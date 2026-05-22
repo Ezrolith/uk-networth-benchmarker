@@ -2063,20 +2063,29 @@ if personal_plot_df is not None and latest_nw is not None:
             except Exception:
                 return None
 
+        # Annual aggregation: last entry per calendar year, used by gains chart + summary
+        if "year" in _s_rpt.columns:
+            _s_ann = (_s_rpt.sort_values("age")
+                       .groupby("year", as_index=False).last()
+                       .sort_values("year"))
+        else:
+            _s_ann = _s_rpt
+
         def _mpl_gains():
             try:
-                s = _s_rpt
+                s = _s_ann
                 if len(s) < 2: return None
                 gains  = s["net_worth"].diff().dropna().values
-                ages   = s["age"].iloc[1:].values
+                years  = (s["year"].iloc[1:].astype(int).values
+                          if "year" in s.columns else s["age"].iloc[1:].values)
                 colors = ["#1d4ed8" if g >= 0 else "#ef4444" for g in gains]
                 fig, ax = _plt.subplots(figsize=(11, 3.5))
-                ax.bar(ages, gains, color=colors, width=0.6)
+                ax.bar(years, gains, color=colors, width=0.6)
                 ax.axhline(0, color="black", lw=0.5)
                 ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
-                ax.set_xlabel("Age"); ax.set_ylabel("Change")
+                ax.set_xlabel("Year"); ax.set_ylabel("Change")
                 ax.grid(True, alpha=0.25, axis="y")
-                ax.set_title("Annual gains breakdown  (blue = gain, red = loss)", fontsize=11)
+                ax.set_title("Year-on-year net worth change  (blue = gain, red = loss)", fontsize=11)
                 fig.tight_layout(); return _save(fig)
             except Exception:
                 return None
@@ -2394,33 +2403,35 @@ if personal_plot_df is not None and latest_nw is not None:
 
         # ── Page 6: Annual gains ────────────────────────────────────────────────
         if gains_png:
-            pdf.add_page(); H1("Period-by-period gains")
+            pdf.add_page(); H1("Year-on-year gains")
             SM(
-                "Net change in wealth between each consecutive pair of data points. "
-                "Blue = net worth increased; red = net worth fell. "
-                "Combines investment returns and saving/spending behaviour."
+                "Net change in wealth for each calendar year, using the last recorded "
+                "entry per year. Multiple entries within the same year are consolidated "
+                "so monthly updates do not fragment the chart. "
+                "Blue = net worth increased; red = fell."
             )
             pdf.ln(3); CHART(gains_png)
-            # Summary stats below chart
+            # Summary stats (annual basis)
             try:
-                _gvals = _s_rpt["net_worth"].diff().dropna()
+                _gvals = _s_ann["net_worth"].diff().dropna()
                 if len(_gvals) > 0:
-                    _pos = int((_gvals > 0).sum()); _neg = int((_gvals <= 0).sum())
+                    _pos = int((_gvals > 0).sum())
                     _ibx = _gvals.idxmax(); _iwx = _gvals.idxmin()
+                    _yrs_col = "year" if "year" in _s_ann.columns else "age"
                     pdf.ln(5)
                     pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*BLUE)
                     pdf.cell(0, 6, "Summary statistics", ln=True)
                     pdf.set_draw_color(*BLUE)
                     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
-                    pdf.ln(3); pdf.set_draw_color(0,0,0)
-                    KV("Positive periods:", f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
-                    KV("Average gain per period:", _fmt_delta(float(_gvals.mean())))
+                    pdf.ln(3); pdf.set_draw_color(0, 0, 0)
+                    KV("Positive years:", f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
+                    KV("Average annual gain:", _fmt_delta(float(_gvals.mean())))
                     if not pd.isna(_ibx):
-                        KV("Best period:", f"{_fmt_delta(float(_gvals[_ibx]))}  "
-                           f"(age {float(_s_rpt.loc[_ibx,'age']):.1f})")
+                        KV("Best year:", f"{_fmt_delta(float(_gvals[_ibx]))}  "
+                           f"({int(_s_ann.loc[_ibx, _yrs_col])})")
                     if not pd.isna(_iwx):
-                        KV("Worst period:", f"{_fmt_delta(float(_gvals[_iwx]))}  "
-                           f"(age {float(_s_rpt.loc[_iwx,'age']):.1f})")
+                        KV("Worst year:", f"{_fmt_delta(float(_gvals[_iwx]))}  "
+                           f"({int(_s_ann.loc[_iwx, _yrs_col])})")
             except Exception:
                 pass
 
