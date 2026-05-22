@@ -1922,38 +1922,115 @@ if personal_plot_df is not None and latest_nw is not None:
         LBLUE = (219, 234, 254)
         LGREY = (248, 250, 252)
 
-        # Render charts to PNG (kaleido)
-        def _png(fig, h=540):
-            return fig.to_image(format="png", width=1400, height=h, scale=2)
+        # Render charts to PNG using matplotlib (no browser/kaleido required)
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as _plt
+        import matplotlib.ticker as _mtick
 
-        main_png = _png(build_main_figure(
-            log_scale, show_tails, show_milestones, show_annotations,
-            age_min, age_max, latest_age, latest_nw, partner_latest_age,
-        ))
+        _PC = COLOURS["person"]
 
-        traj_png = None
+        def _gbp(x, _):
+            if abs(x) >= 1_000_000: return f"£{x/1_000_000:.1f}m"
+            if abs(x) >= 1_000:     return f"£{x/1_000:.0f}k"
+            return f"£{int(x)}"
+
+        def _save(fig):
+            buf = _io.BytesIO()
+            fig.savefig(buf, format="png", bbox_inches="tight", dpi=150)
+            _plt.close(fig)
+            buf.seek(0)
+            return buf.read()
+
+        def _mpl_benchmark():
+            p25 = benchmark[benchmark["percentile"]=="p25"].sort_values("age")
+            p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
+            p75 = benchmark[benchmark["percentile"]=="p75"].sort_values("age")
+            fig, ax = _plt.subplots(figsize=(11, 4.2))
+            ax.fill_between(p25["age"], p25["value"], p75["value"],
+                            alpha=0.15, color="#93c5fd", label="P25-P75 range")
+            ax.plot(p25["age"], p25["value"], "#93c5fd", lw=1.4, ls="--", label="P25")
+            ax.plot(p50["age"], p50["value"], "#1d4ed8", lw=2.5,            label="Median")
+            ax.plot(p75["age"], p75["value"], "#93c5fd", lw=1.4, ls="--", label="P75")
+            ax.plot(_s_rpt["age"], _s_rpt["net_worth"],
+                    _PC, lw=2, marker="o", ms=5, label="You")
+            ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+            ax.set_xlabel("Age"); ax.set_ylabel(f"Net worth ({_price_lbl})")
+            ax.set_xlim(age_min - 0.5, age_max + 0.5)
+            ax.legend(fontsize=8); ax.grid(True, alpha=0.25)
+            ax.set_title("Net worth vs UK distribution (ONS WAS Wave 7)", fontsize=11)
+            fig.tight_layout(); return _save(fig)
+
+        def _mpl_trajectory(traj):
+            fig, ax = _plt.subplots(figsize=(11, 3.8))
+            for pct, lbl in [(25, "P25"), (50, "Median"), (75, "P75")]:
+                ax.axhline(pct, color="#93c5fd", lw=0.8, ls=":")
+                ax.text(float(traj["age"].iloc[0]), pct + 0.8, lbl,
+                        fontsize=7.5, color="#64748b")
+            ax.fill_between(traj["age"], traj["percentile"], alpha=0.12, color=_PC)
+            ax.plot(traj["age"], traj["percentile"], _PC, lw=2, marker="o", ms=5)
+            ax.set_ylim(0, 100); ax.set_xlabel("Age")
+            ax.set_ylabel("Estimated percentile")
+            ax.grid(True, alpha=0.25)
+            ax.set_title("Percentile trajectory", fontsize=11)
+            fig.tight_layout(); return _save(fig)
+
+        def _mpl_gains():
+            s = _s_rpt
+            if len(s) < 2: return None
+            gains  = s["net_worth"].diff().dropna().values
+            ages   = s["age"].iloc[1:].values
+            colors = ["#1d4ed8" if g >= 0 else "#ef4444" for g in gains]
+            fig, ax = _plt.subplots(figsize=(11, 3.5))
+            ax.bar(ages, gains, color=colors, width=0.6)
+            ax.axhline(0, color="black", lw=0.5)
+            ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+            ax.set_xlabel("Age"); ax.set_ylabel("Change")
+            ax.grid(True, alpha=0.25, axis="y")
+            ax.set_title("Annual gains breakdown  (blue = gain, red = loss)", fontsize=11)
+            fig.tight_layout(); return _save(fig)
+
+        def _mpl_whatif():
+            try:
+                _la  = float(_s_rpt.iloc[-1]["age"])
+                _lnw = float(_s_rpt.iloc[-1]["net_worth"])
+                proj_ages = list(range(int(_la), wi_age + 1))
+                sc_def = [(wi_cagr1/100, f"S1 {wi_cagr1:+.1f}%"),
+                          (wi_cagr2/100, f"S2 {wi_cagr2:+.1f}%"),
+                          (wi_cagr3/100, f"S3 {wi_cagr3:+.1f}%")]
+                ann = wi_monthly * 12
+                fig, ax = _plt.subplots(figsize=(11, 4))
+                p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
+                ax.plot(p50["age"], p50["value"], "#1d4ed8", lw=1.5, ls="--",
+                        alpha=0.5, label="Benchmark median")
+                ax.plot(_s_rpt["age"], _s_rpt["net_worth"],
+                        _PC, lw=2, marker="o", ms=4, label="Actual")
+                for i, (cagr, lbl) in enumerate(sc_def):
+                    proj = []
+                    for a in proj_ages:
+                        t = a - _la
+                        if abs(cagr) < 1e-10:
+                            proj.append(_lnw + ann * t)
+                        else:
+                            proj.append(_lnw*(1+cagr)**t + ann*((1+cagr)**t - 1)/cagr)
+                    ax.plot(proj_ages, proj, ["#f97316","#8b5cf6","#06b6d4"][i],
+                            lw=2, ls=("solid" if i==0 else "dashed"), label=lbl)
+                ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+                ax.set_xlabel("Age"); ax.set_ylabel(f"Net worth ({_price_lbl})")
+                ax.legend(fontsize=8); ax.grid(True, alpha=0.25)
+                ax.set_title("What-if projection", fontsize=11)
+                fig.tight_layout(); return _save(fig)
+            except Exception:
+                return None
+
+        main_png  = _mpl_benchmark()
+        traj_png  = None
         if len(_s_rpt) >= 2:
             _ty = build_percentile_trajectory(personal_plot_df, benchmark)
-            _tp = build_percentile_trajectory(partner_plot_df, benchmark) \
-                  if partner_plot_df is not None and len(partner_plot_df) >= 2 else None
             if len(_ty) >= 2:
-                traj_png = _png(build_percentile_chart(_ty, _tp, smooth=smooth_traj), h=400)
-
-        gains_png = _png(
-            build_gains_chart(personal_plot_df, COLOURS["person"], "Your net worth"), h=360
-        ) if len(_s_rpt) >= 2 else None
-
-        whatif_png = None
-        try:
-            _sc = [(wi_cagr1/100, f"S1 ({wi_cagr1:+.1f}%)"),
-                   (wi_cagr2/100, f"S2 ({wi_cagr2:+.1f}%)"),
-                   (wi_cagr3/100, f"S3 ({wi_cagr3:+.1f}%)")]
-            whatif_png = _png(
-                build_whatif_figure(personal_plot_df, benchmark, _sc, wi_age,
-                                    COLOURS["person"], monthly_savings=wi_monthly), h=460
-            )
-        except Exception:
-            pass
+                traj_png = _mpl_trajectory(_ty)
+        gains_png  = _mpl_gains() if len(_s_rpt) >= 2 else None
+        whatif_png = _mpl_whatif()
 
         # PDF layout helpers
         pdf = FPDF()
