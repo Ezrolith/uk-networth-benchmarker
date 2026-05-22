@@ -88,6 +88,7 @@ with st.sidebar:
     )
     include_pension = st.toggle("Include pension wealth", value=True)
     real_terms = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
+    log_scale = st.toggle("Log scale", value=False, help="Spreads out low values — useful when your data spans a wide range")
 
     st.divider()
     st.subheader("Your net worth")
@@ -186,7 +187,7 @@ def _hover(label: str) -> str:
 
 # ── Build Plotly figure ───────────────────────────────────────────────────────
 
-def build_figure() -> go.Figure:
+def build_figure(log_scale: bool = False) -> go.Figure:
     fig = go.Figure()
 
     p25 = _percentile_series("p25")
@@ -265,26 +266,55 @@ def build_figure() -> go.Figure:
         ))
 
     # Personal overlay
+    latest_age = None
     if personal_plot_df is not None and len(personal_plot_df) > 0:
         pdf = personal_plot_df.sort_values("age")
-        fig.add_trace(go.Scatter(
-            x=pdf["age"], y=pdf["net_worth"],
-            mode="lines+markers",
-            line=dict(color=COLOURS["person"], width=2.5),
-            marker=dict(color=COLOURS["person"], size=9,
-                        line=dict(color="white", width=1.5)),
-            name="Your net worth",
-            hovertemplate=(
-                "<b>Your net worth</b><br>"
-                "Age %{x} (year %{customdata})<br>"
-                "£%{y:,.0f}<extra></extra>"
-            ),
-            customdata=pdf["year"],
-        ))
+
+        # On log scale, negative/zero net worth can't be plotted — filter and note it
+        if log_scale:
+            pdf = pdf[pdf["net_worth"] > 0]
+
+        if len(pdf):
+            fig.add_trace(go.Scatter(
+                x=pdf["age"], y=pdf["net_worth"],
+                mode="lines+markers",
+                line=dict(color=COLOURS["person"], width=2.5),
+                marker=dict(color=COLOURS["person"], size=9,
+                            line=dict(color="white", width=1.5)),
+                name="Your net worth",
+                hovertemplate=(
+                    "<b>Your net worth</b><br>"
+                    "Age %{x:.1f} (year %{customdata})<br>"
+                    "£%{y:,.0f}<extra></extra>"
+                ),
+                customdata=pdf["year"],
+            ))
+            latest_age = float(pdf["age"].iloc[-1])
 
     # Layout
     price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
     basis_label = basis.lower()
+
+    if log_scale:
+        yaxis_cfg = dict(
+            title=f"Net worth (£, {price_label}) — log scale",
+            type="log",
+            tickprefix="£",
+            gridcolor="#e2e8f0",
+            showgrid=True,
+            zeroline=False,
+        )
+    else:
+        yaxis_cfg = dict(
+            title=f"Net worth (£, {price_label})",
+            type="linear",
+            tickprefix="£",
+            tickformat=",.0f",
+            gridcolor="#e2e8f0",
+            showgrid=True,
+            zeroline=True,
+            zerolinecolor="#cbd5e1",
+        )
 
     fig.update_layout(
         title=dict(
@@ -300,15 +330,7 @@ def build_figure() -> go.Figure:
             showgrid=True,
             zeroline=False,
         ),
-        yaxis=dict(
-            title=f"Net worth (£, {price_label})",
-            tickprefix="£",
-            tickformat=",.0f",
-            gridcolor="#e2e8f0",
-            showgrid=True,
-            zeroline=True,
-            zerolinecolor="#cbd5e1",
-        ),
+        yaxis=yaxis_cfg,
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -331,6 +353,22 @@ def build_figure() -> go.Figure:
             x=x_val + 0.5,
             line=dict(color="#e2e8f0", width=1, dash="dot"),
             annotation_text="",
+        )
+
+    # "You are here" line at latest personal age
+    if latest_age is not None:
+        fig.add_vline(
+            x=latest_age,
+            line=dict(color=COLOURS["person"], width=1.5, dash="dash"),
+            annotation_text=f"You (age {latest_age:.1f})",
+            annotation_position="top",
+            annotation=dict(
+                font=dict(color=COLOURS["person"], size=12),
+                bgcolor="white",
+                bordercolor=COLOURS["person"],
+                borderwidth=1,
+                borderpad=4,
+            ),
         )
 
     return fig
@@ -372,8 +410,16 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         f"({price_note}) is **{band_desc}** on a {basis.lower()} basis in the UK."
     )
 
+# Warn if log scale would hide negative personal values
+if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
+    n_hidden = (personal_plot_df["net_worth"] <= 0).sum()
+    st.warning(
+        f"{n_hidden} data point(s) with zero or negative net worth are hidden on the log scale.",
+        icon="⚠️",
+    )
+
 # Chart
-fig = build_figure()
+fig = build_figure(log_scale=log_scale)
 st.plotly_chart(fig, use_container_width=True)
 
 # Inline notes
