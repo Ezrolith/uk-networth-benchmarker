@@ -669,13 +669,26 @@ def build_percentile_chart(
             bgcolor="white", bordercolor=COLOURS["person"], borderwidth=1, borderpad=3,
         )
 
+    # Percentile band shading (background zones)
+    band_fills = [
+        (0,  25, "rgba(219,234,254,0.3)", "Below P25"),
+        (25, 50, "rgba(191,219,254,0.3)", "P25–P50"),
+        (50, 75, "rgba(147,197,253,0.3)", "P50–P75"),
+        (75, 100,"rgba(96,165,250,0.3)",  "Above P75"),
+    ]
+    for y0, y1, fill_col, band_name in band_fills:
+        fig.add_hrect(y0=y0, y1=y1, fillcolor=fill_col, line_width=0,
+                      annotation_text=band_name if y1 == 100 else "",
+                      annotation_position="right",
+                      annotation=dict(font=dict(size=9, color="#94a3b8")))
+
     fig.update_layout(
         title=dict(text="Estimated percentile over time", font=dict(size=14, color="#1e293b"), x=0),
         xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
         yaxis=dict(title="Percentile", range=[0, 100], dtick=25,
                    ticksuffix="th", gridcolor="#e2e8f0"),
         plot_bgcolor="white", paper_bgcolor="white",
-        height=270, margin=dict(l=60, r=80, t=50, b=50),
+        height=290, margin=dict(l=60, r=80, t=50, b=50),
         hovermode="x unified",
     )
     return fig
