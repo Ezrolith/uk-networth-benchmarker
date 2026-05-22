@@ -1387,6 +1387,38 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             if vel_p:
                 st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
 
+        # Growth attribution
+        st.markdown("**Growth attribution (rough estimate)**")
+        assumed_return = st.slider("Assumed annual investment return (%)", 0.0, 12.0, 5.0, 0.5,
+                                   key="attr_return",
+                                   help="What % would a passive investment have returned? ~5% is a common real-return assumption.")
+        s_attr = personal_plot_df.sort_values("age")
+        if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
+            attr_rows = []
+            for i in range(1, len(s_attr)):
+                prev = s_attr.iloc[i-1]
+                curr = s_attr.iloc[i]
+                age_gap = float(curr["age"]) - float(prev["age"])
+                nw_prev = float(prev["net_worth"])
+                nw_curr = float(curr["net_worth"])
+                if nw_prev > 0 and age_gap > 0:
+                    investment_component = nw_prev * ((1 + assumed_return/100) ** age_gap - 1)
+                    total_gain = nw_curr - nw_prev
+                    saving_component = total_gain - investment_component
+                    attr_rows.append({
+                        "Period": f"Age {float(prev['age']):.1f}–{float(curr['age']):.1f}",
+                        "Total gain": _fmt_delta(total_gain),
+                        "Est. from returns": _fmt(max(0, investment_component)),
+                        "Est. from saving": _fmt_delta(saving_component),
+                    })
+            if attr_rows:
+                st.dataframe(pd.DataFrame(attr_rows), use_container_width=True, hide_index=True)
+                st.caption(
+                    f"'Returns' = what your opening balance at {assumed_return}% p.a. would earn each period. "
+                    "'Saving' = residual (total gain minus estimated returns). "
+                    "Negative saving = drawdown or assets underperformed the assumption."
+                )
+
 # ── What-if projection ────────────────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) >= 1:
@@ -1613,9 +1645,10 @@ if personal_plot_df is not None and latest_nw is not None:
 # ── Footer ────────────────────────────────────────────────────────────────────
 
 st.divider()
+APP_VERSION = "v2.1"
 st.markdown(
-    "<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
-    "UK Net Worth Benchmarker · ONS WAS Wave 7 (2018–2020) · Streamlit + Plotly"
-    "</div>",
+    f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
+    f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 7 (2018–2020) · Streamlit + Plotly"
+    f"</div>",
     unsafe_allow_html=True,
 )
