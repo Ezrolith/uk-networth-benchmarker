@@ -578,6 +578,34 @@ def build_percentile_chart(
     return fig
 
 
+# ── Wealth velocity chart ────────────────────────────────────────────────────
+
+def build_velocity_chart(pdf: pd.DataFrame, colour: str) -> go.Figure:
+    """Rolling % growth rate per period — shows acceleration/deceleration."""
+    s = pdf.sort_values("age").copy()
+    s["pct_change"] = s["net_worth"].pct_change() * 100
+    s = s.dropna(subset=["pct_change"])
+    if len(s) < 2:
+        return None
+
+    bar_colours = [colour if v >= 0 else "#ef4444" for v in s["pct_change"]]
+    fig = go.Figure(go.Bar(
+        x=s["age"], y=s["pct_change"],
+        marker_color=bar_colours,
+        hovertemplate="<b>Age %{x:.1f}</b><br>%{y:.1f}% growth<extra></extra>",
+    ))
+    fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
+    fig.update_layout(
+        title=dict(text="Wealth velocity (% growth per period)", font=dict(size=13, color="#1e293b"), x=0),
+        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+        yaxis=dict(title="% change", ticksuffix="%", gridcolor="#e2e8f0"),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=200, margin=dict(l=60, r=20, t=40, b=40),
+        showlegend=False,
+    )
+    return fig
+
+
 # ── Annual gain bar chart ────────────────────────────────────────────────────
 
 def build_gains_chart(pdf: pd.DataFrame, colour: str, name: str) -> go.Figure:
@@ -977,6 +1005,15 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             )
         st.caption("Red bars = net worth fell that period. Each bar spans the gap between consecutive data points.")
 
+        # Velocity (% rate) chart
+        vel = build_velocity_chart(personal_plot_df, COLOURS["person"])
+        if vel:
+            st.plotly_chart(vel, use_container_width=True, config=PLOTLY_CONFIG)
+        if partner_plot_df is not None and len(partner_plot_df) >= 3:
+            vel_p = build_velocity_chart(partner_plot_df, COLOURS["partner"])
+            if vel_p:
+                st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
+
 # ── What-if projection ────────────────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) >= 1:
@@ -1006,6 +1043,17 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
             ),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
+
+        # Projected percentile at target age
+        if latest_nw and latest_nw > 0:
+            proj_nw_at_target = latest_nw * (1 + wi_cagr / 100) ** (wi_age - (latest_age or 0))
+            proj_pct = estimate_exact_percentile(proj_nw_at_target, min(wi_age, 85), benchmark)
+            if proj_pct:
+                st.info(
+                    f"At {wi_cagr:+.1f}% CAGR, by age **{wi_age}** your projected net worth of "
+                    f"**{_fmt(proj_nw_at_target)}** would place you at approximately the "
+                    f"**~{proj_pct:.0f}th percentile** (vs the {DATA_YEAR} benchmark)."
+                )
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────
 
@@ -1089,12 +1137,36 @@ Derived from the same log-normal model: `value = exp(mu + z×sigma)` where z = P
 All personal data lives in browser session state or URL query params only.
 No data is transmitted to or stored on any server.
 
+### Regional variation
+
+WAS publishes regional breakdowns but this tool currently shows GB-wide figures only.
+Wealth varies substantially by region — approximate median total wealth premiums vs GB median
+(WAS Wave 7):
+
+| Region | Approx. premium vs GB median |
+|---|---|
+| London | +30–40% |
+| South East | +20–30% |
+| East of England | +10–20% |
+| South West | ±5% |
+| East Midlands / West Midlands | −5 to −10% |
+| Yorkshire / Humber | −10 to −15% |
+| North West | −10 to −15% |
+| North East | −20 to −25% |
+| Wales | −15 to −20% |
+| Scotland | −5 to +5% |
+
+If you live in London or the South East, you are likely comparing against a benchmark
+that understates your peers' wealth; in the North or Wales, it overstates it.
+A region filter is planned for v2.
+
 ### Known limitations
 
 - WAS excludes Northern Ireland; figures = Great Britain only.
 - Very wealthy households (~top 1–2%) are under-represented; P75 is reliable, above P90 less so.
 - Wave 7 predates 2021–2024 inflation/house-price movements; real-terms adjustment is partial.
 - 75+ band uses age-80 midpoint — a modelling assumption over a wide age range.
+- What-if and FIRE projections are illustrative only. Not financial advice.
 """)
 
 # ── Footer ────────────────────────────────────────────────────────────────────
