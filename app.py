@@ -171,7 +171,7 @@ def _personal_data_section(
         st.caption("One row per year. Net worth in £.")
         ss_key = f"{key_prefix}_rows"
         if ss_key not in st.session_state:
-            st.session_state[ss_key] = [{"year": 2024, "age": 30, "net_worth": 0}]
+            st.session_state[ss_key] = [{"year": 2024, "age": 30, "net_worth": 0, "note": ""}]
         edited = st.data_editor(
             pd.DataFrame(st.session_state[ss_key]),
             num_rows="dynamic", use_container_width=True,
@@ -179,6 +179,8 @@ def _personal_data_section(
                 "year":      st.column_config.NumberColumn("Year",     min_value=1960, max_value=2030, step=1,    format="%d"),
                 "age":       st.column_config.NumberColumn("Age",      min_value=16,   max_value=100,  step=1,    format="%d"),
                 "net_worth": st.column_config.NumberColumn("Net worth (£)", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%,d"),
+                "note":      st.column_config.TextColumn("Note (optional)", max_chars=80,
+                                                          help="Short label shown in hover tooltip, e.g. 'bought house'"),
             },
             key=f"{key_prefix}_editor",
         )
@@ -187,6 +189,7 @@ def _personal_data_section(
             result_df["year"]      = result_df["year"].astype(int)
             result_df["age"]       = result_df["age"].astype(float)
             result_df["net_worth"] = result_df["net_worth"].astype(float)
+            result_df["note"]      = result_df["note"].fillna("").astype(str) if "note" in result_df.columns else ""
             result_df = result_df.sort_values("age").reset_index(drop=True)
             st.session_state[ss_key] = result_df.to_dict("records")
 
@@ -505,7 +508,9 @@ def build_main_figure(
                 cp75 = bm_at_age.loc[(ar, "p75")]
             except KeyError:
                 cp25 = cp50 = cp75 = float("nan")
-            custom.append([yr, cp25, cp50, cp75])
+            note = str(row["note"]) if "note" in plot.columns and str(row.get("note", "")).strip() else ""
+            note_html = f"<br><i>Note: {note}</i>" if note else ""
+            custom.append([yr, cp25, cp50, cp75, note_html])
 
         fig.add_trace(go.Scatter(
             x=plot["age"], y=plot["net_worth"],
@@ -518,7 +523,8 @@ def build_main_figure(
                 "Age %{x:.1f} (year %{customdata[0]})<br>"
                 "£%{y:,.0f}<br>"
                 "<i>Benchmark: P25 £%{customdata[1]:,.0f} · "
-                "Med £%{customdata[2]:,.0f} · P75 £%{customdata[3]:,.0f}</i><extra></extra>"
+                "Med £%{customdata[2]:,.0f} · P75 £%{customdata[3]:,.0f}</i>"
+                "%{customdata[4]}<extra></extra>"
             ),
             customdata=custom,
         ))
@@ -771,8 +777,9 @@ def build_whatif_figure(
     scenarios: list[tuple[float, str]],   # [(cagr, label), ...]
     project_to_age: int,
     colour: str,
+    monthly_savings: float = 0.0,
 ) -> go.Figure:
-    """Forward-project net worth under one or more CAGR scenarios."""
+    """Forward-project net worth under one or more CAGR scenarios, optionally with monthly contributions."""
     s = pdf.sort_values("age")
     latest_age = float(s.iloc[-1]["age"])
     latest_nw  = float(s.iloc[-1]["net_worth"])
@@ -808,8 +815,18 @@ def build_whatif_figure(
 
     # One trace per scenario
     scenario_colours = ["#f97316", "#8b5cf6", "#06b6d4"]  # orange, violet, cyan
+    annual_saving = monthly_savings * 12
     for i, (cagr, sc_label) in enumerate(scenarios):
-        proj_nw = [latest_nw * (1 + cagr) ** (a - latest_age) for a in proj_ages]
+        proj_nw = []
+        for a in proj_ages:
+            t = a - latest_age
+            if abs(cagr) < 1e-10:
+                proj_nw.append(latest_nw + annual_saving * t)
+            else:
+                proj_nw.append(
+                    latest_nw * (1 + cagr) ** t
+                    + annual_saving * ((1 + cagr) ** t - 1) / cagr
+                )
         fig.add_trace(go.Scatter(
             x=proj_ages, y=proj_nw, mode="lines",
             line=dict(color=scenario_colours[i % len(scenario_colours)], width=2,
@@ -1405,12 +1422,21 @@ if personal_plot_df is not None and latest_nw is not None:
                 st.caption(f"Progress toward {target_label} ({_fmt(target_val)}): {pct_there:.0f}%")
                 st.progress(pct_there / 100)
             with cols[1]:
-                if age_span > 0.5 and first_nw > 0 and latest_nw > 0:
-                    cagr_cur = (latest_nw / first_nw) ** (1 / age_span) - 1
-                    if cagr_cur > 0.001:
-                        yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
-                        st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
-                                  help=f"At your current {cagr_cur*100:.1f}% CAGR.")
+                if age_span > 0.5 and latest_nw > 0:
+                    if first_nw > 0:
+                        cagr_cur = (latest_nw / first_nw) ** (1 / age_span) - 1
+                        if cagr_cur > 0.001:
+                            yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
+                            st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                      help=f"At your current {cagr_cur*100:.1f}% CAGR.")
+                    else:
+                        avg_gain = (latest_nw - first_nw) / age_span
+                        if avg_gain > 0:
+                            yrs = (target_val - latest_nw) / avg_gain
+                            if 0 < yrs < 60:
+                                st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                          help=f"At your average gain of {_fmt(avg_gain)}/yr. "
+                                               f"(CAGR unavailable — started from zero or negative.)")
 
 # Log scale warning
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
@@ -1579,14 +1605,21 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
                     "Net worth then": _fmt(float(row["net_worth"])),
                 })
             else:
-                # Not yet reached — project with CAGR
+                # Not yet reached — project from current trajectory
                 first_nw_ms = float(s_ms.iloc[0]["net_worth"])
                 last_nw_ms  = float(s_ms.iloc[-1]["net_worth"])
                 asp_ms = float(s_ms.iloc[-1]["age"]) - float(s_ms.iloc[0]["age"])
-                if asp_ms > 0.5 and first_nw_ms > 0 and last_nw_ms > 0 and last_nw_ms < m:
-                    cagr_ms = (last_nw_ms / first_nw_ms) ** (1 / asp_ms) - 1
-                    if cagr_ms > 0:
-                        yrs_ms = math.log(m / last_nw_ms) / math.log(1 + cagr_ms)
+                if asp_ms > 0.5 and last_nw_ms > 0 and last_nw_ms < m:
+                    yrs_ms = None
+                    if first_nw_ms > 0:
+                        cagr_ms = (last_nw_ms / first_nw_ms) ** (1 / asp_ms) - 1
+                        if cagr_ms > 0:
+                            yrs_ms = math.log(m / last_nw_ms) / math.log(1 + cagr_ms)
+                    else:
+                        avg_gain_ms = (last_nw_ms - first_nw_ms) / asp_ms
+                        if avg_gain_ms > 0:
+                            yrs_ms = (m - last_nw_ms) / avg_gain_ms
+                    if yrs_ms is not None:
                         eta_ms = float(s_ms.iloc[-1]["age"]) + yrs_ms
                         if eta_ms <= 100:
                             milestone_rows.append({
@@ -1685,6 +1718,11 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
                 min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
                 max_value=85, value=min(70, 85), key="whatif_age",
             )
+        wi_monthly = st.number_input(
+            "Monthly savings contribution (£)", 0, 50_000, 0, 100, format="%d", key="wi_monthly",
+            help="Net savings added each month on top of investment returns — applied equally to all scenarios. "
+                 "Set to 0 for growth-only projection.",
+        )
 
         scenarios = [
             (wi_cagr1 / 100, f"Scenario 1 ({wi_cagr1:+.1f}%)"),
@@ -1692,7 +1730,8 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
             (wi_cagr3 / 100, f"Scenario 3 ({wi_cagr3:+.1f}%)"),
         ]
         st.plotly_chart(
-            build_whatif_figure(personal_plot_df, benchmark, scenarios, wi_age, COLOURS["person"]),
+            build_whatif_figure(personal_plot_df, benchmark, scenarios, wi_age, COLOURS["person"],
+                                monthly_savings=wi_monthly),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
 
@@ -1700,14 +1739,21 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
         if latest_nw and latest_nw > 0:
             sc_cols = st.columns(3)
             for i, (cagr, sc_label) in enumerate(scenarios):
-                proj_nw_at = latest_nw * (1 + cagr) ** (wi_age - (latest_age or 0))
+                t = wi_age - (latest_age or 0)
+                annual_wi = wi_monthly * 12
+                if abs(cagr) < 1e-10:
+                    proj_nw_at = latest_nw + annual_wi * t
+                else:
+                    proj_nw_at = (latest_nw * (1 + cagr) ** t
+                                  + annual_wi * ((1 + cagr) ** t - 1) / cagr)
                 proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark)
                 with sc_cols[i]:
                     st.metric(
                         sc_label,
                         _fmt(proj_nw_at),
                         delta=f"~{proj_pct:.0f}th pct" if proj_pct else "n/a",
-                        help=f"Projected net worth at age {wi_age}.",
+                        help=f"Projected net worth at age {wi_age}"
+                             + (f" with £{wi_monthly:,}/mo savings." if wi_monthly else "."),
                     )
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────

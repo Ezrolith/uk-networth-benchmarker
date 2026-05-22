@@ -44,13 +44,18 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     - year: integer (2024) or any date string Excel might produce ("01/05/2026") — year is extracted
     - age: integer or decimal (32.4 is fine; gives more precise chart positioning)
     - net_worth: any numeric value including negatives
+    - note: optional free-text label for a data point (shown in hover tooltip)
     """
     df = pd.read_csv(uploaded_file)
     required = {"year", "age", "net_worth"}
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"CSV is missing required columns: {', '.join(sorted(missing))}")
-    df = df[["year", "age", "net_worth"]].dropna()
+    keep_cols = ["year", "age", "net_worth"]
+    if "note" in df.columns:
+        df["note"] = df["note"].fillna("").astype(str)
+        keep_cols.append("note")
+    df = df[keep_cols].dropna(subset=["year", "age", "net_worth"])
 
     # year: accept plain integers or date strings (e.g. "01/05/2026" from Excel)
     try:
@@ -94,23 +99,3 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
             )
 
     return df
-
-
-# ── Shareable URL helpers ─────────────────────────────────────────────────────
-
-def encode_personal_data(df: pd.DataFrame) -> str:
-    """Compress personal data to a URL-safe base64 string for sharing."""
-    records = df[["year", "age", "net_worth"]].round({"age": 4, "net_worth": 2}).to_dict("records")
-    raw = json.dumps(records, separators=(",", ":")).encode()
-    return base64.urlsafe_b64encode(zlib.compress(raw, level=9)).decode()
-
-
-def decode_personal_data(encoded: str) -> pd.DataFrame:
-    """Decode a shareable URL token back into a personal data DataFrame."""
-    raw = zlib.decompress(base64.urlsafe_b64decode(encoded.encode() + b"=="))
-    records = json.loads(raw.decode())
-    df = pd.DataFrame(records)
-    df["year"]      = df["year"].astype(int)
-    df["age"]       = df["age"].astype(float)
-    df["net_worth"] = df["net_worth"].astype(float)
-    return df.sort_values("age").reset_index(drop=True)
