@@ -2216,9 +2216,9 @@ if personal_plot_df is not None and latest_nw is not None:
         if _pct_rpt:
             _stat_boxes.append((f"~{_ordinal(round(_pct_rpt))}", "Estimated percentile"))
         if p50v:
-            _stat_boxes.append((f"{latest_nw/p50v*100:.0f}", "Relative to median (100=avg)"))
+            _stat_boxes.append((f"{latest_nw/p50v*100:.0f}", "Wealth index (100 = median)"))
         if _cagr_rpt:
-            _stat_boxes.append((f"{_cagr_rpt*100:+.1f}%", f"Annual CAGR since age {float(_first_rpt['age']):.0f}"))
+            _stat_boxes.append((f"{_cagr_rpt*100:+.1f}%", f"CAGR since age {float(_first_rpt['age']):.0f}"))
 
         _bw = 54  # box width mm
         _bh = 20  # box height mm
