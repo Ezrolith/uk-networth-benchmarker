@@ -545,6 +545,30 @@ def build_main_figure(
     for x_val in [24, 34, 44, 54, 64, 74]:
         fig.add_vline(x=x_val + 0.5, line=dict(color="#e2e8f0", width=1, dash="dot"))
 
+    # Percentile end-of-chart labels (right edge)
+    if not log_scale and show_annotations:
+        for pct_data, label in [(p25, "P25"), (p50, "P50"), (p75, "P75")]:
+            edge_row = pct_data[pct_data["age"] == age_max] if age_max in pct_data["age"].values \
+                       else pct_data[pct_data["age"] == pct_data["age"].max()]
+            if len(edge_row):
+                fig.add_annotation(
+                    x=age_max, y=float(edge_row["value"].iloc[0]),
+                    text=label, showarrow=False,
+                    xanchor="left", xshift=5,
+                    font=dict(size=10, color="#64748b"),
+                )
+
+    # Birth year label (cohort context) — at the user's latest age
+    if latest_age is not None and show_annotations:
+        birth_year = round(2025 - latest_age)
+        fig.add_annotation(
+            x=latest_age, yref="paper", y=-0.09,
+            text=f"born ~{birth_year}",
+            showarrow=False,
+            font=dict(size=9, color="#94a3b8"),
+            xanchor="center",
+        )
+
     price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
 
     yaxis_cfg = dict(
@@ -767,6 +791,47 @@ def build_whatif_figure(
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
         plot_bgcolor="white", paper_bgcolor="white",
         height=400, margin=dict(l=70, r=40, t=60, b=60), hovermode="x unified",
+    )
+    return fig
+
+
+# ── Cumulative wealth chart ───────────────────────────────────────────────────
+
+def build_cumulative_chart(
+    pdf: pd.DataFrame, colour: str, name: str,
+    partner_pdf: pd.DataFrame | None = None,
+) -> go.Figure:
+    """Area chart showing net worth level over age — pure cumulative view."""
+    fig = go.Figure()
+
+    def _add(df, col, nm, fill_mode):
+        s = df.sort_values("age")
+        fig.add_trace(go.Scatter(
+            x=s["age"], y=s["net_worth"],
+            mode="lines+markers",
+            line=dict(color=col, width=2.5),
+            marker=dict(color=col, size=6),
+            fill=fill_mode,
+            fillcolor=col.replace("#", "rgba(").rstrip(")") + ",0.08)"
+                if col.startswith("#") else col,
+            name=nm,
+            hovertemplate=f"<b>{nm}</b><br>Age %{{x:.1f}}<br>£%{{y:,.0f}}<extra></extra>",
+        ))
+
+    _add(pdf, colour, name, "tozeroy")
+    if partner_pdf is not None and len(partner_pdf) >= 2:
+        _add(partner_pdf, COLOURS["partner"], "Partner", "tozeroy")
+
+    price_lbl = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
+    fig.update_layout(
+        title=dict(text=f"Net worth over time ({price_lbl})",
+                   font=dict(size=14, color="#1e293b"), x=0),
+        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+        yaxis=dict(title="Net worth (£)", tickprefix="£", tickformat=",.0f",
+                   gridcolor="#e2e8f0"),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=260, margin=dict(l=70, r=40, t=50, b=50),
+        hovermode="x unified",
     )
     return fig
 
@@ -1427,6 +1492,12 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             vel_p = build_velocity_chart(partner_plot_df, COLOURS["partner"])
             if vel_p:
                 st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
+
+        # Cumulative view
+        st.plotly_chart(
+            build_cumulative_chart(personal_plot_df, COLOURS["person"], "You", partner_plot_df),
+            use_container_width=True, config=PLOTLY_CONFIG,
+        )
 
         # Growth attribution
         st.markdown("**Growth attribution (rough estimate)**")
