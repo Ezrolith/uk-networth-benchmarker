@@ -359,7 +359,13 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
     with col2:
         st.metric("Net worth", _fmt(latest_nw), help=f"In {price_note}")
     with col3:
-        st.metric("Percentile band", band_desc.replace("between", "btw").title())
+        short_band = {
+            "below the 25th percentile": "Below P25",
+            "between the 25th percentile and the median": "P25 – P50",
+            "between the median and the 75th percentile": "P50 – P75",
+            "above the 75th percentile": "Above P75",
+        }.get(band_desc, band_desc.capitalize())
+        st.metric("Percentile band", short_band)
 
     st.info(
         f"At age **{latest_age}**, your net worth of **{_fmt(latest_nw)}** "
