@@ -2252,11 +2252,17 @@ if personal_plot_df is not None and latest_nw is not None:
 
         if _pct_rpt:
             pdf.ln(4); H1("Key observations")
+            # Find first entry with positive net worth for the percentile trend
+            _pct_start_row = None
+            for _, _r in _s_rpt.iterrows():
+                if float(_r["net_worth"]) > 0:
+                    _pct_start_row = _r
+                    break
             _first_pct = None
-            if float(_first_rpt["net_worth"]) > 0:
+            if _pct_start_row is not None:
                 _first_pct = estimate_exact_percentile(
-                    float(_first_rpt["net_worth"]),
-                    min(round(float(_first_rpt["age"])), 85), benchmark)
+                    float(_pct_start_row["net_worth"]),
+                    min(round(float(_pct_start_row["age"])), 85), benchmark)
             p25v = _bm("p25"); p75v = _bm("p75")
             _obs = []
             if _first_pct:
@@ -2265,8 +2271,9 @@ if personal_plot_df is not None and latest_nw is not None:
                 _sign = "+" if _dp > 0 else ""
                 _obs.append(
                     f"Your percentile has {_dir} from the ~{_ordinal(round(_first_pct))} "
-                    f"at age {float(_first_rpt['age']):.0f} to the ~{_ordinal(round(_pct_rpt))} "
-                    f"now ({_sign}{_dp:.0f} pct pts in {_asp_rpt:.1f} years)."
+                    f"at age {float(_pct_start_row['age']):.0f} to the "
+                    f"~{_ordinal(round(_pct_rpt))} at age {latest_age:.0f} "
+                    f"({_sign}{_dp:.0f} pct pts)."
                 )
             if p50v and p25v and p75v:
                 if latest_nw >= p75v:
@@ -2315,8 +2322,12 @@ if personal_plot_df is not None and latest_nw is not None:
             diff = latest_nw - v
             pos = f"above by {_fmt(abs(diff))}" if diff >= 0 else f"below by {_fmt(abs(diff))}"
             TR(i, (pl, 35, pk=="p50"), (_fmt(v), 45, pk=="p50"), (pos, 100, False))
+        pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(*GREY)
+        pdf.cell(0, 5, "P25, P50, P75: published ONS data.  "
+                 "P10, P90: derived from log-normal model (indicative).", ln=True)
+        pdf.set_text_color(*SLATE)
 
-        pdf.ln(5); H1("Growth history")
+        pdf.ln(4); H1("Growth history")
         KV("Period:", f"Age {float(_first_rpt['age']):.1f} to {latest_age:.1f}  ({_asp_rpt:.1f} years)")
         KV("Starting net worth:", _fmt(_fnw_rpt))
         KV("Current net worth:", _fmt(latest_nw))
@@ -2401,7 +2412,7 @@ if personal_plot_df is not None and latest_nw is not None:
                     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
                     pdf.ln(3); pdf.set_draw_color(0,0,0)
                     KV("Positive periods:", f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
-                    KV("Average change per period:", _fmt_delta(float(_gvals.mean())))
+                    KV("Average gain per period:", _fmt_delta(float(_gvals.mean())))
                     if not pd.isna(_ibx):
                         KV("Best period:", f"{_fmt_delta(float(_gvals[_ibx]))}  "
                            f"(age {float(_s_rpt.loc[_ibx,'age']):.1f})")
@@ -2427,7 +2438,7 @@ if personal_plot_df is not None and latest_nw is not None:
             pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
             pdf.cell(0, 6, f"Projected values at age {wi_age}:", ln=True)
             pdf.ln(1)
-            TH(("Scenario", 55), ("CAGR", 30), (f"Net worth at {wi_age}", 55), ("vs benchmark median", 40))
+            TH(("Scenario", 90), (f"Net worth at age {wi_age}", 50), ("vs benchmark median", 40))
             _ann = wi_monthly * 12
             _p50_at_wi = None
             _p50_wi_rows = benchmark[
@@ -2435,9 +2446,9 @@ if personal_plot_df is not None and latest_nw is not None:
             if len(_p50_wi_rows):
                 _p50_at_wi = float(_p50_wi_rows["value"].iloc[0])
             for _si, (_cagr_v, _lbl) in enumerate([
-                (wi_cagr1/100, f"S1 (conservative)"),
-                (wi_cagr2/100, f"S2 (base case)"),
-                (wi_cagr3/100, f"S3 (optimistic)"),
+                (wi_cagr1/100, f"S1 +{wi_cagr1:.1f}% (conservative)"),
+                (wi_cagr2/100, f"S2 +{wi_cagr2:.1f}% (base case)"),
+                (wi_cagr3/100, f"S3 +{wi_cagr3:.1f}% (optimistic)"),
             ]):
                 try:
                     _t = wi_age - latest_age
@@ -2450,9 +2461,8 @@ if personal_plot_df is not None and latest_nw is not None:
                     if _p50_at_wi:
                         _diff = _proj - _p50_at_wi
                         _vs_med = f"{'above' if _diff>=0 else 'below'} by {_fmt(abs(_diff))}"
-                    TR(_si, (_lbl, 55, False),
-                       (f"{wi_cagr1 if _si==0 else wi_cagr2 if _si==1 else wi_cagr3:+.1f}%", 30, False),
-                       (_fmt(_proj), 55, _si==1),
+                    TR(_si, (_lbl, 90, False),
+                       (_fmt(_proj), 50, _si==1),
                        (_vs_med, 40, False))
                 except Exception:
                     pass
