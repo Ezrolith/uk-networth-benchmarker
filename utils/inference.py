@@ -179,3 +179,74 @@ def estimate_percentile(net_worth: float, age: int, benchmark: pd.DataFrame) -> 
     if net_worth < p75:
         return "between the median and the 75th percentile"
     return "above the 75th percentile"
+
+
+def estimate_exact_percentile(
+    net_worth: float, age: int, benchmark: pd.DataFrame
+) -> float | None:
+    """
+    Estimate a continuous percentile (0–100) for a net worth at a given age.
+
+    Fits a log-normal distribution to the three published percentiles (P25, P50, P75)
+    at the requested age, then evaluates the CDF.
+
+    Log-normality is a reasonable approximation for wealth distributions but is a
+    modelling assumption — treat results as indicative, not authoritative. Label as
+    "estimated" in all user-facing text.
+
+    Returns None if the fit cannot be computed (missing data, non-positive net worth,
+    or degenerate quantiles).
+    """
+    from scipy.stats import norm as _norm
+
+    age_clamped = min(int(age), 85)
+    age_data = benchmark[benchmark["age"] == age_clamped]
+
+    def get_val(pct: str) -> float | None:
+        rows = age_data[age_data["percentile"] == pct]["value"]
+        return float(rows.iloc[0]) if len(rows) else None
+
+    p25v = get_val("p25")
+    p50v = get_val("p50")
+    p75v = get_val("p75")
+
+    if any(v is None or v <= 0 for v in [p25v, p50v, p75v]):
+        return None
+    if net_worth <= 0:
+        return None
+
+    # Log-normal parameters from quantiles:
+    #   mu  = log(median)           [median of log-normal = e^mu]
+    #   sigma = (log(P75) - log(P25)) / (2 × 0.6745)
+    #         because Phi(0.6745) = 0.75 by definition of the normal z-score
+    mu = np.log(p50v)
+    sigma = (np.log(p75v) - np.log(p25v)) / (2 * 0.6745)
+
+    if sigma <= 0:
+        return None
+
+    z = (np.log(net_worth) - mu) / sigma
+    return float(np.clip(_norm.cdf(z) * 100, 0.5, 99.5))
+
+
+def build_percentile_trajectory(
+    personal_df: pd.DataFrame, benchmark: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    Compute estimated percentile at each personal data point.
+    Returns a DataFrame with columns: age, year, net_worth, percentile.
+    Rows where the percentile cannot be estimated are dropped.
+    """
+    rows = []
+    for _, row in personal_df.iterrows():
+        age = float(row["age"])
+        nw = float(row["net_worth"])
+        pct = estimate_exact_percentile(nw, round(age), benchmark)
+        if pct is not None:
+            rows.append({
+                "age":        age,
+                "year":       row.get("year", ""),
+                "net_worth":  nw,
+                "percentile": pct,
+            })
+    return pd.DataFrame(rows).sort_values("age").reset_index(drop=True)

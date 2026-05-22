@@ -17,6 +17,8 @@ from utils.inference import (
     adjust_for_inflation,
     cpi_adjust_personal,
     estimate_percentile,
+    estimate_exact_percentile,
+    build_percentile_trajectory,
     DATA_YEAR,
     REAL_BASE_YEAR,
 )
@@ -34,7 +36,6 @@ st.markdown(
     """
     <style>
     .stMetric { border-left: 4px solid #1d4ed8; padding-left: 0.75rem; }
-    .methodology-note { font-size: 0.85rem; color: #64748b; }
     footer { visibility: hidden; }
     </style>
     """,
@@ -44,12 +45,24 @@ st.markdown(
 AGE_RANGE = np.arange(16, 86)
 
 COLOURS = {
-    "p25":    "#93c5fd",   # blue-300
-    "p50":    "#1d4ed8",   # blue-700
-    "p75":    "#93c5fd",   # blue-300
+    "p25":    "#93c5fd",
+    "p50":    "#1d4ed8",
+    "p75":    "#93c5fd",
     "band":   "rgba(147,197,253,0.18)",
-    "pub":    "#1e40af",   # blue-800  (published data markers)
-    "person": "#f97316",   # orange-500
+    "pub":    "#1e40af",
+    "person": "#f97316",
+}
+
+PLOTLY_CONFIG = {
+    "displayModeBar": True,
+    "modeBarButtonsToRemove": ["select2d", "lasso2d", "autoScale2d"],
+    "toImageButtonOptions": {
+        "format": "png",
+        "filename": "uk_networth_benchmarker",
+        "height": 600,
+        "width": 1200,
+        "scale": 2,
+    },
 }
 
 
@@ -87,8 +100,9 @@ with st.sidebar:
         ),
     )
     include_pension = st.toggle("Include pension wealth", value=True)
-    real_terms = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
-    log_scale = st.toggle("Log scale", value=False, help="Spreads out low values — useful when your data spans a wide range")
+    real_terms      = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
+    log_scale       = st.toggle("Log scale", value=False,
+                                help="Spreads out low values — useful when your data spans a wide range")
 
     st.divider()
     st.subheader("Your net worth")
@@ -140,9 +154,9 @@ with st.sidebar:
             key="personal_editor",
         )
         if len(edited) > 0 and edited["net_worth"].abs().sum() > 0:
-            personal_df = edited.rename(columns=lambda c: c).copy()
-            personal_df["year"] = personal_df["year"].astype(int)
-            personal_df["age"] = personal_df["age"].astype(int)
+            personal_df = edited.copy()
+            personal_df["year"]      = personal_df["year"].astype(int)
+            personal_df["age"]       = personal_df["age"].astype(float)
             personal_df["net_worth"] = personal_df["net_worth"].astype(float)
             personal_df = personal_df.sort_values("age").reset_index(drop=True)
             st.session_state.personal_rows = personal_df.to_dict("records")
@@ -154,27 +168,31 @@ with st.sidebar:
     )
 
 
-# ── Benchmark data pipeline ───────────────────────────────────────────────────
+# ── Benchmark & personal data pipeline ───────────────────────────────────────
 
 benchmark = _build_benchmark(basis, include_pension, real_terms)
 
-# Adjust personal data for real terms if needed
-personal_plot_df = None
+personal_plot_df: pd.DataFrame | None = None
 if personal_df is not None and len(personal_df) > 0:
-    if real_terms:
-        personal_plot_df = cpi_adjust_personal(personal_df, to_year=REAL_BASE_YEAR)
-    else:
-        personal_plot_df = personal_df.copy()
+    personal_plot_df = (
+        cpi_adjust_personal(personal_df, to_year=REAL_BASE_YEAR)
+        if real_terms else personal_df.copy()
+    )
 
 
-# ── Chart helpers ─────────────────────────────────────────────────────────────
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _fmt(value: float) -> str:
-    if value >= 1_000_000:
+    if abs(value) >= 1_000_000:
         return f"£{value/1_000_000:.2f}m"
-    if value >= 1_000:
+    if abs(value) >= 1_000:
         return f"£{value/1_000:.0f}k"
     return f"£{value:.0f}"
+
+
+def _fmt_delta(delta: float) -> str:
+    sign = "+" if delta >= 0 else ""
+    return f"{sign}{_fmt(delta)}"
 
 
 def _percentile_series(pct: str) -> pd.DataFrame:
@@ -185,20 +203,23 @@ def _hover(label: str) -> str:
     return f"<b>{label}</b><br>Age %{{x}}<br>£%{{y:,.0f}}<extra></extra>"
 
 
-# ── Build Plotly figure ───────────────────────────────────────────────────────
+# ── Main benchmark chart ──────────────────────────────────────────────────────
 
-def build_figure(log_scale: bool = False) -> go.Figure:
+def build_main_figure(
+    log_scale: bool,
+    latest_age: float | None,
+    latest_nw: float | None,
+) -> go.Figure:
     fig = go.Figure()
 
     p25 = _percentile_series("p25")
     p50 = _percentile_series("p50")
     p75 = _percentile_series("p75")
 
-    # IQR shading (P25 → P75 → back)
-    x_band = pd.concat([p25["age"], p75["age"].iloc[::-1]])
-    y_band = pd.concat([p25["value"], p75["value"].iloc[::-1]])
+    # IQR shading
     fig.add_trace(go.Scatter(
-        x=x_band, y=y_band,
+        x=pd.concat([p25["age"], p75["age"].iloc[::-1]]),
+        y=pd.concat([p25["value"], p75["value"].iloc[::-1]]),
         fill="toself",
         fillcolor=COLOURS["band"],
         line=dict(width=0),
@@ -207,40 +228,24 @@ def build_figure(log_scale: bool = False) -> go.Figure:
         showlegend=True,
     ))
 
-    # P25 line
-    fig.add_trace(go.Scatter(
-        x=p25["age"], y=p25["value"],
-        mode="lines",
-        line=dict(color=COLOURS["p25"], width=2, dash="dash"),
-        name="25th percentile",
-        hovertemplate=_hover("25th percentile"),
-    ))
+    # Percentile lines
+    for pct_data, colour, width, dash, label in [
+        (p25, COLOURS["p25"], 2, "dash",  "25th percentile"),
+        (p75, COLOURS["p75"], 2, "dash",  "75th percentile"),
+        (p50, COLOURS["p50"], 3, "solid", "Median (P50)"),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=pct_data["age"], y=pct_data["value"],
+            mode="lines",
+            line=dict(color=colour, width=width, dash=dash),
+            name=label,
+            hovertemplate=_hover(label),
+        ))
 
-    # P75 line
-    fig.add_trace(go.Scatter(
-        x=p75["age"], y=p75["value"],
-        mode="lines",
-        line=dict(color=COLOURS["p75"], width=2, dash="dash"),
-        name="75th percentile",
-        hovertemplate=_hover("75th percentile"),
-    ))
-
-    # P50 line
-    fig.add_trace(go.Scatter(
-        x=p50["age"], y=p50["value"],
-        mode="lines",
-        line=dict(color=COLOURS["p50"], width=3),
-        name="Median (P50)",
-        hovertemplate=_hover("Median"),
-    ))
-
-    # Published data markers (solid circles) — only household basis has these
+    # Published WAS data point markers (household only)
     if basis == "Household":
-        for pct_key, pct_data, label in [
-            ("p25", p25, "P25 – published"),
-            ("p50", p50, "P50 – published"),
-            ("p75", p75, "P75 – published"),
-        ]:
+        pub_shown = False
+        for pct_data in [p25, p50, p75]:
             pub = pct_data[pct_data["is_published"]]
             if len(pub):
                 fig.add_trace(go.Scatter(
@@ -248,38 +253,32 @@ def build_figure(log_scale: bool = False) -> go.Figure:
                     mode="markers",
                     marker=dict(color=COLOURS["pub"], size=9, symbol="circle",
                                 line=dict(color="white", width=1.5)),
-                    name=label,
-                    showlegend=(pct_key == "p50"),
+                    name="ONS data point",
+                    showlegend=not pub_shown,
                     hovertemplate=(
-                        f"<b>{label.split('–')[0].strip()} (WAS published)</b>"
-                        "<br>Age %{x}<br>£%{y:,.0f}<extra></extra>"
+                        "<b>ONS published</b><br>Age %{x}<br>£%{y:,.0f}<extra></extra>"
                     ),
                 ))
+                pub_shown = True
     else:
-        # Individual basis — add a legend note entry
         fig.add_trace(go.Scatter(
-            x=[None], y=[None],
-            mode="markers",
+            x=[None], y=[None], mode="markers",
             marker=dict(color="rgba(0,0,0,0)", size=1),
             name="Individual figures are derived estimates",
             showlegend=True,
         ))
 
     # Personal overlay
-    latest_age = None
     if personal_plot_df is not None and len(personal_plot_df) > 0:
         pdf = personal_plot_df.sort_values("age")
-
-        # On log scale, negative/zero net worth can't be plotted — filter and note it
         if log_scale:
             pdf = pdf[pdf["net_worth"] > 0]
-
         if len(pdf):
             fig.add_trace(go.Scatter(
                 x=pdf["age"], y=pdf["net_worth"],
                 mode="lines+markers",
                 line=dict(color=COLOURS["person"], width=2.5),
-                marker=dict(color=COLOURS["person"], size=9,
+                marker=dict(color=COLOURS["person"], size=8,
                             line=dict(color="white", width=1.5)),
                 name="Your net worth",
                 hovertemplate=(
@@ -289,11 +288,46 @@ def build_figure(log_scale: bool = False) -> go.Figure:
                 ),
                 customdata=pdf["year"],
             ))
-            latest_age = float(pdf["age"].iloc[-1])
+
+    # Crosshair: vertical "you are here" line
+    if latest_age is not None:
+        fig.add_vline(
+            x=latest_age,
+            line=dict(color=COLOURS["person"], width=1.5, dash="dash"),
+            annotation_text=f"You (age {latest_age:.1f})",
+            annotation_position="top",
+            annotation=dict(
+                font=dict(color=COLOURS["person"], size=12),
+                bgcolor="white",
+                bordercolor=COLOURS["person"],
+                borderwidth=1,
+                borderpad=4,
+            ),
+        )
+
+    # Crosshair: horizontal "current net worth" line (linear scale only — log adds clutter)
+    if latest_nw is not None and latest_nw > 0 and not log_scale:
+        fig.add_hline(
+            y=latest_nw,
+            line=dict(color=COLOURS["person"], width=1, dash="dot"),
+            annotation_text=_fmt(latest_nw),
+            annotation_position="right",
+            annotation=dict(
+                font=dict(color=COLOURS["person"], size=11),
+                bgcolor="white",
+                borderpad=3,
+            ),
+        )
+
+    # Age band boundary markers (subtle vertical dotted lines)
+    for x_val in [24, 34, 44, 54, 64, 74]:
+        fig.add_vline(
+            x=x_val + 0.5,
+            line=dict(color="#e2e8f0", width=1, dash="dot"),
+        )
 
     # Layout
     price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
-    basis_label = basis.lower()
 
     if log_scale:
         yaxis_cfg = dict(
@@ -318,7 +352,7 @@ def build_figure(log_scale: bool = False) -> go.Figure:
 
     fig.update_layout(
         title=dict(
-            text=f"UK net worth distribution — {basis_label} basis, {price_label}",
+            text=f"UK net worth distribution — {basis.lower()} basis, {price_label}",
             font=dict(size=17, color="#1e293b"),
             x=0,
         ),
@@ -343,33 +377,72 @@ def build_figure(log_scale: bool = False) -> go.Figure:
         plot_bgcolor="white",
         paper_bgcolor="white",
         height=560,
-        margin=dict(l=70, r=30, t=80, b=60),
+        margin=dict(l=70, r=80, t=80, b=60),
     )
 
-    # Age band boundary lines (subtle)
-    band_boundaries = [24, 34, 44, 54, 64, 74]
-    for x_val in band_boundaries:
-        fig.add_vline(
-            x=x_val + 0.5,
-            line=dict(color="#e2e8f0", width=1, dash="dot"),
-            annotation_text="",
+    return fig
+
+
+# ── Percentile trajectory chart ───────────────────────────────────────────────
+
+def build_percentile_chart(traj: pd.DataFrame) -> go.Figure:
+    """Secondary chart: estimated percentile vs age over the user's lifetime."""
+    fig = go.Figure()
+
+    # Reference lines at P25, median, P75
+    for y_val, label in [(75, "P75"), (50, "Median"), (25, "P25")]:
+        fig.add_hline(
+            y=y_val,
+            line=dict(color="#93c5fd", width=1, dash="dot"),
+            annotation_text=label,
+            annotation_position="right",
+            annotation=dict(font=dict(color="#64748b", size=10), bgcolor="rgba(0,0,0,0)"),
         )
 
-    # "You are here" line at latest personal age
-    if latest_age is not None:
-        fig.add_vline(
-            x=latest_age,
-            line=dict(color=COLOURS["person"], width=1.5, dash="dash"),
-            annotation_text=f"You (age {latest_age:.1f})",
-            annotation_position="top",
-            annotation=dict(
-                font=dict(color=COLOURS["person"], size=12),
-                bgcolor="white",
-                bordercolor=COLOURS["person"],
-                borderwidth=1,
-                borderpad=4,
-            ),
-        )
+    # Filled area + line
+    fig.add_trace(go.Scatter(
+        x=traj["age"], y=traj["percentile"],
+        mode="lines+markers",
+        line=dict(color=COLOURS["person"], width=2.5),
+        marker=dict(color=COLOURS["person"], size=7,
+                    line=dict(color="white", width=1.5)),
+        fill="tozeroy",
+        fillcolor="rgba(249,115,22,0.08)",
+        name="Your percentile",
+        hovertemplate=(
+            "<b>Age %{x:.1f}</b><br>"
+            "~%{y:.0f}th percentile<br>"
+            "Net worth: £%{customdata:,.0f}<extra></extra>"
+        ),
+        customdata=traj["net_worth"],
+    ))
+
+    fig.update_layout(
+        title=dict(
+            text="Your estimated percentile over time",
+            font=dict(size=14, color="#1e293b"),
+            x=0,
+        ),
+        xaxis=dict(
+            title="Age",
+            gridcolor="#e2e8f0",
+            dtick=5,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Percentile",
+            range=[0, 100],
+            dtick=25,
+            ticksuffix="th",
+            gridcolor="#e2e8f0",
+        ),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=260,
+        margin=dict(l=60, r=80, t=50, b=50),
+        showlegend=False,
+        hovermode="x unified",
+    )
 
     return fig
 
@@ -382,35 +455,84 @@ st.caption(
     "Source: ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain."
 )
 
-# Percentile callout — shown only when personal data is loaded
+# ── Metrics row ───────────────────────────────────────────────────────────────
+
+latest_age: float | None = None
+latest_nw:  float | None = None
+
 if personal_plot_df is not None and len(personal_plot_df) > 0:
-    latest = personal_plot_df.sort_values("age").iloc[-1]
-    latest_age = float(latest["age"])
-    latest_nw = float(latest["net_worth"])
+    sorted_pdf = personal_plot_df.sort_values("age")
+    latest      = sorted_pdf.iloc[-1]
+    latest_age  = float(latest["age"])
+    latest_nw   = float(latest["net_worth"])
 
-    band_desc = estimate_percentile(latest_nw, round(latest_age), benchmark)
-    price_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
+    price_note  = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
 
-    col1, col2, col3 = st.columns(3)
+    # Exact percentile estimate via log-normal fit
+    exact_pct   = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+    band_desc   = estimate_percentile(latest_nw, round(latest_age), benchmark)
+
+    # Delta from previous data point
+    delta_str   = None
+    delta_val   = None
+    if len(sorted_pdf) >= 2:
+        prev_nw  = float(sorted_pdf.iloc[-2]["net_worth"])
+        delta_val = latest_nw - prev_nw
+        delta_str = _fmt_delta(delta_val)
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Your latest age", f"{latest_age:.1f}")
     with col2:
-        st.metric("Net worth", _fmt(latest_nw), help=f"In {price_note}")
+        st.metric(
+            "Net worth",
+            _fmt(latest_nw),
+            delta=delta_str,
+            help=f"In {price_note}. Delta vs previous data point.",
+        )
     with col3:
-        short_band = {
-            "below the 25th percentile": "Below P25",
-            "between the 25th percentile and the median": "P25 – P50",
-            "between the median and the 75th percentile": "P50 – P75",
-            "above the 75th percentile": "Above P75",
-        }.get(band_desc, band_desc.capitalize())
-        st.metric("Percentile band", short_band)
+        if exact_pct is not None:
+            st.metric(
+                "Est. percentile",
+                f"~{exact_pct:.0f}th",
+                help="Estimated from a log-normal distribution fitted to P25/P50/P75. Indicative only.",
+            )
+        else:
+            short_band = {
+                "below the 25th percentile":              "Below P25",
+                "between the 25th percentile and the median": "P25 – P50",
+                "between the median and the 75th percentile": "P50 – P75",
+                "above the 75th percentile":              "Above P75",
+            }.get(band_desc, band_desc.capitalize())
+            st.metric("Percentile band", short_band)
+    with col4:
+        # Wealth gap to next milestone
+        age_bench = benchmark[benchmark["age"] == min(round(latest_age), 85)]
+        p50_val   = age_bench[age_bench["percentile"] == "p50"]["value"]
+        p75_val   = age_bench[age_bench["percentile"] == "p75"]["value"]
+        if len(p50_val) and len(p75_val):
+            p50v = float(p50_val.iloc[0])
+            p75v = float(p75_val.iloc[0])
+            if latest_nw < p50v:
+                gap = p50v - latest_nw
+                st.metric("Gap to median", _fmt(gap), help="How much more to reach the P50 benchmark at your age.")
+            elif latest_nw < p75v:
+                gap = p75v - latest_nw
+                st.metric("Gap to P75", _fmt(gap), help="How much more to reach the 75th percentile benchmark at your age.")
+            else:
+                above = latest_nw - p75v
+                st.metric("Above P75 by", _fmt(above), help="How far above the 75th percentile you sit.")
 
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** "
-        f"({price_note}) is **{band_desc}** on a {basis.lower()} basis in the UK."
+        f"({price_note}) places you "
+        f"{'at approximately the **' + str(round(exact_pct)) + 'th percentile**' if exact_pct else '**' + band_desc + '**'}"
+        f" on a {basis.lower()} basis in the UK."
+        + (f" (Up {_fmt(delta_val)} from your previous recorded figure.)" if delta_val and delta_val > 0 else
+           f" (Down {_fmt(abs(delta_val))} from your previous recorded figure.)" if delta_val and delta_val < 0 else "")
     )
 
-# Warn if log scale would hide negative personal values
+# Warn if log scale hides personal data points
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
     n_hidden = (personal_plot_df["net_worth"] <= 0).sum()
     st.warning(
@@ -418,21 +540,37 @@ if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"]
         icon="⚠️",
     )
 
-# Chart
-fig = build_figure(log_scale=log_scale)
-st.plotly_chart(fig, use_container_width=True)
+# ── Main chart ────────────────────────────────────────────────────────────────
 
-# Inline notes
+fig = build_main_figure(log_scale, latest_age, latest_nw)
+st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+# Inline note
 if basis == "Individual":
     st.caption(
         "Individual figures are derived from household data using age-specific sharing factors — "
-        "see the methodology panel below for the full calculation."
+        "see the methodology panel below."
     )
 else:
     st.caption(
-        "Filled circles on the chart mark ONS-published data points (band midpoints: ages 20, 30, 40, 50, 60, 70, 80). "
-        "Connecting lines are PCHIP-interpolated estimates. Vertical dotted lines mark age-band boundaries."
+        "Filled circles mark ONS-published data points (band midpoints: ages 20, 30, 40, 50, 60, 70, 80). "
+        "Connecting lines are PCHIP-interpolated estimates. Dotted vertical lines mark age-band boundaries."
     )
+
+# ── Percentile trajectory chart ───────────────────────────────────────────────
+
+if personal_plot_df is not None and len(personal_plot_df) >= 2:
+    traj = build_percentile_trajectory(personal_plot_df, benchmark)
+    if len(traj) >= 2:
+        st.plotly_chart(
+            build_percentile_chart(traj),
+            use_container_width=True,
+            config=PLOTLY_CONFIG,
+        )
+        st.caption(
+            "Percentile estimated by fitting a log-normal distribution to the P25/P50/P75 benchmarks at each age. "
+            "Treat as indicative — log-normality is an approximation."
+        )
 
 
 # ── Methodology panel ─────────────────────────────────────────────────────────
@@ -457,84 +595,75 @@ WAS publishes wealth in 10-year age bands: 16–24, 25–34, 35–44, 45–54, 5
 To produce single-year estimates, we apply **PCHIP monotone cubic spline interpolation**
 anchored at band midpoints (ages 20, 30, 40, 50, 60, 70, 80).
 
-PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) preserves the shape monotonicity
-within each interval, preventing oscillation where net worth growth slows or reverses in
-later life.
+PCHIP preserves shape monotonicity, preventing oscillation where net worth growth slows
+or reverses in later life. **Filled circle markers** on the household chart mark published
+data points; all other ages are interpolated estimates.
 
-- **Filled circle markers** on the household chart mark the seven published data points.
-- **All other ages** are interpolated estimates and should be read with that caveat.
-- Ages 16–19 are held flat at the age-20 value; ages 81–85 at the age-80 value.
+---
+
+### Exact percentile estimation
+
+The "Est. percentile" metric fits a **log-normal distribution** to the three benchmark
+percentiles (P25, P50, P75) at the user's age:
+
+```
+mu    = log(P50)                          [median of log-normal = e^mu]
+sigma = (log(P75) − log(P25)) / 1.3490   [from the normal z-score Phi(0.6745) = 0.75]
+```
+
+The user's net worth is then located on this distribution's CDF. Log-normality is a
+reasonable approximation for wealth distributions but is a modelling assumption — treat
+the result as indicative (±5–10 percentile points), not authoritative.
+
+The **percentile trajectory chart** applies this calculation to every personal data point,
+showing how the user's relative position has changed over time.
 
 ---
 
 ### Household → individual conversion
 
 WAS measures wealth at the household level. The **individual basis** is a derived estimate
-using age-specific sharing factors calibrated from two ONS sources:
+using age-specific sharing factors calibrated from ONS household composition data and
+WAS pension-share component tables.
 
-1. **ONS Families and Households** — average household size and couple/single composition
-   by age of household reference person (HRP)
-2. **WAS component tables** — proportion of total wealth attributable to pension vs
-   property/financial/physical wealth
+Pension wealth is not divided (WAS tracks it per-individual). Non-pension wealth is
+halved for couple households and kept whole for single-person households.
 
-The conversion logic per age band:
-
-```
-sharing_factor = pension_share × 1.0
-               + (1 − pension_share) × (couple_share × 0.5 + single_share × 1.0)
-```
-
-Pension wealth is not divided because WAS tracks it per-individual.
-Non-pension wealth is halved for couple households (assuming 50/50 ownership) and kept
-whole for single-person households.
-
-**Individual figures carry ±15–20% uncertainty** and should be treated as approximate.
-All individual output is flagged as derived.
+**Individual figures carry ±15–20% uncertainty.** All individual output is flagged as derived.
 
 ---
 
 ### Real vs nominal
 
-Nominal values are in **{DATA_YEAR} prices** (approximate mid-point of the 2018–2020
-survey period). Real values are CPI-adjusted to **{REAL_BASE_YEAR} prices** using the
-ONS Consumer Price Index (2015 = 100).
-
-Personal net worth entries are CPI-adjusted from their recorded year to {REAL_BASE_YEAR}
-when real-terms mode is active.
+Nominal values are in **{DATA_YEAR} prices**. Real values are CPI-adjusted to **{REAL_BASE_YEAR}**
+using the ONS Consumer Price Index (2015 = 100). Personal net worth entries are each
+CPI-adjusted from their recorded year when real-terms mode is active.
 
 ---
 
-### Pension wealth definition
+### Pension wealth
 
-WAS tracks four wealth components:
-
-| Component | Definition |
-|---|---|
-| Property wealth | Gross property value minus outstanding mortgage |
-| Financial wealth | Savings, investments, formal/informal loans — net of non-mortgage debt |
-| Physical wealth | Vehicles, household contents, collectibles |
-| Private pension wealth | DC: current fund value; DB: estimated present value using ONS annuity factors |
-
-When **"Include pension wealth"** is toggled off, the pension component is removed from
-all benchmark figures.
+WAS tracks four components: property wealth (net of mortgage), financial wealth (net of
+non-mortgage debt), physical wealth, and private pension wealth (DC: fund value; DB:
+present value using ONS annuity factors). Toggle "Include pension wealth" to exclude
+the pension component from all figures.
 
 ---
 
 ### Personal data privacy
 
-Your net worth data is stored in **Streamlit session state only**. It is not transmitted
-to any server, logged, or persisted beyond the current browser session.
+Your data is held in **Streamlit session state only** — not transmitted, logged, or stored
+beyond the current browser session.
 
 ---
 
 ### Known limitations
 
 - WAS excludes Northern Ireland; figures represent Great Britain only.
-- WAS excludes the very wealthiest households (top ~1–2%) due to survey under-coverage;
-  P75 figures are broadly reliable but the distribution above P90 is underestimated.
-- The 75+ band spans a wide age range; the age-80 midpoint is a modelling assumption.
-- Wave 7 (2018–2020) predates significant house-price and inflation movements of 2021–2024;
-  figures may understate current wealth levels in real terms even after CPI adjustment.
+- WAS under-covers the very wealthiest households (~top 1–2%); P75 is broadly reliable
+  but the distribution above P90 is underestimated.
+- The 75+ band spans a wide range; age-80 midpoint is a modelling assumption.
+- Wave 7 (2018–2020) predates significant house-price and inflation movements of 2021–2024.
 """)
 
 
