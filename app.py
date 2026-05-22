@@ -1285,6 +1285,41 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                 help=f"£{total_paid:,.0f} contributed; £{fv - total_paid:,.0f} from compound returns."
             )
 
+# ── Weeks to FI ──────────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    # Use fire_number from sidebar goal calculator (fallback to 25x £30k)
+    try:
+        fi_target = fire_number
+    except NameError:
+        fi_target = 750_000
+
+    if fi_target > 0:
+        # At what weekly spending rate is current net worth ≥ 25× spending?
+        # If net worth ≥ fire_number: already FI
+        # Weeks of expenses covered by current net worth = nw / (annual_spending/52)
+        # Or: what spending rate would make today's nw = 25× spending?
+        implied_annual = latest_nw / 25
+        implied_weekly = implied_annual / 52
+        fi_gap = max(0, fi_target - latest_nw)
+
+        fi_cols = st.columns(3)
+        with fi_cols[0]:
+            if latest_nw >= fi_target:
+                st.metric("Financial independence", "✅ Achieved",
+                          help=f"Net worth ≥ FIRE number ({_fmt(fi_target)}).")
+            else:
+                st.metric("FIRE gap", _fmt(fi_gap),
+                          help=f"Amount needed to reach FIRE number ({_fmt(fi_target)}).")
+        with fi_cols[1]:
+            st.metric("Implied sustainable spending",
+                      f"{_fmt(implied_weekly)}/wk",
+                      help=f"£{implied_annual:,.0f}/yr — the spending level at which your net worth = 25× (4% SWR).")
+        with fi_cols[2]:
+            fi_pct = min(latest_nw / fi_target * 100, 100) if fi_target > 0 else 0
+            st.metric("FI progress", f"{fi_pct:.0f}%",
+                      help=f"{fi_pct:.1f}% of the way to your FIRE number.")
+
 # Partner summary metric
 if partner_plot_df is not None and len(partner_plot_df) > 0:
     ps = partner_plot_df.sort_values("age")
