@@ -45,15 +45,27 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
 
     df = df.sort_values("age").reset_index(drop=True)
 
-    # Birth-year consistency check: year - age should be roughly constant
-    implied_birth = df["year"] - df["age"]
-    span = implied_birth.max() - implied_birth.min()
-    if span > 3:
-        # Return data plus a warning attribute so the caller can surface it
-        df.attrs["birth_year_warning"] = (
-            f"Implied birth year varies by {span:.0f} years across your data "
-            f"(min {implied_birth.min():.0f}, max {implied_birth.max():.0f}). "
-            "Check that age and year values are consistent."
+    # Detect Excel date-artifact years (Excel serial dates misformatted as early 1900s)
+    artifact_rows = df[df["year"] < 1940]
+    if len(artifact_rows) > 0:
+        example = int(artifact_rows["year"].iloc[0])
+        df.attrs["excel_year_warning"] = (
+            f"{len(artifact_rows)} row(s) have a year before 1940 (e.g. {example}). "
+            "These are likely Excel date-format artefacts — your 'year' column may contain "
+            "date strings that were auto-formatted by Excel. The data will still plot correctly "
+            "using the 'age' column, but year labels in tooltips will be wrong."
         )
+
+    # Birth-year consistency check — only on rows with plausible years
+    plausible = df[df["year"] >= 1940]
+    if len(plausible) >= 2:
+        implied_birth = plausible["year"] - plausible["age"]
+        span = implied_birth.max() - implied_birth.min()
+        if span > 3:
+            df.attrs["birth_year_warning"] = (
+                f"Implied birth year varies by {span:.0f} years across your data "
+                f"(min {implied_birth.min():.0f}, max {implied_birth.max():.0f}). "
+                "Check that age and year values are consistent."
+            )
 
     return df

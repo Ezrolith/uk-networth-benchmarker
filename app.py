@@ -123,6 +123,8 @@ with st.sidebar:
             try:
                 personal_df = parse_personal_csv(uploaded)
                 st.success(f"{len(personal_df)} data point(s) loaded.")
+                if "excel_year_warning" in personal_df.attrs:
+                    st.warning(personal_df.attrs["excel_year_warning"], icon="⚠️")
                 if "birth_year_warning" in personal_df.attrs:
                     st.warning(personal_df.attrs["birth_year_warning"], icon="⚠️")
             except ValueError as exc:
