@@ -190,6 +190,21 @@ with st.sidebar:
             st.session_state.personal_rows = personal_df.to_dict("records")
 
     st.divider()
+
+    # Benchmark data download
+    with st.expander("Download benchmark data"):
+        bm_download = _build_benchmark(basis, include_pension, real_terms)
+        price_label = f"{REAL_BASE_YEAR}_real" if real_terms else f"{DATA_YEAR}_nominal"
+        fname = f"uk_networth_benchmark_{basis.lower()}_{price_label}.csv"
+        st.download_button(
+            "Download benchmark CSV",
+            bm_download.to_csv(index=False).encode(),
+            fname,
+            "text/csv",
+            use_container_width=True,
+            help="Full interpolated benchmark table for the current settings.",
+        )
+
     st.caption(
         "Data: ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain. "
         "Individual figures and single-year interpolations are derived estimates."
@@ -653,6 +668,14 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                     prog   = min(max((latest_nw - from_val) / span, 0.0), 1.0)
                     st.caption(label)
                     st.progress(prog)
+
+                    # Simple linear projection: at current annual gain, when do we hit target?
+                    ann_abs_proj = (latest_nw - first_nw) / age_span if age_span > 0 else None
+                    if ann_abs_proj and ann_abs_proj > 0 and latest_nw < target:
+                        years_needed = (target - latest_nw) / ann_abs_proj
+                        eta_age = latest_age + years_needed
+                        if eta_age <= 100:
+                            st.caption(f"At your current rate: age **{eta_age:.0f}** (in ~{years_needed:.0f} yrs)")
 
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** "
