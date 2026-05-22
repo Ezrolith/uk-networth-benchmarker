@@ -117,3 +117,19 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Forward projection with savings contributions (monthly £ input, FV-of-annuity formula)
 - [x] Duplicate encode/decode helpers removed from data_loader.py
 - [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
+
+### Session 4 (May 2026)
+- [x] PDF report complete overhaul — fpdf2 FPDF subclass footer (fixes blank pages permanently), page numbers
+- [x] Cover page redesign: large hero net worth, stat boxes (percentile, wealth index, CAGR), Key observations narrative
+- [x] Key observations: percentile journey (from first positive NW entry to now), benchmark position, ETA to median
+- [x] Benchmark comparison table with P10–P90, footnote distinguishing published vs log-normal-modelled values
+- [x] Data history table: added Change column, correct ordinal suffixes (33rd/43rd/52nd not 33th/43th/52th)
+- [x] Chart pages: each has a descriptive paragraph explaining what to read
+- [x] Trajectory page: states current percentile in description
+- [x] Gains chart: aggregated to calendar-year (last entry per year) — fixes mess when user has monthly entries; x-axis shows year integers
+- [x] Gains page summary stats: Positive years, Average annual gain, Best/Worst year with year label
+- [x] What-if page: projected values table (S1/S2/S3 net worth at target age vs benchmark median)
+- [x] Goals page: visual progress bars (blue for targets, green for FI tracker); ETA with arrival age; avg-gain fallback when CAGR undefined
+- [x] Methodology & Disclaimer final page
+- [x] _fmt() negative sign fix: -£12k not £-12k (affects whole app)
+- [x] App version string bumped to v2.3
