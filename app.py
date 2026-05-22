@@ -45,7 +45,7 @@ st.markdown(
 
 AGE_RANGE = np.arange(16, 86)
 
-COLOURS = {
+_COLOURS_STANDARD = {
     "p25":    "#93c5fd",
     "p50":    "#1d4ed8",
     "p75":    "#93c5fd",
@@ -54,6 +54,18 @@ COLOURS = {
     "person": "#f97316",   # orange
     "partner":"#10b981",   # emerald
 }
+
+_COLOURS_CB = {           # deuteranopia-friendly (Okabe-Ito palette)
+    "p25":    "#56b4e9",   # sky blue
+    "p50":    "#0072b2",   # blue
+    "p75":    "#56b4e9",
+    "band":   "rgba(86,180,233,0.18)",
+    "pub":    "#005082",
+    "person": "#e69f00",   # amber
+    "partner":"#009e73",   # bluish green
+}
+
+COLOURS = _COLOURS_STANDARD  # overridden below after sidebar reads cb_safe
 
 ASSET_COLOURS = {
     "Property":  "#1d4ed8",
@@ -222,6 +234,8 @@ with st.sidebar:
                                  help="Stacked chart: property / pension / financial / physical at the median")
     show_annotations = st.toggle("Show chart annotations", value=True,
                                  help="Show best-gain arrows and crosshair labels — turn off for clean screenshots")
+    cb_safe = st.toggle("Colourblind-safe palette", value=False,
+                        help="Replaces blue/orange with a deuteranopia-friendly palette")
 
     age_min, age_max = st.slider("Age range shown", 16, 85, (16, 85), step=1,
                                  help="Zoom in on a specific age window")
@@ -335,6 +349,9 @@ with st.sidebar:
         "Individual figures and interpolations are derived estimates."
     )
 
+
+# Apply palette (must be after sidebar reads cb_safe)
+COLOURS = _COLOURS_CB if cb_safe else _COLOURS_STANDARD
 
 # ── Data pipeline ─────────────────────────────────────────────────────────────
 
@@ -1216,13 +1233,44 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                             if eta <= 100:
                                 st.caption(f"At {cagr_proj*100:.1f}% CAGR: age **{eta:.0f}** (~{yrs:.0f} yrs)")
 
+    # Median multiples
+    if p50v and p50v > 0:
+        multiples = latest_nw / p50v
+        multiples_str = f"**{multiples:.1f}× the median**" if multiples >= 0.1 else f"**{multiples*100:.0f}% of the median**"
+    else:
+        multiples_str = ""
+
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** ({price_note}) "
         f"places you {'at approximately the **' + str(round(exact_pct)) + 'th percentile**' if exact_pct else '**' + band_desc + '**'} "
         f"on a {basis.lower()} basis in the UK."
-        + (f" (Up {_fmt(delta_val)} from your previous recorded figure.)" if delta_val and delta_val > 0 else
-           f" (Down {_fmt(abs(delta_val))} from your previous recorded figure.)" if delta_val and delta_val < 0 else "")
+        + (f" That's {multiples_str} at your age." if multiples_str else "")
+        + (f" (Up {_fmt(delta_val)} from previous.)" if delta_val and delta_val > 0 else
+           f" (Down {_fmt(abs(delta_val))} from previous.)" if delta_val and delta_val < 0 else "")
     )
+
+    # Monthly savings micro-calculator
+    with st.expander("Quick calculator: monthly savings impact"):
+        st.caption("How much would saving an extra amount per month add to your net worth?")
+        mc_cols = st.columns(3)
+        with mc_cols[0]:
+            extra_monthly = st.number_input("Extra monthly saving (£)", 0, 10_000, 200, 50, key="mc_monthly")
+        with mc_cols[1]:
+            mc_return  = st.number_input("Annual return (%)", 0.0, 15.0, 5.0, 0.5, key="mc_return")
+        with mc_cols[2]:
+            mc_years   = st.number_input("Years", 1, 50, 10, 1, key="mc_years")
+        if extra_monthly > 0:
+            # FV of annuity: PMT * [(1+r)^n - 1] / r  where r = monthly rate
+            r = (mc_return / 100) / 12
+            n = mc_years * 12
+            fv = extra_monthly * ((1 + r) ** n - 1) / r if r > 0 else extra_monthly * n
+            total_paid = extra_monthly * n
+            st.metric(
+                f"Future value in {mc_years} yrs",
+                _fmt(fv),
+                delta=f"+{_fmt(fv - total_paid)} from returns",
+                help=f"£{total_paid:,.0f} contributed; £{fv - total_paid:,.0f} from compound returns."
+            )
 
 # Partner summary metric
 if partner_plot_df is not None and len(partner_plot_df) > 0:
