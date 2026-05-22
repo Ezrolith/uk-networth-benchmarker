@@ -2121,10 +2121,30 @@ if personal_plot_df is not None and latest_nw is not None:
         gains_png  = _mpl_gains() if len(_s_rpt) >= 2 else None
         whatif_png = _mpl_whatif()
 
-        # PDF layout helpers
-        pdf = FPDF()
+        # ── PDF helpers & layout ───────────────────────────────────────────────
+        def _ordinal(n: int) -> str:
+            n = int(n)
+            if 11 <= (n % 100) <= 13:
+                return f"{n}th"
+            return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
+        _ftxt = (
+            f"UK Net Worth Benchmarker  |  ONS WAS Wave 7 (2018-2020)  |  "
+            f"Not financial advice  |  {_today}"
+        )
+
+        # Subclass so fpdf2 calls footer() automatically on each page close
+        class _PDF(FPDF):
+            def footer(self):
+                self.set_y(-14)
+                self.set_font("Helvetica", "I", 7)
+                self.set_text_color(*GREY)
+                self.cell(148, 5, _ftxt)
+                self.cell(0, 5, f"Page {self.page_no()}", align="R")
+
+        pdf = _PDF()
         pdf.set_margins(15, 15, 15)
-        pdf.set_auto_page_break(auto=True, margin=18)
+        pdf.set_auto_page_break(auto=True, margin=20)
 
         def H1(txt):
             pdf.set_font("Helvetica", "B", 14); pdf.set_text_color(*BLUE)
@@ -2137,94 +2157,146 @@ if personal_plot_df is not None and latest_nw is not None:
             pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*SLATE)
             pdf.cell(0, 7, txt, ln=True)
 
-        def KV(label, value, lw=68):
+        def KV(label, value, lw=70):
             pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*GREY)
             pdf.cell(lw, 6, label)
             pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
             pdf.cell(0, 6, str(value), ln=True)
 
         def SM(txt):
-            pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(*GREY)
-            pdf.cell(0, 5, txt, ln=True); pdf.set_text_color(*SLATE)
+            pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
+            pdf.multi_cell(0, 5, txt); pdf.set_text_color(*SLATE)
 
         def TH(*cols):
             pdf.set_font("Helvetica", "B", 9); pdf.set_fill_color(*LBLUE)
+            pdf.set_text_color(*SLATE)
             for txt, w in cols:
-                pdf.cell(w, 6, txt, fill=True)
+                pdf.cell(w, 6.5, txt, fill=True)
             pdf.ln()
 
         def TR(i, *cells):
             pdf.set_fill_color(*LGREY) if i % 2 == 0 else pdf.set_fill_color(255, 255, 255)
+            pdf.set_text_color(*SLATE)
             for txt, w, bold in cells:
                 pdf.set_font("Helvetica", "B" if bold else "", 9)
                 pdf.cell(w, 5.5, str(txt), fill=True)
             pdf.ln()
 
-        def _ordinal(n: int) -> str:
-            n = int(n)
-            if 11 <= (n % 100) <= 13:
-                return f"{n}th"
-            return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
-
-        def FOOTER():
-            pdf.set_auto_page_break(auto=False)
-            pdf.set_y(-14); pdf.set_font("Helvetica", "I", 7); pdf.set_text_color(*GREY)
-            pdf.cell(0, 5,
-                f"UK Net Worth Benchmarker  |  ONS WAS Wave 7 (2018-2020)  |  "
-                f"Not financial advice  |  {_today}", align="C")
-            pdf.set_auto_page_break(auto=True, margin=18)
-            pdf.set_text_color(*SLATE)
-
-        def CHART(png_b, caption=""):
+        def CHART(png_b):
             if png_b is None:
                 SM("(chart unavailable)")
                 return
             pdf.image(_io.BytesIO(png_b), x=15, w=180)
-            pdf.ln(2)
-            if caption:
-                SM(caption)
 
-        # ── Page 1: Cover ──────────────────────────────────────────────────────
+        # ── Page 1: Cover ──────────────────────────────────────────────────────────
         pdf.add_page()
         pdf.set_fill_color(*BLUE); pdf.rect(0, 0, 210, 48, "F")
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 22); pdf.set_y(12)
-        pdf.cell(0, 12, "UK Net Worth Benchmarker", align="C", ln=True)
+        pdf.set_font("Helvetica", "B", 22); pdf.set_y(11)
+        pdf.cell(0, 13, "UK Net Worth Benchmarker", align="C", ln=True)
         pdf.set_font("Helvetica", "", 13)
         pdf.cell(0, 8, "Personal Report", align="C", ln=True)
-        pdf.set_text_color(*SLATE); pdf.ln(10)
+        pdf.set_text_color(*SLATE)
+        pdf.set_y(58)
 
-        H1("Settings")
-        KV("Generated:", _today)
-        KV("Basis:", basis)
-        KV("Prices:", _price_lbl)
-        KV("Pension:", "Included" if include_pension else "Excluded")
+        H1("Report settings")
+        _basis_lbl = basis
         if basis == "Individual" and gender != "All":
-            KV("Gender:", gender)
+            _basis_lbl = f"Individual ({gender})"
+        KV("Generated:", _today)
+        KV("Basis:", _basis_lbl)
+        KV("Prices:", _price_lbl)
+        KV("Pension wealth:", "Included" if include_pension else "Excluded")
         if wealth_component != "Total":
             KV("Wealth component:", wealth_component)
 
-        pdf.ln(4); H1("Current position")
+        pdf.ln(4); H1("Your snapshot")
         KV("Age:", f"{latest_age:.1f}")
         KV("Net worth:", _fmt(latest_nw))
         if _pct_rpt:
             KV("Estimated percentile:", f"~{_ordinal(round(_pct_rpt))}")
         p50v = _bm("p50")
         if p50v:
-            KV("Relative wealth index:", f"{latest_nw/p50v*100:.0f}  (100 = median)")
+            KV("Relative to median:", f"{latest_nw/p50v*100:.0f}  (100 = median for your age group)")
+        if _cagr_rpt:
+            KV("Growth rate (CAGR):",
+               f"{_cagr_rpt*100:+.2f}% per year since age {float(_first_rpt['age']):.0f}")
 
-        FOOTER()
+        if _pct_rpt:
+            pdf.ln(4); H1("Key observations")
+            _first_pct = None
+            if float(_first_rpt["net_worth"]) > 0:
+                _first_pct = estimate_exact_percentile(
+                    float(_first_rpt["net_worth"]),
+                    min(round(float(_first_rpt["age"])), 85), benchmark)
+            p25v = _bm("p25"); p75v = _bm("p75")
+            _obs = []
+            if _first_pct:
+                _dp = _pct_rpt - _first_pct
+                _dir = "risen" if _dp > 0 else "fallen"
+                _sign = "+" if _dp > 0 else ""
+                _obs.append(
+                    f"Your percentile has {_dir} from the ~{_ordinal(round(_first_pct))} "
+                    f"at age {float(_first_rpt['age']):.0f} to the ~{_ordinal(round(_pct_rpt))} "
+                    f"now ({_sign}{_dp:.0f} pct pts in {_asp_rpt:.1f} years)."
+                )
+            if p50v and p25v and p75v:
+                if latest_nw >= p75v:
+                    _obs.append(f"You are above the 75th percentile ({_fmt(p75v)}) for your age group.")
+                elif latest_nw >= p50v:
+                    _obs.append(
+                        f"You are above the median ({_fmt(p50v)}) for your age group, "
+                        f"with {_fmt(p75v - latest_nw)} to go to reach the 75th percentile."
+                    )
+                elif latest_nw >= p25v:
+                    _obs.append(
+                        f"You are between the 25th percentile ({_fmt(p25v)}) and the median "
+                        f"({_fmt(p50v)}) for your age group."
+                    )
+                else:
+                    _obs.append(f"You are below the 25th percentile ({_fmt(p25v)}) for your age group.")
+            if _cagr_rpt and _cagr_rpt > 0 and p50v and latest_nw < p50v:
+                try:
+                    _yrs_med = math.log(p50v / latest_nw) / math.log(1 + _cagr_rpt)
+                    if 0 < _yrs_med < 40:
+                        _obs.append(
+                            f"At your current growth rate you would reach the median "
+                            f"in ~{_yrs_med:.0f} years (age {latest_age + _yrs_med:.0f})."
+                        )
+                except Exception:
+                    pass
+            for ob in _obs:
+                pdf.set_font("Helvetica", "", 9.5); pdf.set_text_color(*SLATE)
+                pdf.multi_cell(0, 5.5, ob)
+                pdf.ln(1)
 
-        # ── Page 2: Growth & benchmark ─────────────────────────────────────────
-        pdf.add_page(); H1("Growth history")
-        KV("Period:", f"age {float(_first_rpt['age']):.1f} to {latest_age:.1f}  ({_asp_rpt:.1f} yrs)")
-        KV("Start net worth:", _fmt(_fnw_rpt))
-        KV("Latest net worth:", _fmt(latest_nw))
+        # ── Page 2: Benchmark context & growth ─────────────────────────────────
+        pdf.add_page()
+        H1(f"Benchmark comparison at age {latest_age:.0f}")
+        _basis_desc = "individuals" if basis == "Individual" else "households"
+        pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
+        pdf.multi_cell(0, 5.5,
+            f"ONS WAS Wave 7 (2018-2020) wealth thresholds for UK {_basis_desc} aged "
+            f"{latest_age:.0f}, compared to your current net worth of {_fmt(latest_nw)}.")
+        pdf.ln(3)
+        TH(("Percentile", 35), ("Benchmark", 45), ("Your position", 100))
+        for i, (pk, pl) in enumerate([("p10","P10"),("p25","P25"),("p50","Median"),
+                                       ("p75","P75"),("p90","P90")]):
+            v = _bm(pk)
+            if v is None: continue
+            diff = latest_nw - v
+            pos = f"above by {_fmt(abs(diff))}" if diff >= 0 else f"below by {_fmt(abs(diff))}"
+            TR(i, (pl, 35, pk=="p50"), (_fmt(v), 45, pk=="p50"), (pos, 100, False))
+
+        pdf.ln(5); H1("Growth history")
+        KV("Period:", f"Age {float(_first_rpt['age']):.1f} to {latest_age:.1f}  ({_asp_rpt:.1f} years)")
+        KV("Starting net worth:", _fmt(_fnw_rpt))
+        KV("Current net worth:", _fmt(latest_nw))
         KV("Total change:", _fmt_delta(latest_nw - _fnw_rpt))
         if _cagr_rpt:
-            KV("CAGR:", f"{_cagr_rpt*100:+.2f}%")
+            KV("CAGR:", f"{_cagr_rpt*100:+.2f}% per year")
             if _cagr_rpt > 0:
-                KV("Doubles in:", f"~{math.log(2)/math.log(1+_cagr_rpt):.0f} years at current rate")
+                KV("Doubling time:", f"~{math.log(2)/math.log(1+_cagr_rpt):.0f} years at this rate")
         if len(_s_rpt) >= 2:
             _g = _s_rpt["net_worth"].diff()
             _ib, _iw = _g.idxmax(), _g.idxmin()
@@ -2233,65 +2305,76 @@ if personal_plot_df is not None and latest_nw is not None:
             if not pd.isna(_iw):
                 KV("Worst period:", f"{_fmt_delta(_g[_iw])}  (age {float(_s_rpt.loc[_iw,'age']):.1f})")
 
-        pdf.ln(3); H1(f"Benchmark at age {latest_age:.0f}")
-        TH(("Percentile", 40), ("Net worth", 55), ("vs yours", 85))
-        for i, (pk, pl) in enumerate([("p10","P10"),("p25","P25"),("p50","Median"),
-                                       ("p75","P75"),("p90","P90")]):
-            v = _bm(pk)
-            if v is None: continue
-            diff = latest_nw - v
-            sign = "above" if diff >= 0 else "below"
-            TR(i, (pl, 40, pk=="p50"), (_fmt(v), 55, pk=="p50"),
-               (f"{sign} by {_fmt(abs(diff))}", 85, False))
-
-        pdf.ln(3); H1("Data history")
-        TH(("Age", 25), ("Year", 25), ("Net worth", 50), ("~Percentile", 40))
+        # ── Page 3: Net worth history ───────────────────────────────────────────
+        pdf.add_page()
+        H1("Net worth history")
+        pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
+        pdf.multi_cell(0, 5.5,
+            "Each row shows your net worth at a point in time with the change from the previous "
+            "entry and an estimated percentile. Percentiles are indicative (+/-5-10 pct pts).")
+        pdf.ln(3)
+        TH(("Age", 22), ("Year", 22), ("Net worth", 42), ("Change", 38), ("~Percentile", 40))
+        _prev_nw = None
         for i, (_, rd) in enumerate(_s_rpt.iterrows()):
-            a_d = float(rd["age"]); nw_d = float(rd["net_worth"])
-            p_d = estimate_exact_percentile(nw_d, min(round(a_d), 85), benchmark)
+            a_d  = float(rd["age"]); nw_d = float(rd["net_worth"])
+            p_d  = estimate_exact_percentile(nw_d, min(round(a_d), 85), benchmark)
             yr_d = str(int(rd["year"])) if "year" in rd.index else ""
             note_d = str(rd["note"]) if "note" in rd.index and str(rd.get("note","")).strip() else ""
-            TR(i, (f"{a_d:.1f}", 25, False), (yr_d, 25, False),
-               (_fmt(nw_d), 50, False), (f"~{_ordinal(round(p_d))}" if p_d else "n/a", 40, False))
+            chg = _fmt_delta(nw_d - _prev_nw) if _prev_nw is not None else "-"
+            _prev_nw = nw_d
+            TR(i, (f"{a_d:.1f}", 22, False), (yr_d, 22, False),
+               (_fmt(nw_d), 42, False), (chg, 38, False),
+               (f"~{_ordinal(round(p_d))}" if p_d else "n/a", 40, False))
             if note_d:
                 pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
-                pdf.cell(25, 4.5, ""); pdf.cell(0, 4.5, f"  {note_d}", ln=True)
+                pdf.cell(22, 4.5, ""); pdf.cell(0, 4.5, f"  Note: {note_d}", ln=True)
                 pdf.set_text_color(*SLATE)
 
-        FOOTER()
-
-        # ── Page 3: Main chart ─────────────────────────────────────────────────
+        # ── Page 4: Main chart ─────────────────────────────────────────────────
         pdf.add_page(); H1("Net worth vs UK distribution")
-        CHART(main_png,
-              "Shaded band = P25-P75. Lines interpolated from ONS WAS Wave 7 (2018-2020).")
-        FOOTER()
+        SM(
+            f"Your net worth plotted against the P25, median and P75 benchmarks for UK "
+            f"{_basis_desc} at each age. The shaded band shows the interquartile range. "
+            f"Lines are PCHIP-interpolated from ONS WAS Wave 7 (2018-2020) age-band data."
+        )
+        pdf.ln(3); CHART(main_png)
 
-        # ── Page 4: Percentile trajectory ──────────────────────────────────────
+        # ── Page 5: Percentile trajectory ──────────────────────────────────────
         if traj_png:
             pdf.add_page(); H1("Percentile trajectory")
-            CHART(traj_png,
-                  "Percentile via log-normal fit to P25/P50/P75. Indicative +/-5-10 pct pts.")
-            FOOTER()
+            SM(
+                f"Your estimated percentile rank at each data point. A rising line means your "
+                f"wealth is growing faster than the typical UK {_basis_desc[:-1]}. Derived from "
+                f"a log-normal model fitted to P25/P50/P75 - indicative +/-5-10 percentile points."
+            )
+            pdf.ln(3); CHART(traj_png)
 
-        # ── Page 5: Annual gains ────────────────────────────────────────────────
+        # ── Page 6: Annual gains ────────────────────────────────────────────────
         if gains_png:
-            pdf.add_page(); H1("Annual gains breakdown")
-            CHART(gains_png,
-                  "Red bars = net worth fell that period. Each bar spans consecutive data points.")
-            FOOTER()
+            pdf.add_page(); H1("Period-by-period gains")
+            SM(
+                "Net change in wealth between each consecutive pair of data points. "
+                "Blue = net worth increased; red = net worth fell. "
+                "Combines investment returns and saving/spending behaviour."
+            )
+            pdf.ln(3); CHART(gains_png)
 
-        # ── Page 6: What-if projection ─────────────────────────────────────────
+        # ── Page 7: What-if projection ─────────────────────────────────────────
         if whatif_png:
             pdf.add_page(); H1("What-if projection")
-            CHART(whatif_png, "Illustrative only - not financial advice.")
-            FOOTER()
+            SM(
+                f"Projected net worth from age {latest_age:.0f} to {wi_age} under three CAGR "
+                f"scenarios, alongside the benchmark median. Assumes compound growth from your "
+                f"current net worth. Illustrative only - not financial advice."
+            )
+            pdf.ln(3); CHART(whatif_png)
 
-        # ── Page 7: Goals (if set) ─────────────────────────────────────────────
+        # ── Page 8: Goals (if set) ─────────────────────────────────────────────
         try:
             if goal_amount > 0 or fire_number > 0:
-                pdf.add_page(); H1("Goals & FIRE")
+                pdf.add_page(); H1("Goals & financial independence")
                 KV("Target net worth:", _fmt(goal_amount))
-                KV("FIRE number (25x spending):", _fmt(fire_number))
+                KV("FIRE number (25x annual spending):", _fmt(fire_number))
                 try: KV("Annual retirement spending:", f"GBP {fire_spending:,}")
                 except NameError: pass
 
@@ -2299,14 +2382,15 @@ if personal_plot_df is not None and latest_nw is not None:
                                         ("FIRE number", fire_number)]:
                     if tgt_v <= 0: continue
                     pct_t = min(latest_nw / tgt_v * 100, 100)
-                    pdf.ln(3); H2(f"{tgt_lbl}: {pct_t:.0f}% of the way")
+                    pdf.ln(3); H2(f"{tgt_lbl}: {pct_t:.0f}% of the way there")
                     if tgt_v > latest_nw:
-                        KV("  Gap:", _fmt(tgt_v - latest_nw))
+                        KV("  Remaining gap:", _fmt(tgt_v - latest_nw))
                         if _cagr_rpt and _cagr_rpt > 0:
                             try:
                                 yrs_t = math.log(tgt_v / latest_nw) / math.log(1 + _cagr_rpt)
                                 if 0 < yrs_t < 80:
-                                    KV("  ETA at current CAGR:", f"~{yrs_t:.0f} years")
+                                    KV("  ETA at current CAGR:",
+                                       f"~{yrs_t:.0f} years  (age {latest_age + yrs_t:.0f})")
                             except Exception: pass
                     else:
                         pdf.set_font("Helvetica", "B", 9)
@@ -2315,13 +2399,55 @@ if personal_plot_df is not None and latest_nw is not None:
                         pdf.set_text_color(*SLATE)
 
                 if fire_number > 0:
-                    pdf.ln(3); H2("Financial independence")
+                    pdf.ln(3); H2("Financial independence tracker")
                     KV("FI progress:", f"{min(latest_nw/fire_number*100,100):.0f}%")
-                    KV("Implied sustainable spending:",
+                    KV("Sustainable spending at current NW:",
                        f"{_fmt(latest_nw/25/52)}/week  ({_fmt(latest_nw/25)}/yr)")
+                    if fire_number > latest_nw:
+                        KV("FIRE gap:", _fmt(fire_number - latest_nw))
 
-                FOOTER()
         except (NameError, Exception): pass
+
+        # ── Final page: Methodology & disclaimer ───────────────────────────────
+        pdf.add_page()
+        H1("Methodology & data sources")
+        pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
+        for para in [
+            ("Benchmark data: ONS Wealth and Assets Survey (WAS) Wave 7, covering 2018 to 2020. "
+             "The survey provides P25, P50 and P75 total wealth by age band for UK households "
+             "and individuals. Values are approximate reproductions of published tables."),
+            ("Interpolation: PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) converts "
+             "the published 10-year age bands to single-year estimates from age 16 to 85."),
+            ("Percentile estimation: The exact percentile for a given net worth at a given age is "
+             "estimated via a log-normal distribution fitted to the P25, P50 and P75 values. "
+             "Estimates carry uncertainty of approximately +/-5 to 10 percentile points."),
+            ("Real-terms adjustment: Where selected, all figures are CPI-adjusted to 2026 prices "
+             "using an estimated adjustment factor of ~1.26 (CPI index ~141.7, base 2015=100)."),
+            ("Individual basis: Household totals are converted using WAS-derived sharing factors. "
+             "Gender-adjusted benchmarks use published WAS male/female wealth ratios."),
+        ]:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5.5, para)
+            pdf.ln(2)
+
+        pdf.ln(3)
+        H1("Disclaimer")
+        pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
+        for para in [
+            ("This report is produced for personal information and illustration only. "
+             "It does not constitute financial advice. Benchmark data reflect 2018-2020 survey "
+             "conditions and may not represent current wealth distributions."),
+            ("Projections assume constant growth rates and do not account for tax, inflation, "
+             "market volatility, or changes in personal circumstances. "
+             "Past growth does not guarantee future returns."),
+            ("Please consult a qualified financial adviser before making investment or "
+             "retirement decisions."),
+            ("Data: Office for National Statistics, Wealth and Assets Survey Wave 7. "
+             "Reproduced under the Open Government Licence v3.0."),
+        ]:
+            pdf.set_font("Helvetica", "", 9)
+            pdf.multi_cell(0, 5.5, para)
+            pdf.ln(2)
 
         return bytes(pdf.output())
 
