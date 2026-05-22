@@ -1,4 +1,5 @@
 from pathlib import Path
+import json, base64, zlib
 import pandas as pd
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -9,6 +10,26 @@ def load_was_data() -> pd.DataFrame:
     df = df.rename(columns={"value_nominal": "value"})
     df["with_pension"] = df["with_pension"].astype(bool)
     return df
+
+
+# ── Shareable URL helpers ─────────────────────────────────────────────────────
+
+def encode_personal_data(df: pd.DataFrame) -> str:
+    """Compress personal data to a URL-safe base64 string for sharing."""
+    records = df[["year", "age", "net_worth"]].round({"age": 4, "net_worth": 2}).to_dict("records")
+    raw = json.dumps(records, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(zlib.compress(raw, level=9)).decode()
+
+
+def decode_personal_data(encoded: str) -> pd.DataFrame:
+    """Decode a shareable URL token back into a personal data DataFrame."""
+    raw = zlib.decompress(base64.urlsafe_b64decode(encoded.encode() + b"=="))
+    records = json.loads(raw.decode())
+    df = pd.DataFrame(records)
+    df["year"]      = df["year"].astype(int)
+    df["age"]       = df["age"].astype(float)
+    df["net_worth"] = df["net_worth"].astype(float)
+    return df.sort_values("age").reset_index(drop=True)
 
 
 def parse_personal_csv(uploaded_file) -> pd.DataFrame:
@@ -69,3 +90,23 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
             )
 
     return df
+
+
+# ── Shareable URL helpers ─────────────────────────────────────────────────────
+
+def encode_personal_data(df: pd.DataFrame) -> str:
+    """Compress personal data to a URL-safe base64 string for sharing."""
+    records = df[["year", "age", "net_worth"]].round({"age": 4, "net_worth": 2}).to_dict("records")
+    raw = json.dumps(records, separators=(",", ":")).encode()
+    return base64.urlsafe_b64encode(zlib.compress(raw, level=9)).decode()
+
+
+def decode_personal_data(encoded: str) -> pd.DataFrame:
+    """Decode a shareable URL token back into a personal data DataFrame."""
+    raw = zlib.decompress(base64.urlsafe_b64decode(encoded.encode() + b"=="))
+    records = json.loads(raw.decode())
+    df = pd.DataFrame(records)
+    df["year"]      = df["year"].astype(int)
+    df["age"]       = df["age"].astype(float)
+    df["net_worth"] = df["net_worth"].astype(float)
+    return df.sort_values("age").reset_index(drop=True)

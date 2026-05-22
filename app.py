@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from utils.data_loader import load_was_data, parse_personal_csv
+from utils.data_loader import load_was_data, parse_personal_csv, encode_personal_data, decode_personal_data
 from utils.inference import (
     interpolate_benchmarks,
     convert_to_individual,
@@ -44,6 +44,20 @@ st.markdown(
 )
 
 AGE_RANGE = np.arange(16, 86)
+
+# ── Shareable URL: pre-load personal data from query param ────────────────────
+_url_personal_df: pd.DataFrame | None = None
+_url_load_error: str | None = None
+_qp = st.query_params
+if "d" in _qp and "url_personal_loaded" not in st.session_state:
+    try:
+        _url_personal_df = decode_personal_data(_qp["d"])
+        st.session_state.url_personal_df = _url_personal_df
+        st.session_state.url_personal_loaded = True
+    except Exception:
+        _url_load_error = "Could not decode the shared link — it may be corrupted or expired."
+elif "url_personal_df" in st.session_state:
+    _url_personal_df = st.session_state.url_personal_df
 
 COLOURS = {
     "p25":    "#93c5fd",
@@ -106,6 +120,10 @@ with st.sidebar:
                                 help="Spreads out low values — useful when your data spans a wide range")
     show_tails      = st.toggle("Show P10 / P90", value=False,
                                 help="Derived tails: modelled from the log-normal fit, not published WAS data")
+    show_milestones = st.toggle("Wealth milestones", value=False,
+                                help="Reference lines at £100k, £250k, £500k and £1m")
+    smooth_traj     = st.toggle("Smooth trajectory", value=False,
+                                help="Apply a rolling average to the percentile trajectory chart (reduces noise with many data points)")
 
     st.divider()
     st.subheader("Your net worth")
@@ -115,7 +133,10 @@ with st.sidebar:
         label_visibility="collapsed",
     )
 
-    personal_df: pd.DataFrame | None = None
+    personal_df: pd.DataFrame | None = _url_personal_df  # pre-populated from shared link
+
+    if _url_load_error:
+        st.error(_url_load_error)
 
     if input_method == "Upload CSV":
         uploaded = st.file_uploader("Upload your net worth history", type=["csv"])
@@ -215,6 +236,7 @@ def _hover(label: str) -> str:
 def build_main_figure(
     log_scale: bool,
     show_tails: bool,
+    show_milestones: bool,
     latest_age: float | None,
     latest_nw: float | None,
 ) -> go.Figure:
@@ -338,6 +360,18 @@ def build_main_figure(
                 ),
                 customdata=custom,
             ))
+
+    # Wealth milestone reference lines
+    if show_milestones and not log_scale:
+        for amount, label in [(100_000, "£100k"), (250_000, "£250k"),
+                              (500_000, "£500k"), (1_000_000, "£1m")]:
+            fig.add_hline(
+                y=amount,
+                line=dict(color="#d1d5db", width=1, dash="dot"),
+                annotation_text=label,
+                annotation_position="right",
+                annotation=dict(font=dict(color="#9ca3af", size=10), bgcolor="rgba(0,0,0,0)"),
+            )
 
     # Crosshair: vertical "you are here" line
     if latest_age is not None:
@@ -639,7 +673,7 @@ if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"]
 
 # ── Main chart ────────────────────────────────────────────────────────────────
 
-fig = build_main_figure(log_scale, show_tails, latest_age, latest_nw)
+fig = build_main_figure(log_scale, show_tails, show_milestones, latest_age, latest_nw)
 st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 # Inline note
@@ -654,11 +688,39 @@ else:
         "Connecting lines are PCHIP-interpolated estimates. Dotted vertical lines mark age-band boundaries."
     )
 
+# ── Share link ────────────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and len(personal_plot_df) > 0:
+    with st.expander("Share your chart", expanded=False):
+        try:
+            token  = encode_personal_data(personal_plot_df)
+            params = st.query_params.to_dict()
+            params["d"] = token
+            param_str = "&".join(f"{k}={v}" for k, v in params.items())
+            # Build a full URL using the current host where possible
+            base_url = "https://uk-networth-benchmarker.streamlit.app"
+            share_url = f"{base_url}/?{param_str}"
+            st.text_input(
+                "Copy this link to share your net worth history (no data is stored on any server):",
+                value=share_url,
+                key="share_url_display",
+            )
+            st.caption(
+                "The link encodes your data directly — anyone with it can see your figures. "
+                "Share only with people you trust."
+            )
+        except Exception:
+            st.info("Share link unavailable — data may be too large to encode.")
+
 # ── Percentile trajectory chart ───────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) >= 2:
     traj = build_percentile_trajectory(personal_plot_df, benchmark)
     if len(traj) >= 2:
+        if smooth_traj and len(traj) >= 4:
+            window = max(3, len(traj) // 4)
+            traj = traj.copy()
+            traj["percentile"] = traj["percentile"].rolling(window, center=True, min_periods=1).mean()
         st.plotly_chart(
             build_percentile_chart(traj),
             use_container_width=True,
@@ -667,6 +729,7 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
         st.caption(
             "Percentile estimated by fitting a log-normal distribution to the P25/P50/P75 benchmarks at each age. "
             "Treat as indicative — log-normality is an approximation."
+            + (" Rolling average applied." if smooth_traj else "")
         )
 
 
