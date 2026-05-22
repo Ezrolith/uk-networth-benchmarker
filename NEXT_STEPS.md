@@ -4,61 +4,109 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ---
 
-## v1 polish — remaining
+## Highest priority remaining
 
-### Data accuracy
-- [ ] **Replace approximate WAS figures with the actual ONS data tables** — download WAS Wave 7 Bulletin Table 3.2 and transcribe exact numbers into `data/was_data.csv`. This is the single biggest data quality improvement available.
-- [ ] **Add WAS Wave 8 (2020-2022) data** — update `was_data.csv` and version the source column when published.
+### Data accuracy (biggest single improvement available)
+- [ ] **Replace approximate WAS figures with actual ONS data tables** — download WAS Wave 7 Bulletin Table 3.2 (Total Wealth by age and percentile) and transcribe exact numbers into `data/was_data.csv`. Current figures are close but not identical. This is the single change that most improves credibility.
+- [ ] **Add WAS Wave 8 (2020–2022) data** — when published, update `was_data.csv`, add new rows with `data_year=2021`, and add a wave selector toggle so users can compare waves.
 
-### Chart UX
-- [ ] **Mobile layout** — sidebar collapses awkwardly on small screens.
+### Chart / UX polish
+- [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
+- [ ] **Smarter milestone ETA** for negative/zero starting net worth — current CAGR projection breaks when first recorded value ≤ 0; fall back to savings-rate estimate.
 
 ### Personal data
-- [ ] **Currency input formatting** — sidebar manual entry shows raw integers; format as £ with thousands separators.
-- [ ] **Smarter milestone ETA** — current projection is linear; a CAGR-based compound projection would be more realistic.
+- [ ] **Note annotations on data points** — let users attach a short label to any data point ("bought house", "changed job") that shows in hover tooltips.
 
 ---
 
 ## v2 features
 
-### Filters and breakdowns
-- [ ] **Region filter** — WAS publishes regional breakdowns (London, North West, etc.). High value, requires additional data prep.
-- [ ] **Asset class breakdown** — stacked area chart showing pension / property / financial / physical components by age.
-- [ ] **Gender filter** — WAS includes individual-level pension data by gender; relevant for the individual basis.
+### Filters
+- [ ] **Region filter** — WAS publishes regional breakdowns (London vs rest of UK). High value, requires adding regional data to `was_data.csv`.
+- [ ] **Wealth type filter** — toggle to show only property, pension, or financial wealth components rather than total.
 
-### Saved snapshots
-- [ ] **Dedicated PNG export button** — using `fig.to_image()` with kaleido for more control over styling than the modebar.
+### Export
+- [ ] **Proper PDF report** — use kaleido (already in requirements.txt) to export all active charts as a formatted multi-page PDF. The current text `.md` download is a stopgap.
 
 ---
 
 ## v3 stretch
 
-- [ ] **"What if" projection** — forward-model net worth under different contribution / return assumptions against forward-projected benchmark percentiles.
-- [ ] **International comparison** — US SCF, Canada SFS — normalised to PPP.
+- [ ] **International comparison** — US SCF, Canada SFS, normalised to PPP. Useful context, harder to keep current.
 - [ ] **Tax-adjusted view** — net worth after estimated IHT / CGT exposure.
+- [ ] **Forward projection with savings contributions** — extend the what-if model to include monthly savings alongside CAGR (currently CAGR only).
 
 ---
 
-## Completed
+## Completed ✓
 
+### Session 1 (initial build, May 2026)
+- [x] Core app: P25/P50/P75 benchmark chart, household/individual toggle, real/nominal, pension toggle
+- [x] Personal CSV upload (handles Excel date-formatted years, decimal ages)
+- [x] PCHIP interpolation from WAS age bands to single years
+- [x] Methodology panel with full source documentation
+- [x] ONS data point markers on household chart
+- [x] Deploy to Streamlit Community Cloud
+- [x] GitHub repo (Ezrolith/uk-networth-benchmarker, private)
+
+### Session 2 (iterative enhancements, May 2026)
 - [x] Log scale toggle
 - [x] "You are here" vertical age line + horizontal net worth crosshair
-- [x] Exact percentile estimate via log-normal fit
-- [x] Percentile trajectory chart (secondary chart)
+- [x] Exact percentile estimate (~48th) via log-normal fit to P25/P50/P75
+- [x] Percentile trajectory chart with band shading (Below P25 / P25–P50 / P50–P75 / Above P75)
 - [x] Trajectory smoothing (rolling average toggle)
-- [x] CAGR, average annual gain, delta vs previous data point
+- [x] CAGR metric + doubling time caption
+- [x] Average annual gain metric
+- [x] Delta vs previous data point on net worth metric
 - [x] Milestone progress bar toward median / P75
-- [x] Milestone ETA projection (linear, at current annual gain)
-- [x] Wealth milestone reference lines (PS100k, PS250k, PS500k, PS1m toggle)
-- [x] P10/P90 toggle (log-normal derived)
-- [x] Hover shows benchmark P25/P50/P75 alongside personal net worth
+- [x] Milestone ETA projection (CAGR-compound)
+- [x] Milestone tracker table (crossed vs projected for £10k–£1m)
+- [x] Wealth milestone reference lines toggle (£100k / £250k / £500k / £1m)
+- [x] P10/P90 toggle (log-normal derived tails)
+- [x] Hover shows benchmark P25/P50/P75 inline alongside personal net worth
 - [x] Zero reference line when personal data contains negatives
-- [x] Shareable URL (personal data encoded into query param, no server storage)
+- [x] Shareable URL (personal data zlib+base64 encoded in query param)
 - [x] Benchmark CSV download (sidebar, respects current settings)
 - [x] Birth-year consistency validation on CSV upload
-- [x] Excel date-artifact year detection (separate from birth-year check)
+- [x] Excel date-artifact year detection
 - [x] Legend renamed "ONS data point"
-- [x] Plotly modebar + PNG export at 2x resolution
+- [x] Plotly modebar + PNG export (2× resolution)
 - [x] Percentile band metric display fix
-- [x] CSV parser handles Excel date-formatted years and decimal ages
-- [x] Deployment to Streamlit Community Cloud
+- [x] Partner comparison mode (emerald green overlay, same pipeline)
+- [x] Head-to-head leaderboard (age-adjusted percentile comparison)
+- [x] Combined household net worth banner
+- [x] Age range slider (zoom x-axis without discarding data)
+- [x] Summary statistics expander (CAGR, best/worst year, percentile per person)
+- [x] Data quality score (0–100, with per-criterion notes)
+- [x] Percentile history CSV download
+- [x] Best single-year gain annotation (arrow on main chart)
+- [x] Percentile delta annotation on trajectory chart
+- [x] Annual gains bar chart + wealth velocity (% growth) chart
+- [x] Cumulative wealth area chart
+- [x] Growth attribution table (returns vs savings split, adjustable return assumption)
+- [x] What-if projection (3 independent CAGR scenarios, projected percentile per scenario)
+- [x] Asset class breakdown stacked area chart (property/pension/financial/physical)
+- [x] Personal asset composition overlay (user enters own % split)
+- [x] Goal / FIRE calculator (target net worth, spending, FIRE number)
+- [x] Savings rate calculator (% income to save to hit target)
+- [x] Pension pot estimator (annuity-based, state pension offset)
+- [x] FI tracker row (FIRE gap, implied weekly spending, FI progress %)
+- [x] Monthly savings compound calculator (FV of annuity)
+- [x] Relative wealth index (net worth / benchmark median × 100)
+- [x] Median multiples display (X.Xx the median)
+- [x] FIRE goal & pension progress bars with CAGR-ETA
+- [x] Percentile heatmap (stacked colour bands across all ages)
+- [x] Wealth distribution curve (interactive age slider, log-normal density)
+- [x] Decile table (P10–P90 at user's age, published vs modelled)
+- [x] Header badges (Household/Individual pill, Real/Nominal pill)
+- [x] Annotation toggle (clean-screenshot mode)
+- [x] Colourblind-safe palette toggle (Okabe-Ito)
+- [x] Gender adjustment filter (Individual basis only, WAS-derived factors)
+- [x] P25/P50/P75 edge labels on main chart
+- [x] Birth-year cohort annotation below x-axis
+- [x] Text report download (.md, dated)
+- [x] kaleido added to requirements for PNG export
+- [x] Real terms base year updated 2024 → 2026 (2026 CPI estimated ~141.7)
+- [x] Sidebar crash fix (latest_nw pre-initialised before sidebar block)
+- [x] App version string in footer (v2.1)
+- [x] CLAUDE.md fully updated to reflect v2 architecture
