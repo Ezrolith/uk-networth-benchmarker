@@ -118,6 +118,16 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Duplicate encode/decode helpers removed from data_loader.py
 - [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
 
+### Session 5 (May 2026) — audit & polish (v2.4)
+- [x] Fix: `build_percentile_trajectory` crashed on empty/all-negative input — now returns typed empty DataFrame
+- [x] Fix: PDF data history showed "Note: nan" on every row without a note (NaN-string ambiguity) — new `_clean_note()` helper
+- [x] Fix: single-entry users saw "Your percentile has fallen from the ~50th at age 35 to the ~50th at age 35 (0 pct pts)" — trend bullet now requires meaningful age span AND ≥1 pct pt change
+- [x] Fix: PDF benchmark table claimed P10/P90 via footnote but didn't show them — tail percentiles now appended to the benchmark before generating the report
+- [x] Fix: tiny starting NW (£1.5k → £8k) produced absurd +133% CAGR and "reach median in ~1 year" projection — new `_safe_cagr()` helper requires starting NW ≥ £5,000; affects cover, summary stats, PDF
+- [x] Remove dead code: unused `compute_twr()` function (~25 lines)
+- [x] Update README: outdated v1 feature list + 2024 base year → current v2.4 feature set and 2026 base
+- [x] Bump APP_VERSION → v2.4
+
 ### Session 4 (May 2026)
 - [x] PDF report complete overhaul — fpdf2 FPDF subclass footer (fixes blank pages permanently), page numbers
 - [x] Cover page redesign: large hero net worth, stat boxes (percentile, wealth index, CAGR), Key observations narrative

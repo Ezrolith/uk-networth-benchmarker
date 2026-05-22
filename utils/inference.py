@@ -470,7 +470,8 @@ def build_percentile_trajectory(
     """
     Compute estimated percentile at each personal data point.
     Returns a DataFrame with columns: age, year, net_worth, percentile.
-    Rows where the percentile cannot be estimated are dropped.
+    Rows where the percentile cannot be estimated (e.g. negative NW) are dropped.
+    Returns an empty typed DataFrame if no rows qualify.
     """
     rows = []
     for _, row in personal_df.iterrows():
@@ -484,4 +485,6 @@ def build_percentile_trajectory(
                 "net_worth":  nw,
                 "percentile": pct,
             })
+    if not rows:
+        return pd.DataFrame(columns=["age", "year", "net_worth", "percentile"])
     return pd.DataFrame(rows).sort_values("age").reset_index(drop=True)

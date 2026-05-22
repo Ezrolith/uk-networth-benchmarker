@@ -207,6 +207,30 @@ def _fmt(v: float) -> str:
 def _fmt_delta(d: float) -> str:
     return ("+" if d >= 0 else "") + _fmt(d)
 
+def _clean_note(row) -> str:
+    """Extract a row's note as a clean string. Treats NaN, 'nan', and blanks as empty."""
+    if "note" not in row.index:
+        return ""
+    val = row.get("note")
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return ""
+    s = str(val).strip()
+    return "" if s.lower() == "nan" else s
+
+# CAGR is only meaningful if the starting balance is non-trivial.
+# Tiny starts (e.g. £100 → £8k) compute as 100%+ CAGR but tell us nothing useful.
+_CAGR_MIN_START = 5_000
+
+def _safe_cagr(start_nw: float, end_nw: float, years: float) -> float | None:
+    """Return CAGR if it would be meaningful, else None."""
+    if years is None or years <= 0.5:
+        return None
+    if start_nw is None or end_nw is None:
+        return None
+    if start_nw < _CAGR_MIN_START or end_nw <= 0:
+        return None
+    return (end_nw / start_nw) ** (1 / years) - 1
+
 
 # Initialised here so sidebar goal/savings calculator can reference them safely
 # (personal_plot_df and latest_nw are populated later, after sidebar renders)
@@ -519,7 +543,7 @@ def build_main_figure(
                 cp75 = bm_at_age.loc[(ar, "p75")]
             except KeyError:
                 cp25 = cp50 = cp75 = float("nan")
-            note = str(row["note"]) if "note" in plot.columns and str(row.get("note", "")).strip() else ""
+            note = _clean_note(row) if "note" in plot.columns else ""
             note_html = f"<br><i>Note: {note}</i>" if note else ""
             custom.append([yr, cp25, cp50, cp75, note_html])
 
@@ -1122,31 +1146,6 @@ def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
 
 # ── Summary statistics table ──────────────────────────────────────────────────
 
-def compute_twr(pdf: pd.DataFrame) -> float | None:
-    """
-    Approximate time-weighted return (TWR) using Modified Dietz method.
-    Each period: r_period = (end - start) / start
-    TWR = product of (1 + r_period) - 1
-
-    This removes the effect of when contributions/withdrawals were made,
-    unlike CAGR which is heavily influenced by the starting value.
-    Note: without knowing the exact timing of contributions this is
-    an approximation — treat as indicative.
-    """
-    s = pdf.sort_values("age")
-    if len(s) < 2:
-        return None
-    product = 1.0
-    for i in range(1, len(s)):
-        start = float(s.iloc[i-1]["net_worth"])
-        end   = float(s.iloc[i]["net_worth"])
-        if start <= 0:
-            continue
-        r = (end - start) / start
-        product *= (1 + r)
-    return product - 1
-
-
 def build_summary_stats(
     pdf: pd.DataFrame, bm: pd.DataFrame, label: str = "You"
 ) -> pd.DataFrame:
@@ -1162,8 +1161,8 @@ def build_summary_stats(
         {"Metric": f"{label} — total change",     "Value": _fmt_delta(nw_end - nw_start)},
     ]
 
-    if age_span > 0.5 and nw_start > 0 and nw_end > 0:
-        cagr = (nw_end / nw_start) ** (1 / age_span) - 1
+    cagr = _safe_cagr(nw_start, nw_end, age_span)
+    if cagr is not None:
         rows.append({"Metric": f"{label} — CAGR", "Value": f"{cagr*100:+.2f}%"})
 
     best = _best_gain(s)
@@ -1275,8 +1274,8 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
     if len(sorted_pdf) >= 2:
         col_a, col_b, col_c = st.columns([1, 1, 2])
         with col_a:
-            if age_span > 0.5 and first_nw > 0 and latest_nw > 0:
-                cagr = (latest_nw / first_nw) ** (1 / age_span) - 1
+            cagr = _safe_cagr(first_nw, latest_nw, age_span)
+            if cagr is not None:
                 double_time = (math.log(2) / math.log(1 + cagr)) if cagr > 0 else None
                 dt_str = f" · doubles in {double_time:.0f} yrs" if double_time else ""
                 st.metric("CAGR", f"{cagr*100:+.1f}%",
@@ -1284,7 +1283,11 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                 if double_time:
                     st.caption(f"Doubles in ~{double_time:.0f} yrs at this rate")
             else:
-                st.metric("Total change", _fmt_delta(latest_nw - first_nw))
+                st.metric("Total change", _fmt_delta(latest_nw - first_nw),
+                          help=("CAGR not shown: starting net worth below "
+                                f"£{_CAGR_MIN_START:,} would inflate the rate."
+                                if first_nw < _CAGR_MIN_START and first_nw > 0
+                                else None))
         with col_b:
             if age_span > 0:
                 st.metric("Avg annual gain", _fmt((latest_nw - first_nw) / age_span),
@@ -1985,10 +1988,14 @@ if personal_plot_df is not None and latest_nw is not None:
     _first_rpt = _s_rpt.iloc[0]
     _asp_rpt   = float(_s_rpt.iloc[-1]["age"]) - float(_first_rpt["age"])
     _fnw_rpt   = float(_first_rpt["net_worth"])
-    _cagr_rpt  = (latest_nw / _fnw_rpt) ** (1 / _asp_rpt) - 1 \
-                 if _asp_rpt > 0.5 and _fnw_rpt > 0 and latest_nw > 0 else None
+    _cagr_rpt  = _safe_cagr(_fnw_rpt, latest_nw, _asp_rpt)
     _pct_rpt   = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
-    _ab_rpt    = benchmark[benchmark["age"] == min(round(latest_age), 85)]
+
+    # PDF benchmark table promises P10/P90 derived values; ensure they're present
+    # regardless of whether the user toggled show_tails.
+    _benchmark_with_tails = pd.concat([benchmark, derive_tail_percentiles(benchmark)],
+                                       ignore_index=True)
+    _ab_rpt    = _benchmark_with_tails[_benchmark_with_tails["age"] == min(round(latest_age), 85)]
 
     def _bm(p):
         r = _ab_rpt[_ab_rpt["percentile"] == p]
@@ -2263,20 +2270,27 @@ if personal_plot_df is not None and latest_nw is not None:
 
         if _pct_rpt:
             pdf.ln(4); H1("Key observations")
-            # Find first entry with positive net worth for the percentile trend
+            # Find first entry with positive net worth for the percentile trend.
+            # Only include this bullet if the start row is meaningfully earlier than the
+            # latest row AND the percentile has actually moved (else it reads like nonsense).
             _pct_start_row = None
             for _, _r in _s_rpt.iterrows():
                 if float(_r["net_worth"]) > 0:
                     _pct_start_row = _r
                     break
             _first_pct = None
+            _trend_meaningful = False
             if _pct_start_row is not None:
-                _first_pct = estimate_exact_percentile(
-                    float(_pct_start_row["net_worth"]),
-                    min(round(float(_pct_start_row["age"])), 85), benchmark)
+                _start_age = float(_pct_start_row["age"])
+                if abs(latest_age - _start_age) >= 0.5:  # at least 6 months apart
+                    _first_pct = estimate_exact_percentile(
+                        float(_pct_start_row["net_worth"]),
+                        min(round(_start_age), 85), benchmark)
+                    if _first_pct is not None and abs(_pct_rpt - _first_pct) >= 1:
+                        _trend_meaningful = True
             p25v = _bm("p25"); p75v = _bm("p75")
             _obs = []
-            if _first_pct:
+            if _trend_meaningful:
                 _dp = _pct_rpt - _first_pct
                 _dir = "risen" if _dp > 0 else "fallen"
                 _sign = "+" if _dp > 0 else ""
@@ -2369,7 +2383,7 @@ if personal_plot_df is not None and latest_nw is not None:
             a_d  = float(rd["age"]); nw_d = float(rd["net_worth"])
             p_d  = estimate_exact_percentile(nw_d, min(round(a_d), 85), benchmark)
             yr_d = str(int(rd["year"])) if "year" in rd.index else ""
-            note_d = str(rd["note"]) if "note" in rd.index and str(rd.get("note","")).strip() else ""
+            note_d = _clean_note(rd)
             chg = _fmt_delta(nw_d - _prev_nw) if _prev_nw is not None else "-"
             _prev_nw = nw_d
             TR(i, (f"{a_d:.1f}", 22, False), (yr_d, 22, False),
@@ -2649,7 +2663,7 @@ if personal_plot_df is not None and latest_nw is not None:
 # ── Footer ────────────────────────────────────────────────────────────────────
 
 st.divider()
-APP_VERSION = "v2.3"
+APP_VERSION = "v2.4"
 st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
     f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 7 (2018–2020) · Streamlit + Plotly"
