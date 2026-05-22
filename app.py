@@ -955,8 +955,12 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         with col_a:
             if age_span > 0.5 and first_nw > 0 and latest_nw > 0:
                 cagr = (latest_nw / first_nw) ** (1 / age_span) - 1
+                double_time = (math.log(2) / math.log(1 + cagr)) if cagr > 0 else None
+                dt_str = f" · doubles in {double_time:.0f} yrs" if double_time else ""
                 st.metric("CAGR", f"{cagr*100:+.1f}%",
-                          help=f"Compound annual growth rate from age {first_age:.1f} to {latest_age:.1f}.")
+                          help=f"Compound annual growth rate from age {first_age:.1f} to {latest_age:.1f}.{dt_str}")
+                if double_time:
+                    st.caption(f"Doubles in ~{double_time:.0f} yrs at this rate")
             else:
                 st.metric("Total change", _fmt_delta(latest_nw - first_nw))
         with col_b:
@@ -1144,20 +1148,25 @@ if latest_age is not None:
 
 # ── Distribution curve at user's age ─────────────────────────────────────────
 
-if latest_age is not None:
-    with st.expander(f"Wealth distribution curve at age {latest_age:.0f}"):
-        p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
-            if partner_plot_df is not None and len(partner_plot_df) > 0 else None
-        dist_fig = build_distribution_chart(
-            round(latest_age), benchmark,
-            user_nw=latest_nw, partner_nw=p_nw_for_dist,
+with st.expander(f"Wealth distribution curve — explore by age"):
+    dist_age_default = round(latest_age) if latest_age else 40
+    dist_age = st.slider("Age to show distribution for", 16, 85, dist_age_default,
+                         key="dist_age_slider")
+    p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
+        if partner_plot_df is not None and len(partner_plot_df) > 0 else None
+    dist_fig = build_distribution_chart(
+        dist_age, benchmark,
+        user_nw=latest_nw if dist_age == dist_age_default else None,
+        partner_nw=p_nw_for_dist if dist_age == dist_age_default else None,
+    )
+    if dist_fig:
+        st.plotly_chart(dist_fig, use_container_width=True, config=PLOTLY_CONFIG)
+        st.caption(
+            "Slide to explore the distribution at any age. "
+            "Your net worth is shown only at your latest recorded age. "
+            "Distribution simulated from log-normal model fitted to P25/P50/P75 — "
+            "tails above P90 are extrapolated."
         )
-        if dist_fig:
-            st.plotly_chart(dist_fig, use_container_width=True, config=PLOTLY_CONFIG)
-            st.caption(
-                "Distribution simulated from a log-normal model fitted to P25/P50/P75. "
-                "Tails (above P90) are extrapolated and should be read with caution."
-            )
 
 # ── Percentile trajectory chart ───────────────────────────────────────────────
 
