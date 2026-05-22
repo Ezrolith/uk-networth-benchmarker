@@ -2508,6 +2508,15 @@ if personal_plot_df is not None and latest_nw is not None:
                                     KV("  ETA at current CAGR:",
                                        f"~{yrs_t:.0f} years  (age {latest_age + yrs_t:.0f})")
                             except Exception: pass
+                        elif _asp_rpt > 0.5:
+                            try:
+                                _avg_ann = (latest_nw - _fnw_rpt) / _asp_rpt
+                                if _avg_ann > 0:
+                                    _yrs_avg = (tgt_v - latest_nw) / _avg_ann
+                                    if 0 < _yrs_avg < 80:
+                                        KV("  ETA (avg annual gain):",
+                                           f"~{_yrs_avg:.0f} years  (age {latest_age + _yrs_avg:.0f})")
+                            except Exception: pass
                     else:
                         pdf.set_font("Helvetica", "B", 9)
                         pdf.set_text_color(16, 185, 129)
