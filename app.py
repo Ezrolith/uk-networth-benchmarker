@@ -269,6 +269,36 @@ with st.sidebar:
         fire_number = fire_spending * 25  # 4% safe withdrawal rate
         st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
 
+        st.markdown("**Savings rate calculator**")
+        annual_income = st.number_input(
+            "Annual gross income (£)", 0, 1_000_000, 50_000, 1_000,
+            format="%d", key="annual_income",
+            help="Used to estimate required savings rate to reach your goal."
+        )
+        if annual_income > 0 and latest_nw is not None and latest_nw > 0:
+            for tgt_label, tgt_val in [("goal", goal_amount), ("FIRE number", fire_number)]:
+                if tgt_val > latest_nw:
+                    # At current CAGR: years to target; savings needed = (target - compound_growth) / years
+                    # Simplified: use CAGR from personal data if available
+                    sorted_pdf2 = personal_plot_df.sort_values("age") if personal_plot_df is not None else None
+                    if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
+                        fs = float(sorted_pdf2.iloc[0]["net_worth"])
+                        asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
+                        if asp > 0.5 and fs > 0 and latest_nw > 0:
+                            cagr_s = (latest_nw / fs) ** (1 / asp) - 1
+                            if cagr_s > 0:
+                                yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
+                                if 0 < yrs_s < 60:
+                                    savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
+                                    # savings_needed may be negative if compound growth alone gets there
+                                    savings_rate = max(0, savings_needed) / annual_income * 100
+                                    st.caption(
+                                        f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
+                                        f"~{yrs_s:.0f} yrs at {cagr_s*100:.1f}% CAGR: "
+                                        f"save **{savings_rate:.0f}%** of income "
+                                        f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
+                                    )
+
     st.divider()
 
     # Benchmark CSV download
@@ -938,6 +968,15 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         p50v = float(ab[ab["percentile"] == "p50"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p50"]) else None
         p75v = float(ab[ab["percentile"] == "p75"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p75"]) else None
         if p50v and p75v:
+            # Age-adjusted relative wealth: net_worth / benchmark_median (index = 100 at median)
+            if p50v > 0:
+                rel_wealth = latest_nw / p50v * 100
+                st.metric(
+                    "Rel. wealth index",
+                    f"{rel_wealth:.0f}",
+                    help="Your net worth as a % of the benchmark median at your age. "
+                         "100 = exactly at median. Age-adjusted so it's comparable across ages.",
+                )
             if latest_nw < p50v:
                 st.metric("Gap to median", _fmt(p50v - latest_nw))
             elif latest_nw < p75v:
