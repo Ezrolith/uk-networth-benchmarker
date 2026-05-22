@@ -643,16 +643,15 @@ def build_gains_chart(pdf: pd.DataFrame, colour: str, name: str) -> go.Figure:
 
 def build_whatif_figure(
     pdf: pd.DataFrame, benchmark: pd.DataFrame,
-    scenario_cagr: float, project_to_age: int,
+    scenarios: list[tuple[float, str]],   # [(cagr, label), ...]
+    project_to_age: int,
     colour: str,
 ) -> go.Figure:
-    """Forward-project net worth from latest data point under a chosen CAGR."""
+    """Forward-project net worth under one or more CAGR scenarios."""
     s = pdf.sort_values("age")
     latest_age = float(s.iloc[-1]["age"])
     latest_nw  = float(s.iloc[-1]["net_worth"])
-
-    proj_ages = np.arange(latest_age, project_to_age + 1, 1.0)
-    proj_nw   = [latest_nw * (1 + scenario_cagr) ** (a - latest_age) for a in proj_ages]
+    proj_ages  = np.arange(latest_age, project_to_age + 1, 1.0)
 
     fig = go.Figure()
 
@@ -682,17 +681,22 @@ def build_whatif_figure(
         name="Actual", hovertemplate="<b>Actual</b><br>Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
     ))
 
-    # Projection
-    fig.add_trace(go.Scatter(
-        x=proj_ages, y=proj_nw, mode="lines",
-        line=dict(color=colour, width=2, dash="dash"),
-        name=f"Projection ({scenario_cagr*100:+.1f}% CAGR)",
-        hovertemplate="<b>Projected</b><br>Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
-    ))
+    # One trace per scenario
+    scenario_colours = ["#f97316", "#8b5cf6", "#06b6d4"]  # orange, violet, cyan
+    for i, (cagr, sc_label) in enumerate(scenarios):
+        proj_nw = [latest_nw * (1 + cagr) ** (a - latest_age) for a in proj_ages]
+        fig.add_trace(go.Scatter(
+            x=proj_ages, y=proj_nw, mode="lines",
+            line=dict(color=scenario_colours[i % len(scenario_colours)], width=2,
+                      dash="dash" if i > 0 else "solid"),
+            name=sc_label,
+            hovertemplate=f"<b>{sc_label}</b><br>Age %{{x:.1f}}<br>£%{{y:,.0f}}<extra></extra>",
+        ))
 
+    sc_title = " vs ".join(f"{c*100:.1f}%" for c, _ in scenarios)
     price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
     fig.update_layout(
-        title=dict(text=f"What-if projection — {scenario_cagr*100:.1f}% CAGR from age {latest_age:.1f}",
+        title=dict(text=f"What-if: {sc_title} CAGR from age {latest_age:.1f}",
                    font=dict(size=14, color="#1e293b"), x=0),
         xaxis=dict(title="Age", range=[15, project_to_age + 1], dtick=5,
                    gridcolor="#e2e8f0", zeroline=False),
@@ -940,6 +944,22 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             frames.append(build_summary_stats(partner_plot_df, benchmark, "Partner"))
         st.dataframe(pd.concat(frames, ignore_index=True), use_container_width=True, hide_index=True)
 
+        # Downloadable percentile history
+        st.markdown("**Percentile history download**")
+        traj_dl = build_percentile_trajectory(personal_plot_df, benchmark)
+        if len(traj_dl):
+            traj_dl_out = traj_dl.rename(columns={
+                "age": "age", "year": "year",
+                "net_worth": "net_worth_gbp", "percentile": "est_percentile",
+            })
+            st.download_button(
+                "Download your percentile history (CSV)",
+                traj_dl_out.to_csv(index=False).encode(),
+                "my_percentile_history.csv", "text/csv",
+                use_container_width=True,
+                help="Each data point with its estimated percentile at that age.",
+            )
+
 # ── Main chart ────────────────────────────────────────────────────────────────
 
 fig = build_main_figure(
@@ -1022,38 +1042,46 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
             "Forward-project your net worth from the latest data point under a chosen growth rate, "
             "overlaid against the benchmark. Descriptive only — not financial advice."
         )
-        wcol1, wcol2 = st.columns(2)
+        wcol1, wcol2, wcol3, wcol4 = st.columns(4)
         with wcol1:
-            wi_cagr = st.slider(
-                "Annual growth rate (%)", min_value=-5.0, max_value=20.0,
-                value=5.0, step=0.5, key="whatif_cagr",
-                help="Applied as a compound annual rate from your latest net worth."
-            )
+            wi_cagr1 = st.number_input("Scenario 1 (%)", -5.0, 25.0, 3.0, 0.5, key="wi1",
+                                       help="Bear case / conservative")
         with wcol2:
+            wi_cagr2 = st.number_input("Scenario 2 (%)", -5.0, 25.0, 6.0, 0.5, key="wi2",
+                                       help="Base case")
+        with wcol3:
+            wi_cagr3 = st.number_input("Scenario 3 (%)", -5.0, 25.0, 10.0, 0.5, key="wi3",
+                                       help="Bull case / optimistic")
+        with wcol4:
             wi_age = st.slider(
-                "Project to age", min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
+                "Project to age",
+                min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
                 max_value=85, value=min(70, 85), key="whatif_age",
             )
+
+        scenarios = [
+            (wi_cagr1 / 100, f"Scenario 1 ({wi_cagr1:+.1f}%)"),
+            (wi_cagr2 / 100, f"Scenario 2 ({wi_cagr2:+.1f}%)"),
+            (wi_cagr3 / 100, f"Scenario 3 ({wi_cagr3:+.1f}%)"),
+        ]
         st.plotly_chart(
-            build_whatif_figure(
-                personal_plot_df, benchmark,
-                scenario_cagr=wi_cagr / 100,
-                project_to_age=wi_age,
-                colour=COLOURS["person"],
-            ),
+            build_whatif_figure(personal_plot_df, benchmark, scenarios, wi_age, COLOURS["person"]),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
 
-        # Projected percentile at target age
+        # Projected percentiles at target age for each scenario
         if latest_nw and latest_nw > 0:
-            proj_nw_at_target = latest_nw * (1 + wi_cagr / 100) ** (wi_age - (latest_age or 0))
-            proj_pct = estimate_exact_percentile(proj_nw_at_target, min(wi_age, 85), benchmark)
-            if proj_pct:
-                st.info(
-                    f"At {wi_cagr:+.1f}% CAGR, by age **{wi_age}** your projected net worth of "
-                    f"**{_fmt(proj_nw_at_target)}** would place you at approximately the "
-                    f"**~{proj_pct:.0f}th percentile** (vs the {DATA_YEAR} benchmark)."
-                )
+            sc_cols = st.columns(3)
+            for i, (cagr, sc_label) in enumerate(scenarios):
+                proj_nw_at = latest_nw * (1 + cagr) ** (wi_age - (latest_age or 0))
+                proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark)
+                with sc_cols[i]:
+                    st.metric(
+                        sc_label,
+                        _fmt(proj_nw_at),
+                        delta=f"~{proj_pct:.0f}th pct" if proj_pct else "n/a",
+                        help=f"Projected net worth at age {wi_age}.",
+                    )
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────
 
