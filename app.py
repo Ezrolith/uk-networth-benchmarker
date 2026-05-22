@@ -1524,7 +1524,7 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                       help="Net amount heirs would receive (excluding admin costs, probate fees, etc.)")
 
         if taxable_estate == 0:
-            st.success(f"Your estate is within the IHT threshold — no IHT payable under this scenario.", icon="✓")
+            st.success("Your estate is within the IHT threshold - no IHT payable under this scenario.")
         else:
             st.caption(
                 f"Taxable estate: {_fmt(taxable_estate)} (estate above threshold). "
