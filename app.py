@@ -1309,6 +1309,45 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
 # ── Annual gain chart ────────────────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) >= 2:
+    with st.expander("Milestone tracker"):
+        MILESTONES = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+        s_ms = personal_plot_df.sort_values("age")
+        milestone_rows = []
+        for m in MILESTONES:
+            # Find first row where net_worth >= m
+            crossed = s_ms[s_ms["net_worth"] >= m]
+            if len(crossed):
+                row = crossed.iloc[0]
+                milestone_rows.append({
+                    "Milestone":    _fmt(m),
+                    "Age reached":  f"{float(row['age']):.1f}",
+                    "Year":         str(int(row["year"])) if "year" in row else "—",
+                    "Net worth then": _fmt(float(row["net_worth"])),
+                })
+            else:
+                # Not yet reached — project with CAGR
+                first_nw_ms = float(s_ms.iloc[0]["net_worth"])
+                last_nw_ms  = float(s_ms.iloc[-1]["net_worth"])
+                asp_ms = float(s_ms.iloc[-1]["age"]) - float(s_ms.iloc[0]["age"])
+                if asp_ms > 0.5 and first_nw_ms > 0 and last_nw_ms > 0 and last_nw_ms < m:
+                    cagr_ms = (last_nw_ms / first_nw_ms) ** (1 / asp_ms) - 1
+                    if cagr_ms > 0:
+                        yrs_ms = math.log(m / last_nw_ms) / math.log(1 + cagr_ms)
+                        eta_ms = float(s_ms.iloc[-1]["age"]) + yrs_ms
+                        if eta_ms <= 100:
+                            milestone_rows.append({
+                                "Milestone":    _fmt(m),
+                                "Age reached":  f"~{eta_ms:.0f} (projected)",
+                                "Year":         "—",
+                                "Net worth then": _fmt(m),
+                            })
+        if milestone_rows:
+            st.dataframe(pd.DataFrame(milestone_rows), use_container_width=True, hide_index=True)
+            st.caption("Projected ages use your current CAGR — treat as illustrative.")
+        else:
+            st.info("Add more data points to see milestone tracking.")
+
+if personal_plot_df is not None and len(personal_plot_df) >= 2:
     with st.expander("Annual gains breakdown"):
         st.plotly_chart(
             build_gains_chart(personal_plot_df, COLOURS["person"], "Your net worth"),
