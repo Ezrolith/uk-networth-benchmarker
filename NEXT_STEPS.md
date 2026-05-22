@@ -12,10 +12,10 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
-- [ ] **Smarter milestone ETA** for negative/zero starting net worth — current CAGR projection breaks when first recorded value ≤ 0; fall back to savings-rate estimate.
+- [x] **Smarter milestone ETA** for negative/zero starting net worth — falls back to average annual gain when CAGR is undefined; fixes Goal/FIRE ETA and milestone tracker.
 
 ### Personal data
-- [ ] **Note annotations on data points** — let users attach a short label to any data point ("bought house", "changed job") that shows in hover tooltips.
+- [x] **Note annotations on data points** — optional `note` column in CSV and manual entry editor; notes appear in hover tooltips on the main chart.
 
 ---
 
@@ -34,7 +34,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 - [ ] **International comparison** — US SCF, Canada SFS, normalised to PPP. Useful context, harder to keep current.
 - [ ] **Tax-adjusted view** — net worth after estimated IHT / CGT exposure.
-- [ ] **Forward projection with savings contributions** — extend the what-if model to include monthly savings alongside CAGR (currently CAGR only).
+- [x] **Forward projection with savings contributions** — what-if model now accepts a monthly savings contribution; uses FV-of-annuity formula alongside CAGR; projected percentile metrics reflect contributions.
 
 ---
 
@@ -110,3 +110,9 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Sidebar crash fix (latest_nw pre-initialised before sidebar block)
 - [x] App version string in footer (v2.1)
 - [x] CLAUDE.md fully updated to reflect v2 architecture
+
+### Session 3 (May 2026)
+- [x] Note annotations on data points (optional column in CSV + manual entry; renders in hover tooltip)
+- [x] Smarter milestone ETA for zero/negative starting NW (avg-gain fallback)
+- [x] Forward projection with savings contributions (monthly £ input, FV-of-annuity formula)
+- [x] Duplicate encode/decode helpers removed from data_loader.py
