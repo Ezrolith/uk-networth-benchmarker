@@ -179,6 +179,17 @@ def _personal_data_section(
     return result_df
 
 
+# ── Helpers (defined before sidebar so they're available everywhere) ───────────
+
+def _fmt(v: float) -> str:
+    if abs(v) >= 1_000_000: return f"£{v/1_000_000:.2f}m"
+    if abs(v) >= 1_000:     return f"£{v/1_000:.0f}k"
+    return f"£{v:.0f}"
+
+def _fmt_delta(d: float) -> str:
+    return ("+" if d >= 0 else "") + _fmt(d)
+
+
 with st.sidebar:
     st.title("Settings")
 
@@ -216,6 +227,39 @@ with st.sidebar:
 
     st.divider()
 
+    # ── Personal asset composition ────────────────────────────────────────────
+    with st.expander("Your wealth composition (optional)"):
+        st.caption("Enter your approximate split — shown on the asset class chart.")
+        pa_prop = st.number_input("Property %",    0, 100, 40, key="pa_prop")
+        pa_pen  = st.number_input("Pension %",     0, 100, 30, key="pa_pen")
+        pa_fin  = st.number_input("Financial %",   0, 100, 20, key="pa_fin")
+        pa_phys = st.number_input("Physical %",    0, 100, 10, key="pa_phys")
+        pa_total = pa_prop + pa_pen + pa_fin + pa_phys
+        if pa_total != 100:
+            st.warning(f"Percentages sum to {pa_total}% — should be 100%.")
+        personal_asset_split = {
+            "Property": pa_prop / 100,
+            "Pension":  pa_pen  / 100,
+            "Financial":pa_fin  / 100,
+            "Physical": pa_phys / 100,
+        } if pa_total == 100 else None
+
+    st.divider()
+
+    # ── Goal / FIRE calculator ─────────────────────────────────────────────────
+    with st.expander("Goal calculator"):
+        st.caption("Set a net worth target and see your trajectory toward it.")
+        goal_amount = st.number_input("Target net worth (£)", min_value=0,
+                                      max_value=10_000_000, value=500_000, step=10_000,
+                                      format="%d", key="goal_amount")
+        fire_spending = st.number_input("Annual retirement spending (£, for FIRE estimate)",
+                                        min_value=0, max_value=500_000, value=30_000,
+                                        step=1_000, format="%d", key="fire_spend")
+        fire_number = fire_spending * 25  # 4% safe withdrawal rate
+        st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
+
+    st.divider()
+
     # Benchmark CSV download
     with st.expander("Download benchmark data"):
         bm_dl = _build_benchmark(basis, include_pension, real_terms)
@@ -245,16 +289,6 @@ def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
 personal_plot_df = _prep_plot_df(personal_df)
 partner_plot_df  = _prep_plot_df(partner_df)
 
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-
-def _fmt(v: float) -> str:
-    if abs(v) >= 1_000_000: return f"£{v/1_000_000:.2f}m"
-    if abs(v) >= 1_000:     return f"£{v/1_000:.0f}k"
-    return f"£{v:.0f}"
-
-def _fmt_delta(d: float) -> str:
-    return ("+" if d >= 0 else "") + _fmt(d)
 
 def _pct_series(pct: str) -> pd.DataFrame:
     return benchmark[benchmark["percentile"] == pct].sort_values("age")
@@ -839,6 +873,32 @@ if partner_plot_df is not None and len(partner_plot_df) > 0:
         combined = latest_nw + p_nw
         st.info(f"Combined household net worth: **{_fmt(combined)}**")
 
+# ── Goal / FIRE output ────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and latest_nw is not None:
+    sorted_pdf = personal_plot_df.sort_values("age")
+    first_nw   = float(sorted_pdf.iloc[0]["net_worth"])
+    age_span   = latest_age - float(sorted_pdf.iloc[0]["age"])
+
+    for target_label, target_val in [
+        ("your goal", goal_amount),
+        ("FIRE number", fire_number),
+    ]:
+        if target_val > 0 and latest_nw < target_val:
+            gap = target_val - latest_nw
+            pct_there = min(latest_nw / target_val * 100, 100)
+            cols = st.columns([2, 1])
+            with cols[0]:
+                st.caption(f"Progress toward {target_label} ({_fmt(target_val)}): {pct_there:.0f}%")
+                st.progress(pct_there / 100)
+            with cols[1]:
+                if age_span > 0.5 and first_nw > 0 and latest_nw > 0:
+                    cagr_cur = (latest_nw / first_nw) ** (1 / age_span) - 1
+                    if cagr_cur > 0.001:
+                        yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
+                        st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                  help=f"At your current {cagr_cur*100:.1f}% CAGR.")
+
 # Log scale warning
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
     st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
@@ -952,15 +1012,30 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
 if show_asset_class:
     asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
     if len(asset_series):
-        st.plotly_chart(
-            build_asset_class_chart(asset_series),
-            use_container_width=True, config=PLOTLY_CONFIG,
-        )
+        ac_fig = build_asset_class_chart(asset_series)
+
+        # Overlay user's own composition as annotation lines if latest net worth known
+        if personal_asset_split and latest_nw and latest_nw > 0:
+            cumulative = 0.0
+            stacked_base = 0.0
+            for component in ["Physical", "Financial", "Pension", "Property"]:
+                share = personal_asset_split[component]
+                component_val = latest_nw * share
+                stacked_base += component_val
+                ac_fig.add_hline(
+                    y=stacked_base,
+                    line=dict(color=ASSET_COLOURS[component], width=2, dash="solid"),
+                    annotation_text=f"You: {component} ({share*100:.0f}%)",
+                    annotation_position="left",
+                    annotation=dict(font=dict(color=ASSET_COLOURS[component], size=10)),
+                )
+
+        st.plotly_chart(ac_fig, use_container_width=True, config=PLOTLY_CONFIG)
         st.caption(
-            "Approximate WAS Wave 7 component shares at the median, interpolated to single years. "
-            "Property = net of mortgage. Pension = private (DB PV + DC fund). "
-            "Financial = savings/investments net of non-mortgage debt. Physical = vehicles, contents, valuables. "
-            "All derived — not published WAS breakdowns."
+            "Benchmark: approximate WAS Wave 7 component shares at the median. "
+            "Your composition (if entered) shown as horizontal lines. "
+            "Property = net of mortgage · Pension = private (DB PV + DC) · "
+            "Financial = savings/investments net of non-mortgage debt · Physical = vehicles/contents/valuables."
         )
 
 # ── Methodology panel ─────────────────────────────────────────────────────────
