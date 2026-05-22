@@ -277,6 +277,46 @@ def derive_tail_percentiles(benchmark: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def build_decile_table(age: int, benchmark: pd.DataFrame) -> pd.DataFrame:
+    """
+    Compute all deciles (10th–90th) at the given age using the log-normal model,
+    plus the published P25/P50/P75 for reference.
+
+    Returns a DataFrame with columns: percentile_label, value, is_modelled.
+    """
+    from scipy.stats import norm as _norm
+
+    age_clamped = min(int(age), 85)
+    age_data = benchmark[benchmark["age"] == age_clamped]
+
+    def get_val(pct: str) -> float | None:
+        rows = age_data[age_data["percentile"] == pct]["value"]
+        return float(rows.iloc[0]) if len(rows) else None
+
+    p25v = get_val("p25")
+    p50v = get_val("p50")
+    p75v = get_val("p75")
+
+    if any(v is None or v <= 0 for v in [p25v, p50v, p75v]):
+        return pd.DataFrame()
+
+    mu    = np.log(p50v)
+    sigma = (np.log(p75v) - np.log(p25v)) / (2 * 0.6745)
+
+    published = {25: p25v, 50: p50v, 75: p75v}
+    rows = []
+    for pct in [10, 20, 25, 30, 40, 50, 60, 70, 75, 80, 90]:
+        if pct in published:
+            val = published[pct]
+            modelled = False
+        else:
+            z   = _norm.ppf(pct / 100)
+            val = float(np.exp(mu + z * sigma))
+            modelled = True
+        rows.append({"Percentile": f"P{pct}", "Net worth (£)": val, "Modelled": modelled})
+    return pd.DataFrame(rows)
+
+
 def build_asset_class_series(
     asset_df: pd.DataFrame,
     benchmark: pd.DataFrame,

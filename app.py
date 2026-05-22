@@ -20,7 +20,7 @@ from utils.inference import (
     adjust_for_inflation, cpi_adjust_personal,
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
-    build_asset_class_series,
+    build_asset_class_series, build_decile_table,
     DATA_YEAR, REAL_BASE_YEAR,
 )
 
@@ -781,11 +781,24 @@ def build_summary_stats(
 
 # ── Main content ──────────────────────────────────────────────────────────────
 
-st.title("UK Net Worth Benchmarker")
-st.caption(
-    "Compare your net worth against UK population distributions by age. "
-    "Source: ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain."
-)
+col_hdr, col_badge = st.columns([5, 1])
+with col_hdr:
+    st.title("UK Net Worth Benchmarker")
+    st.caption(
+        "Compare your net worth against UK population distributions by age · "
+        "ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain"
+    )
+with col_badge:
+    price_badge = f"Real {REAL_BASE_YEAR} £" if real_terms else f"Nominal {DATA_YEAR} £"
+    st.markdown(
+        f"<div style='text-align:right;margin-top:1rem;'>"
+        f"<span style='background:#dbeafe;color:#1e40af;padding:4px 10px;"
+        f"border-radius:12px;font-size:0.8rem;font-weight:600;'>{basis}</span>&nbsp;"
+        f"<span style='background:#f0fdf4;color:#166534;padding:4px 10px;"
+        f"border-radius:12px;font-size:0.8rem;font-weight:600;'>{price_badge}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
 
 # ── Metrics ───────────────────────────────────────────────────────────────────
 
@@ -991,6 +1004,34 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             st.caption("Anyone with this link can see your figures. Share only with people you trust.")
         except Exception:
             st.info("Share link unavailable — data may be too large to encode.")
+
+# ── Decile table ─────────────────────────────────────────────────────────────
+
+if latest_age is not None:
+    with st.expander(f"Full decile table at age {latest_age:.0f}"):
+        decile_df = build_decile_table(round(latest_age), benchmark)
+        if len(decile_df):
+            # Format £ values
+            decile_display = decile_df.copy()
+            decile_display["Net worth (£)"] = decile_display["Net worth (£)"].apply(
+                lambda v: f"£{v:,.0f}"
+            )
+            decile_display["Source"] = decile_display["Modelled"].map(
+                {True: "Log-normal model", False: "WAS published"}
+            )
+            decile_display = decile_display.drop(columns=["Modelled"])
+
+            # Highlight the user's row if we know their net worth
+            st.dataframe(decile_display, use_container_width=True, hide_index=True)
+            if latest_nw:
+                exact_pct_here = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+                if exact_pct_here:
+                    st.caption(
+                        f"Your net worth of **{_fmt(latest_nw)}** sits at approximately "
+                        f"**~{exact_pct_here:.0f}th percentile** at age {latest_age:.0f}."
+                    )
+            price_label_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
+            st.caption(f"All values in {price_label_note}. Rows marked 'Log-normal model' are derived estimates.")
 
 # ── Percentile trajectory chart ───────────────────────────────────────────────
 
