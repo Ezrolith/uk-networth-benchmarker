@@ -1,64 +1,69 @@
 # Next Steps — UK Net Worth Benchmarker
 
-Ranked roughly by value vs effort. Top section = v1 polish, below = v2 features.
+Ranked by value vs effort. Completed items archived at the bottom.
 
 ---
 
-## Bugs / quick wins
-
-- [x] ~~Percentile band metric showing mangled "Btw The 25Th Percentile And Th..."~~ Fixed
-
----
-
-## v1 polish
-
-### Chart UX
-- [ ] **Log scale toggle** — wealth distributions are log-normal; a log Y axis shows the lower percentiles much more clearly without the bottom half being squashed to zero
-- [ ] **"You are here" annotation** — vertical dotted line + label at the user's latest age on the chart, so the eye is drawn to the right spot instantly
-- [ ] **Exact percentile estimate** — instead of a band (P25–P50), interpolate to give an approximate single-figure percentile (e.g. "~38th percentile"). Needs care with methodology labelling
-- [ ] **Year-over-year delta** in the metrics row — show net worth change from the previous data point, not just the latest value
-- [ ] **Legend cleanup** — "P50 – published" is technical jargon to a first-time user; rename to "ONS data point" and consolidate P25/P75 published markers into one legend entry
-- [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider moving controls to an expander above the chart on mobile
+## v1 polish — remaining
 
 ### Data accuracy
-- [ ] **Replace approximate WAS figures with the actual ONS data tables** — download the WAS Wave 7 Bulletins Table 3.2 (Total Wealth by age and percentile) and transcribe the exact numbers into `data/was_data.csv`. The current figures are close but not identical to the published source
-- [ ] **Add P10 and P90** as optional toggle — gives a better picture of the tails without cluttering the default view
+- [ ] **Replace approximate WAS figures with the actual ONS data tables** — download WAS Wave 7 Bulletin Table 3.2 (Total Wealth by age and percentile) and transcribe exact numbers into `data/was_data.csv`. Current figures are close but not identical to the published source. This is the single biggest data quality improvement available.
+- [ ] **Add WAS Wave 8 (2020–2022) data** — expected to be published; update `was_data.csv` and version the source column
+
+### Chart UX
+- [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider moving controls to an expander above the chart on mobile
+- [ ] **Annotate chart with net worth milestones** — subtle horizontal reference lines at £100k, £250k, £500k, £1m (optional toggle to avoid clutter)
+- [ ] **Smooth the trajectory chart** — add a LOESS or rolling average option for users with many data points where the line is noisy
 
 ### Personal data
-- [ ] **Negative net worth support** — show a horizontal zero line clearly; users in their 20s with student loans are likely below zero
-- [ ] **Validate age/year consistency** on upload — warn if `year - age` implies a different birth year across rows (likely data entry error)
-- [ ] **Currency input formatting** — sidebar manual entry shows raw numbers; format as £ with thousands separators
+- [ ] **Currency input formatting** — sidebar manual entry shows raw integers; format as £ with thousands separators for readability
 
 ---
 
 ## v2 features
 
 ### Filters and breakdowns
-- [ ] **Region filter** — WAS publishes regional breakdowns (London, North West, etc.); add a dropdown that re-scales the benchmarks
-- [ ] **Asset class breakdown** — stacked area chart showing pension / property / financial / physical components by age; helps users understand *what* makes up the benchmark, not just the total
+- [ ] **Region filter** — WAS publishes regional breakdowns (London, North West, etc.); dropdown that re-scales the benchmarks. High value, but requires additional data prep
+- [ ] **Asset class breakdown** — stacked area chart showing pension / property / financial / physical components by age; helps users understand *what* makes up the benchmark
 - [ ] **Gender filter** — WAS includes individual-level pension data broken down by gender; relevant for the individual basis
 
-### Data freshness
-- [ ] **WAS Wave 8 data** — Wave 8 (2020–2022) is expected to be published; update `was_data.csv` and version the source column when it lands
-- [ ] **Nowcast toggle (v2 stretch)** — roll Wave 7 forward to today using: house price index (HM Land Registry), FTSE/global equity returns, OBR wage growth. Mark heavily as modelled
-
 ### Saved snapshots
-- [ ] **Download results as PNG/PDF** — "Export chart" button using Plotly's built-in download, or a custom `st.download_button` wrapping a fig export
-- [ ] **Shareable anonymised link** — encode personal data in a URL hash (no server storage) so users can bookmark or share their position
-
----
-
-## Deployment / portfolio
-
-- [ ] **Deploy to Streamlit Community Cloud** — repo is already on GitHub (Ezrolith/uk-networth-benchmarker); go to share.streamlit.io, connect the repo, point at `app.py`
-- [ ] **Add `og:image` / social preview** — static screenshot in `/assets/` referenced in the README, makes the GitHub card look good
-- [ ] **Write up the methodology as a short blog post or Notion doc** — documents the inference decisions for Multiverse portfolio purposes
-- [ ] **Add a LICENSE file** — MIT is fine for a portfolio piece
+- [ ] **Download results as PNG/PDF** — Plotly modebar download is now active; a dedicated button using `st.download_button` wrapping `fig.to_image()` would give more control over styling
+- [ ] **Shareable URL** — encode personal data in a URL hash (no server storage); users can bookmark or share their position
 
 ---
 
 ## v3 stretch
 
-- [ ] **"What if" projection** — forward-model the user's net worth under different contribution / investment return assumptions, overlaid against forward-projected percentiles
-- [ ] **International comparison** — US SCF, Canada Survey of Financial Security — normalised to purchasing power parity; useful context but harder to keep current
-- [ ] **Tax-adjusted view** — show net worth after estimated IHT / CGT exposure (very complex, requires significant methodology work)
+- [ ] **"What if" projection** — forward-model net worth under different contribution / investment return assumptions, overlaid against forward-projected benchmark percentiles
+- [ ] **International comparison** — US SCF, Canada Survey of Financial Security — normalised to PPP; useful context, harder to keep current
+- [ ] **Tax-adjusted view** — net worth after estimated IHT / CGT exposure
+
+---
+
+## Deployment
+
+- [ ] **Deploy to Streamlit Community Cloud** — repo is at Ezrolith/uk-networth-benchmarker (private); go to share.streamlit.io, connect repo, entry point `app.py`, no secrets needed
+
+---
+
+## Completed ✓
+
+- [x] Log scale toggle
+- [x] "You are here" vertical age line
+- [x] Horizontal crosshair at current net worth
+- [x] Exact percentile estimate via log-normal fit (replacing coarse band)
+- [x] Percentile trajectory chart (secondary chart below main)
+- [x] CAGR metric
+- [x] Average annual gain metric
+- [x] Milestone progress bar (toward median / P75)
+- [x] Year-over-year delta on net worth metric
+- [x] Gap-to-next-milestone metric (col 4)
+- [x] P10/P90 optional toggle (derived from log-normal model)
+- [x] Hover shows benchmark P25/P50/P75 alongside personal net worth
+- [x] Zero reference line when personal data contains negatives
+- [x] Birth-year consistency validation on CSV upload
+- [x] Legend renamed "ONS data point" (was "P50 – published")
+- [x] Plotly modebar + PNG export at 2× resolution
+- [x] Percentile band metric display fix (was mangled by .title())
+- [x] CSV parser handles Excel date-formatted years and decimal ages
