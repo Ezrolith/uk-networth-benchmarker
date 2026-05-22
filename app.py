@@ -347,15 +347,15 @@ st.caption(
 # Percentile callout — shown only when personal data is loaded
 if personal_plot_df is not None and len(personal_plot_df) > 0:
     latest = personal_plot_df.sort_values("age").iloc[-1]
-    latest_age = int(latest["age"])
+    latest_age = float(latest["age"])
     latest_nw = float(latest["net_worth"])
 
-    band_desc = estimate_percentile(latest_nw, latest_age, benchmark)
+    band_desc = estimate_percentile(latest_nw, round(latest_age), benchmark)
     price_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.metric("Your latest age", f"{latest_age}")
+        st.metric("Your latest age", f"{latest_age:.1f}")
     with col2:
         st.metric("Net worth", _fmt(latest_nw), help=f"In {price_note}")
     with col3:
@@ -368,7 +368,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         st.metric("Percentile band", short_band)
 
     st.info(
-        f"At age **{latest_age}**, your net worth of **{_fmt(latest_nw)}** "
+        f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** "
         f"({price_note}) is **{band_desc}** on a {basis.lower()} basis in the UK."
     )
 
