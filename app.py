@@ -263,23 +263,24 @@ with st.sidebar:
              "Uses approximate WAS asset class share proportions — derived, not published. "
              "Your personal overlay still shows total net worth.",
     )
-    log_scale        = st.toggle("Log scale", value=False,
-                                 help="Spreads low values — useful when data spans several orders of magnitude")
-    show_tails       = st.toggle("Show P10 / P90", value=False,
-                                 help="Modelled tails from log-normal fit — not published WAS data")
-    show_milestones  = st.toggle("Wealth milestones", value=False,
-                                 help="Reference lines at £100k, £250k, £500k and £1m")
-    smooth_traj      = st.toggle("Smooth trajectory", value=False,
-                                 help="Rolling average on the percentile trajectory chart")
-    show_asset_class = st.toggle("Asset class breakdown", value=False,
-                                 help="Stacked chart: property / pension / financial / physical at the median")
-    show_annotations = st.toggle("Show chart annotations", value=True,
-                                 help="Show best-gain arrows and crosshair labels — turn off for clean screenshots")
-    cb_safe = st.toggle("Colourblind-safe palette", value=False,
-                        help="Replaces blue/orange with a deuteranopia-friendly palette")
-
     age_min, age_max = st.slider("Age range shown", 16, 85, (16, 85), step=1,
                                  help="Zoom in on a specific age window")
+
+    with st.expander("Display options"):
+        log_scale        = st.toggle("Log scale", value=False,
+                                     help="Spreads low values — useful when data spans several orders of magnitude")
+        show_tails       = st.toggle("Show P10 / P90", value=False,
+                                     help="Modelled tails from log-normal fit — not published WAS data")
+        show_milestones  = st.toggle("Wealth milestones", value=False,
+                                     help="Reference lines at £100k, £250k, £500k and £1m")
+        smooth_traj      = st.toggle("Smooth trajectory", value=False,
+                                     help="Rolling average on the percentile trajectory chart")
+        show_asset_class = st.toggle("Asset class breakdown", value=False,
+                                     help="Stacked chart: property / pension / financial / physical at the median")
+        show_annotations = st.toggle("Show chart annotations", value=True,
+                                     help="Show best-gain arrows and crosshair labels — turn off for clean screenshots")
+        cb_safe = st.toggle("Colourblind-safe palette", value=False,
+                            help="Replaces blue/orange with a deuteranopia-friendly palette")
 
     st.divider()
 
@@ -328,18 +329,22 @@ with st.sidebar:
         retirement_age = st.number_input("Target retirement age", 50, 80, 65, 1, key="ret_age")
         pension_income = st.number_input("Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
                                           format="%d", key="pen_income")
-        state_pension  = st.number_input("Expected state pension (£/yr)", 0, 15_000, 11_500, 100,
+        # 2026/27 full new State Pension projected: ~£12,400/yr (uprated by triple lock)
+        state_pension  = st.number_input("Expected state pension (£/yr)", 0, 20_000, 12_400, 100,
                                           format="%d", key="state_pension",
-                                          help="Full new State Pension 2024/25: ~£11,500/yr")
+                                          help="Full new State Pension 2025/26: £11,973/yr; "
+                                               "2026/27 estimate ~£12,400/yr (triple-lock).")
         if retirement_age and pension_income:
             private_needed = max(0, pension_income - state_pension)
-            # Use annuity rate approximation: 5% for age 65, adjusting for early/late retirement
-            annuity_rate = 0.05 + (retirement_age - 65) * 0.002
+            # Annuity rate approximation: gilt-linked rates have been ~6.5% at age 65
+            # in late 2024 / 2025. Use 6.5% baseline with small age adjustment.
+            annuity_rate = 0.065 + (retirement_age - 65) * 0.0025
             pot_needed   = private_needed / max(annuity_rate, 0.02)
             st.caption(
                 f"Private pension pot needed: **{_fmt(pot_needed)}** "
                 f"(for £{private_needed:,}/yr net of state pension, "
-                f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age})"
+                f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age}). "
+                f"Annuity rates from a single-life level annuity quote — drawdown can be more flexible."
             )
 
         st.markdown("**Savings rate calculator**")
@@ -1215,6 +1220,17 @@ latest_age: float | None = None
 latest_nw:  float | None = None
 partner_latest_age: float | None = None
 
+# Empty-state guidance — shown when no personal data is entered yet
+if personal_plot_df is None or len(personal_plot_df) == 0:
+    with st.container():
+        st.info(
+            "**Add your net worth history to get started.** "
+            "Open **Your net worth** in the sidebar → choose *Upload CSV* (template provided) "
+            "or *Manual entry* to type in a few rows. Even 2–3 data points unlocks the "
+            "percentile, growth-rate, retirement and goal calculators below the chart.",
+            icon="👋",
+        )
+
 if personal_plot_df is not None and len(personal_plot_df) > 0:
     sorted_pdf = personal_plot_df.sort_values("age")
     latest     = sorted_pdf.iloc[-1]
@@ -1463,6 +1479,293 @@ if personal_plot_df is not None and latest_nw is not None:
 # Log scale warning
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
     st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
+
+# ── Retirement income summary ────────────────────────────────────────────────
+# Ties the sidebar inputs (state pension, retirement age, target income) together
+# with the user's projected net worth at retirement and shows estimated annual income.
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    with st.expander("Retirement income forecast", expanded=False):
+        st.caption(
+            "Brings together your projected net worth at retirement with state pension "
+            "and shows estimated annual income from three sources. "
+            "All figures in **today's money (real terms)**. Indicative only — not advice."
+        )
+
+        ri_col1, ri_col2, ri_col3 = st.columns(3)
+        with ri_col1:
+            ri_retire_age = st.number_input("Retirement age",
+                min_value=max(int(latest_age) + 1, 50), max_value=80,
+                value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
+                step=1, key="ri_retire_age",
+                help="Defaults to your pension calculator age in the sidebar.")
+        with ri_col2:
+            ri_real_return = st.number_input("Assumed real return on NW (%)",
+                0.0, 12.0, 4.0, 0.25, key="ri_real_return",
+                help="Annual return above inflation. Long-run UK equity has been ~5% real; a balanced 60/40 portfolio nearer 3–4%.")
+        with ri_col3:
+            ri_pension_share = st.slider("% of net worth in pension wrappers", 0, 100,
+                int(personal_asset_split["Pension"] * 100) if personal_asset_split else 30,
+                step=5, key="ri_pension_share",
+                help="Used to split your projected NW into the pension portion (eligible for annuity) "
+                     "vs other wealth (drawn down at 4%).")
+
+        # Project NW to retirement age using the assumed real return
+        _ri_years = ri_retire_age - latest_age
+        _ri_nw_at_retire = latest_nw * (1 + ri_real_return / 100) ** _ri_years
+
+        # Split into pension / other
+        _ri_pension_pot = _ri_nw_at_retire * (ri_pension_share / 100)
+        _ri_other_wealth = _ri_nw_at_retire - _ri_pension_pot
+
+        # Annuity rate at retirement age (gilt-linked single-life, recent UK levels)
+        _ri_ann_rate = 0.065 + (ri_retire_age - 65) * 0.0025
+        _ri_annuity = _ri_pension_pot * max(_ri_ann_rate, 0.02)
+
+        # 4% draw from non-pension wealth (ISAs, GIAs, property income proxy)
+        _ri_drawdown = _ri_other_wealth * 0.04
+
+        # State pension (assume claimed from age 67+; tapered if user retires earlier)
+        _ri_state_pen = state_pension if ri_retire_age >= 67 else 0
+
+        _ri_total = _ri_annuity + _ri_drawdown + _ri_state_pen
+
+        st.markdown(
+            f"#### Projected income at age {ri_retire_age}  ·  "
+            f"net worth ≈ {_fmt(_ri_nw_at_retire)}"
+        )
+        inc_c1, inc_c2, inc_c3, inc_c4 = st.columns(4)
+        with inc_c1:
+            st.metric("Annuity from pension", f"{_fmt(_ri_annuity)}/yr",
+                      help=f"From pension pot {_fmt(_ri_pension_pot)} at "
+                           f"{_ri_ann_rate*100:.1f}% annuity rate. "
+                           "Drawdown can be more flexible but rate varies with markets.")
+        with inc_c2:
+            st.metric("4% draw from other wealth", f"{_fmt(_ri_drawdown)}/yr",
+                      help=f"From non-pension wealth {_fmt(_ri_other_wealth)} at 4% safe-withdrawal rate.")
+        with inc_c3:
+            if _ri_state_pen > 0:
+                st.metric("State pension", f"{_fmt(_ri_state_pen)}/yr",
+                          help="From state pension age (currently 66, rising to 67 by 2028).")
+            else:
+                st.metric("State pension", "Not yet eligible",
+                          help=f"State pension age is 66–67. You'd retire {67 - ri_retire_age:.0f}+ years before that.")
+        with inc_c4:
+            st.metric("Total annual income", f"{_fmt(_ri_total)}/yr",
+                      delta=f"~{_fmt(_ri_total/52)}/week",
+                      help="Sum of the three sources above. Pre-tax.")
+
+        # Compare to target
+        try:
+            _target = float(pension_income) if pension_income else 0
+        except (NameError, ValueError):
+            _target = 0
+        if _target > 0:
+            _pct = min(_ri_total / _target * 100, 999)
+            _delta = _ri_total - _target
+            if _delta >= 0:
+                st.success(
+                    f"You would exceed your target of {_fmt(_target)}/yr by **{_fmt(_delta)}/yr** "
+                    f"({_pct:.0f}% of target).",
+                    icon="✅",
+                )
+            else:
+                st.warning(
+                    f"You would fall **{_fmt(abs(_delta))}/yr short** of your target of {_fmt(_target)}/yr "
+                    f"({_pct:.0f}% of target). Consider saving more, working longer, or accepting a lower income.",
+                    icon="⚠️",
+                )
+
+        st.caption(
+            "**Notes.** Real return assumed constant — actual returns vary year to year. "
+            "Annuity figures are level (no inflation linking) using current UK gilt-linked rates. "
+            "Drawdown uses the 4% rule (Trinity Study) — for a 30-year retirement; longer horizons "
+            "or higher equity exposure may require lower rates. Pre-tax: income tax applies above "
+            "the Personal Allowance (~£12,570)."
+        )
+
+# ── Drawdown / pot longevity simulator ───────────────────────────────────────
+# How long does your pot last in retirement under various withdrawal rates?
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    with st.expander("Retirement drawdown — pot longevity", expanded=False):
+        st.caption(
+            "How long will your money last in retirement? Simulates drawdown from a starting "
+            "pot, with annual withdrawals inflation-adjusted, against a chosen real return. "
+            "Shows the age your pot is depleted — and how that compares to UK life expectancy. "
+            "**All figures in today's money (real terms).** Indicative only — not advice."
+        )
+
+        dd_col1, dd_col2, dd_col3, dd_col4 = st.columns(4)
+        with dd_col1:
+            dd_start_age = st.number_input("Retirement age",
+                min_value=max(int(latest_age) + 1, 50), max_value=80,
+                value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
+                step=1, key="dd_start_age")
+        with dd_col2:
+            # Project NW to start age at user-chosen real return
+            _dd_default_pot = int(latest_nw * 1.04 ** max(0, dd_start_age - latest_age))
+            dd_start_pot = st.number_input("Starting pot at retirement (£)",
+                min_value=10_000, max_value=20_000_000,
+                value=max(10_000, _dd_default_pot), step=10_000, format="%d", key="dd_start_pot",
+                help="Pre-filled with your latest NW projected at 4% real return to your retirement age. "
+                     "Edit if you want a different starting amount.")
+        with dd_col3:
+            dd_annual_spend = st.number_input("Annual spend (£, today's money)",
+                min_value=5_000, max_value=500_000,
+                value=int(fire_spending) if fire_spending else 30_000, step=1_000, format="%d", key="dd_spend",
+                help="Annual withdrawal in today's money. Will be inflation-adjusted each year.")
+        with dd_col4:
+            dd_real_return = st.number_input("Real return (%)",
+                -2.0, 10.0, 4.0, 0.25, key="dd_return",
+                help="Return above inflation on the pot during retirement. "
+                     "Common assumptions: 3% for cautious, 4% balanced, 5% equity-heavy.")
+
+        # Optional: include state pension reducing the withdrawal need
+        dd_include_sp = st.checkbox("Include state pension (reduces drawdown need)",
+            value=True, key="dd_sp",
+            help="If checked, state pension income (from age 66/67) is subtracted from the annual "
+                 "spend, so less is drawn from the pot once you qualify.")
+
+        # Simulate
+        _dd_pot = float(dd_start_pot)
+        _dd_r = dd_real_return / 100
+        _dd_ages = [dd_start_age]
+        _dd_pots = [_dd_pot]
+        _dd_runout_age = None
+        _max_sim_age = 100
+        _state_pen_age = 67  # planned for cohorts retiring 2028+
+
+        for age in range(dd_start_age, _max_sim_age):
+            # Annual withdrawal in real terms (already adjusted because we work in real £)
+            # Reduce by state pension from state pension age onward, if opted in
+            sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
+            net_withdrawal = max(0, dd_annual_spend - sp)
+            # End-of-year balance: grow first, then withdraw (mid-year would be more accurate
+            # but ordering doesn't change pot longevity much for small SWRs)
+            _dd_pot = _dd_pot * (1 + _dd_r) - net_withdrawal
+            _dd_ages.append(age + 1)
+            _dd_pots.append(max(0, _dd_pot))
+            if _dd_pot <= 0 and _dd_runout_age is None:
+                _dd_runout_age = age + 1
+                break
+
+        # Headline metric row
+        dd_m1, dd_m2, dd_m3, dd_m4 = st.columns(4)
+        with dd_m1:
+            st.metric("Years in retirement covered",
+                      f"{(_dd_runout_age - dd_start_age) if _dd_runout_age else f'≥{_max_sim_age - dd_start_age}'}")
+        with dd_m2:
+            if _dd_runout_age:
+                st.metric("Pot depleted at age", f"{_dd_runout_age}",
+                          help="Age your pot reaches zero given the spend and real return.")
+            else:
+                st.metric("Pot survives to", f"≥ age {_max_sim_age}",
+                          delta="Sustainable", help="Pot still has funds at age 100.")
+        with dd_m3:
+            # Compare to UK life expectancy (ONS 2020-22 cohort life expectancy at retirement age)
+            # Approx values for someone retiring at 65: M ~84, F ~86, mixed ~85.
+            # At 60: M ~85, F ~87. At 55: M ~86, F ~88.
+            _le_at_retire = {55: 86, 60: 85, 65: 85, 67: 84, 70: 83, 75: 82, 80: 81}.get(dd_start_age,
+                            int(85 - max(0, dd_start_age - 65) * 0.2))
+            st.metric("Avg life expectancy", f"~{_le_at_retire}",
+                      help="ONS cohort life expectancy at this retirement age (mixed-sex). "
+                           "Many will live longer — plan for ~10 years beyond average.")
+        with dd_m4:
+            # Implied SWR
+            _swr_implied = dd_annual_spend / dd_start_pot * 100
+            st.metric("Implied withdrawal rate", f"{_swr_implied:.1f}%",
+                      help="Annual spend ÷ starting pot. <4% is generally considered safe over 30+ years.")
+
+        # Verdict
+        if _dd_runout_age is None:
+            st.success(f"Your pot sustains the chosen spend indefinitely at {dd_real_return:.1f}% real return.",
+                       icon="✅")
+        else:
+            yrs_covered = _dd_runout_age - dd_start_age
+            if _dd_runout_age >= _le_at_retire + 5:
+                st.info(
+                    f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
+                    f"That's comfortably beyond UK average life expectancy at this age (~{_le_at_retire}).",
+                    icon="✅",
+                )
+            elif _dd_runout_age >= _le_at_retire:
+                st.warning(
+                    f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
+                    f"Just covers average life expectancy (~{_le_at_retire}) — half of people will outlive this. "
+                    "Consider lower spend, higher return assumption, or planning longer.",
+                    icon="⚠️",
+                )
+            else:
+                st.error(
+                    f"Pot lasts only ~{yrs_covered} years, depleting at age {_dd_runout_age} — "
+                    f"well before average life expectancy (~{_le_at_retire}). "
+                    "Reduce spend, retire later, or save more.",
+                    icon="🚨",
+                )
+
+        # Drawdown chart
+        _dd_fig = go.Figure()
+        _dd_fig.add_trace(go.Scatter(
+            x=_dd_ages, y=_dd_pots,
+            mode="lines", line=dict(color=COLOURS["person"], width=2.5),
+            fill="tozeroy", fillcolor="rgba(249,115,22,0.10)",
+            name="Pot balance",
+            hovertemplate="Age %{x}<br>£%{y:,.0f}<extra></extra>",
+        ))
+        _dd_fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
+        # Life expectancy marker
+        _dd_fig.add_vline(x=_le_at_retire,
+            line=dict(color="#64748b", width=1, dash="dash"),
+            annotation_text=f"Avg life exp ~{_le_at_retire}",
+            annotation_position="top right",
+            annotation=dict(font=dict(size=10, color="#64748b")),
+        )
+        if _dd_runout_age:
+            _dd_fig.add_vline(x=_dd_runout_age,
+                line=dict(color="#ef4444", width=1.5, dash="dot"),
+                annotation_text=f"Depleted age {_dd_runout_age}",
+                annotation_position="bottom right",
+                annotation=dict(font=dict(size=10, color="#ef4444")),
+            )
+        _dd_fig.update_layout(
+            title=dict(text="Pot balance over retirement (real terms)",
+                       font=dict(size=14, color="#1e293b"), x=0),
+            xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+            yaxis=dict(title="Pot value (£, today's money)", tickprefix="£", tickformat=",.0f",
+                       gridcolor="#e2e8f0"),
+            plot_bgcolor="white", paper_bgcolor="white",
+            height=300, margin=dict(l=70, r=40, t=50, b=50), hovermode="x unified",
+        )
+        st.plotly_chart(_dd_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+        # Sensitivity table: how does longevity change with different real returns?
+        st.markdown("**Sensitivity: how long does the pot last at different return assumptions?**")
+        sens_rows = []
+        for _r_test in [1, 2, 3, 4, 5, 6]:
+            _r = _r_test / 100
+            _pot = float(dd_start_pot)
+            _runout = None
+            for age in range(dd_start_age, _max_sim_age + 1):
+                sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
+                net_w = max(0, dd_annual_spend - sp)
+                _pot = _pot * (1 + _r) - net_w
+                if _pot <= 0 and _runout is None:
+                    _runout = age + 1
+                    break
+            sens_rows.append({
+                "Real return": f"{_r_test}%",
+                "Pot lasts until": (f"age {_runout}" if _runout
+                                     else f"≥ age {_max_sim_age} (sustainable)"),
+                "Years covered": (f"{_runout - dd_start_age}" if _runout
+                                   else f"≥ {_max_sim_age - dd_start_age}"),
+            })
+        st.dataframe(pd.DataFrame(sens_rows), use_container_width=True, hide_index=True)
+        st.caption(
+            "Sensitivity is one of the most important things to check — small changes in assumed "
+            "real return swing the depletion age by years. Sequence-of-returns risk (bad early years) "
+            "is not modelled here; consider stress-testing with 1–2% real return as a 'rough patch' floor."
+        )
 
 # ── IHT / estate tax calculator ───────────────────────────────────────────────
 
@@ -1956,6 +2259,35 @@ All derived — not published WAS component tables.
 
 Derived from the same log-normal model: `value = exp(mu + z×sigma)` where z = Phi⁻¹(0.10/0.90).
 
+### Retirement income forecast
+
+Projects your net worth to your chosen retirement age using a configurable real
+return (default 4%), splits the result into pension wrappers vs other wealth using
+your asset composition, then estimates annual income from three sources:
+
+- **Pension annuity** = pension pot × annuity rate. Rate ≈ 6.5% at age 65, with
+  small adjustment for retirement age (single-life, level annuity, gilt-linked).
+  Drawdown can be more flexible — this is a conservative income proxy.
+- **4% drawdown** from non-pension wealth (ISAs, GIAs, property-equivalent).
+  Follows the Trinity Study 4% rule for a 30-year horizon.
+- **State pension** included from age 67 (post-2028 cohort); your input figure.
+
+All figures pre-tax. Compare against your target income to see if the plan stacks up.
+
+### Retirement drawdown — pot longevity
+
+Simulates spending down a retirement pot year-by-year. Starts with a chosen pot
+size, grows it at the real return, subtracts annual withdrawal (inflation-adjusted
+because we work in real terms), and reports the depletion age. Compares against
+ONS cohort life expectancy at the retirement age. Includes a sensitivity table
+showing how the depletion age changes at real returns from 1% to 6%.
+
+**Important caveat:** sequence-of-returns risk is not modelled here — the
+simulation assumes constant returns each year. In reality, the order of returns
+matters (a bad first 5 years is much worse than a bad last 5 years). For
+robustness, stress-test with a 1–2% real-return floor and ensure the pot still
+covers your planning horizon.
+
 ### Privacy
 
 All personal data lives in browser session state or URL query params only.
@@ -1982,7 +2314,7 @@ Wealth varies substantially by region — approximate median total wealth premiu
 
 If you live in London or the South East, you are likely comparing against a benchmark
 that understates your peers' wealth; in the North or Wales, it overstates it.
-A region filter is planned for v2.
+A region filter is on the roadmap (requires expanded WAS regional tables).
 
 ### Known limitations
 
@@ -2583,6 +2915,85 @@ if personal_plot_df is not None and latest_nw is not None:
 
         except (NameError, Exception): pass
 
+        # ── Page 9: Retirement income forecast ─────────────────────────────────
+        try:
+            _retire_age_pdf = int(retirement_age) if retirement_age else 65
+            if _retire_age_pdf > latest_age and latest_nw > 0:
+                pdf.add_page(); H1("Retirement income forecast")
+                SM(
+                    f"Projected annual income at age {_retire_age_pdf} from your net worth, split "
+                    "into annuity (pension wrappers) + 4% drawdown (other wealth) + state pension. "
+                    "Real terms (today's money). Indicative only - not financial advice."
+                )
+                pdf.ln(3)
+                # Project NW at 4% real return as a baseline
+                _yrs_to_retire = _retire_age_pdf - latest_age
+                _nw_at_retire = latest_nw * (1.04 ** _yrs_to_retire)
+                # Pension share comes from personal_asset_split if set, else 30%
+                try:
+                    _pen_share = personal_asset_split["Pension"] if personal_asset_split else 0.30
+                except NameError:
+                    _pen_share = 0.30
+                _pen_pot = _nw_at_retire * _pen_share
+                _other  = _nw_at_retire - _pen_pot
+                _ann_rate_pdf = 0.065 + (_retire_age_pdf - 65) * 0.0025
+                _annuity_pdf  = _pen_pot * max(_ann_rate_pdf, 0.02)
+                _draw_pdf     = _other * 0.04
+                _sp_pdf       = state_pension if (_retire_age_pdf >= 67 and state_pension) else 0
+                _total_pdf    = _annuity_pdf + _draw_pdf + _sp_pdf
+
+                KV("Projected net worth at retirement:", _fmt(_nw_at_retire))
+                KV("  Assumed real return until retirement:", "4.0% per year")
+                KV("  Pension wrappers (annuity source):", f"{_fmt(_pen_pot)}  ({_pen_share*100:.0f}%)")
+                KV("  Other wealth (4% drawdown source):", _fmt(_other))
+                pdf.ln(3)
+
+                pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*BLUE)
+                pdf.cell(0, 6, "Estimated annual income at retirement", ln=True)
+                pdf.set_draw_color(*BLUE); pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+                pdf.ln(3); pdf.set_draw_color(0, 0, 0)
+                TH(("Source", 90), ("Annual income", 50), ("Per week", 40))
+                rows_inc = [
+                    ("Pension annuity", _annuity_pdf, False),
+                    ("4% drawdown from other wealth", _draw_pdf, False),
+                    ("State pension", _sp_pdf, False),
+                    ("Total", _total_pdf, True),
+                ]
+                for _idx, (lbl_inc, val_inc, bold) in enumerate(rows_inc):
+                    TR(_idx, (lbl_inc, 90, bold),
+                       (f"{_fmt(val_inc)}/yr", 50, bold),
+                       (f"{_fmt(val_inc/52)}/wk", 40, bold))
+
+                # Compare against target
+                try:
+                    _target_pdf = float(pension_income) if pension_income else 0
+                except (NameError, ValueError):
+                    _target_pdf = 0
+                if _target_pdf > 0:
+                    pdf.ln(3)
+                    _gap = _total_pdf - _target_pdf
+                    if _gap >= 0:
+                        pdf.set_text_color(16, 185, 129)
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.cell(0, 6, f"Exceeds target ({_fmt(_target_pdf)}/yr) by {_fmt(_gap)}/yr.",
+                                 ln=True)
+                    else:
+                        pdf.set_text_color(217, 119, 6)
+                        pdf.set_font("Helvetica", "B", 10)
+                        pdf.cell(0, 6, f"Short of target ({_fmt(_target_pdf)}/yr) by {_fmt(abs(_gap))}/yr.",
+                                 ln=True)
+                    pdf.set_text_color(*SLATE)
+
+                pdf.ln(4)
+                SM(
+                    "Assumptions: 4% real return on NW until retirement; "
+                    f"annuity at {_ann_rate_pdf*100:.1f}% (gilt-linked level annuity, single life); "
+                    "4% safe withdrawal from non-pension wealth; "
+                    "state pension included from age 67. "
+                    "Pre-tax: income tax applies above the Personal Allowance (~£12,570/yr)."
+                )
+        except Exception: pass
+
         # ── Final page: Methodology & disclaimer ───────────────────────────────
         pdf.add_page()
         H1("Methodology & data sources")
@@ -2685,7 +3096,7 @@ if personal_plot_df is not None and latest_nw is not None:
 # ── Footer ────────────────────────────────────────────────────────────────────
 
 st.divider()
-APP_VERSION = "v2.4"
+APP_VERSION = "v2.5"
 st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
     f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 7 (2018–2020) · Streamlit + Plotly"

@@ -118,6 +118,16 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Duplicate encode/decode helpers removed from data_loader.py
 - [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
 
+### Session 6 (May 2026) — retirement planning push (v2.5)
+- [x] **Retirement income forecast** (new) — combines projected NW at retirement, pension share, state pension, annuity rate, and 4% drawdown into a single annual-income view with target comparison. In-app expander + PDF page.
+- [x] **Drawdown / pot longevity simulator** (new) — year-by-year decumulation simulation with depletion age, life-expectancy comparison, sensitivity table over 1-6% real returns, optional state pension overlay, pot-balance chart, verdict banner. Closes the biggest gap vs leading retirement tools.
+- [x] State pension default £11,500 → £12,400 (2026/27 estimate); help text updated.
+- [x] Annuity rate assumption 5% → 6.5% at age 65 (UK gilt-linked rates).
+- [x] Sidebar: 7 display toggles moved into a "Display options" expander; age range slider stays prominent.
+- [x] Empty-state guidance: friendly banner pointing first-time users at the sidebar upload widget.
+- [x] Methodology panel updated with retirement income + drawdown sections; stale "v2" region note removed.
+- [x] REVIEW_LOG.md created with full Session 6 audit (findings, plan, results).
+
 ### Session 5 (May 2026) — audit & polish (v2.4)
 - [x] Fix: `build_percentile_trajectory` crashed on empty/all-negative input — now returns typed empty DataFrame
 - [x] Fix: PDF data history showed "Note: nan" on every row without a note (NaN-string ambiguity) — new `_clean_note()` helper

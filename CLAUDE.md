@@ -135,7 +135,7 @@ For production accuracy, replace with values from:
 
 ## Current version
 
-**v2.2** (May 2026) — wealth type filter, note annotations, savings projection. See NEXT_STEPS.md for remaining backlog.
+**v2.5** (May 2026) — retirement income forecast + drawdown / pot longevity simulator added; sidebar display toggles consolidated; empty-state guidance for new users; state pension and annuity defaults refreshed to 2025/26 rates. See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
 
 ## Workflow
 
