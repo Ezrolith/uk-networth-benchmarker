@@ -722,6 +722,87 @@ def build_whatif_figure(
     return fig
 
 
+# ── Distribution histogram at user's age ─────────────────────────────────────
+
+def build_distribution_chart(
+    age: int, benchmark: pd.DataFrame,
+    user_nw: float | None = None,
+    partner_nw: float | None = None,
+) -> go.Figure | None:
+    """
+    Simulate the log-normal wealth distribution at a given age and plot it as a
+    density curve, with vertical lines for P25/P50/P75 and the user's position.
+    """
+    from scipy.stats import norm as _norm, lognorm as _lognorm
+
+    age_clamped = min(int(age), 85)
+    age_data = benchmark[benchmark["age"] == age_clamped]
+
+    def get_val(pct: str) -> float | None:
+        rows = age_data[age_data["percentile"] == pct]["value"]
+        return float(rows.iloc[0]) if len(rows) else None
+
+    p25v = get_val("p25")
+    p50v = get_val("p50")
+    p75v = get_val("p75")
+    if any(v is None or v <= 0 for v in [p25v, p50v, p75v]):
+        return None
+
+    mu    = np.log(p50v)
+    sigma = (np.log(p75v) - np.log(p25v)) / (2 * 0.6745)
+
+    # X range: P2 to P98
+    x_min = float(np.exp(mu + _norm.ppf(0.02) * sigma))
+    x_max = float(np.exp(mu + _norm.ppf(0.98) * sigma))
+    x = np.linspace(max(x_min, 1), x_max, 500)
+    pdf = _lognorm.pdf(x, s=sigma, scale=np.exp(mu))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=x, y=pdf, mode="lines",
+        line=dict(color="#93c5fd", width=2),
+        fill="tozeroy", fillcolor="rgba(147,197,253,0.15)",
+        name="Distribution", hoverinfo="skip",
+    ))
+
+    for val, label, colour in [
+        (p25v, "P25", "#93c5fd"), (p50v, "Median", "#1d4ed8"), (p75v, "P75", "#93c5fd")
+    ]:
+        fig.add_vline(x=val, line=dict(color=colour, width=1.5, dash="dot"),
+            annotation_text=f"{label} {_fmt(val)}", annotation_position="top",
+            annotation=dict(font=dict(size=10, color=colour)),
+        )
+
+    if user_nw and user_nw > 0:
+        user_pct = _lognorm.cdf(user_nw, s=sigma, scale=np.exp(mu)) * 100
+        fig.add_vline(x=user_nw, line=dict(color=COLOURS["person"], width=2.5),
+            annotation_text=f"You {_fmt(user_nw)} (~{user_pct:.0f}th)",
+            annotation_position="top right",
+            annotation=dict(font=dict(size=11, color=COLOURS["person"]),
+                            bgcolor="white", borderpad=3),
+        )
+    if partner_nw and partner_nw > 0:
+        fig.add_vline(x=partner_nw, line=dict(color=COLOURS["partner"], width=2.5),
+            annotation_text=f"Partner {_fmt(partner_nw)}",
+            annotation_position="top left",
+            annotation=dict(font=dict(size=11, color=COLOURS["partner"]),
+                            bgcolor="white", borderpad=3),
+        )
+
+    price_note = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
+    fig.update_layout(
+        title=dict(text=f"Wealth distribution at age {age_clamped} ({price_note})",
+                   font=dict(size=14, color="#1e293b"), x=0),
+        xaxis=dict(title=f"Net worth (£, {price_note})", tickprefix="£", tickformat=",.0f",
+                   gridcolor="#e2e8f0"),
+        yaxis=dict(title="Probability density", showticklabels=False, gridcolor="#e2e8f0"),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=300, margin=dict(l=60, r=60, t=50, b=50),
+        showlegend=False,
+    )
+    return fig
+
+
 # ── Asset class chart ─────────────────────────────────────────────────────────
 
 def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
@@ -1060,6 +1141,23 @@ if latest_age is not None:
                     )
             price_label_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
             st.caption(f"All values in {price_label_note}. Rows marked 'Log-normal model' are derived estimates.")
+
+# ── Distribution curve at user's age ─────────────────────────────────────────
+
+if latest_age is not None:
+    with st.expander(f"Wealth distribution curve at age {latest_age:.0f}"):
+        p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
+            if partner_plot_df is not None and len(partner_plot_df) > 0 else None
+        dist_fig = build_distribution_chart(
+            round(latest_age), benchmark,
+            user_nw=latest_nw, partner_nw=p_nw_for_dist,
+        )
+        if dist_fig:
+            st.plotly_chart(dist_fig, use_container_width=True, config=PLOTLY_CONFIG)
+            st.caption(
+                "Distribution simulated from a log-normal model fitted to P25/P50/P75. "
+                "Tails (above P90) are extrapolated and should be read with caution."
+            )
 
 # ── Percentile trajectory chart ───────────────────────────────────────────────
 
