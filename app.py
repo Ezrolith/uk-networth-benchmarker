@@ -20,7 +20,7 @@ from utils.inference import (
     adjust_for_inflation, cpi_adjust_personal,
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
-    build_asset_class_series, build_decile_table,
+    build_asset_class_series, build_decile_table, apply_component_filter,
     DATA_YEAR, REAL_BASE_YEAR,
 )
 
@@ -230,6 +230,14 @@ with st.sidebar:
                           help="Applies approximate WAS gender wealth-gap factors. "
                                "Male = baseline. Female ≈ 68–92% of male by age. "
                                "Derived — treat as indicative (±10–15%).")
+    wealth_component = st.radio(
+        "Wealth component",
+        ["Total", "Property", "Pension", "Financial", "Physical"],
+        horizontal=True,
+        help="Filter the benchmark to a single wealth component. "
+             "Uses approximate WAS asset class share proportions — derived, not published. "
+             "Your personal overlay still shows total net worth.",
+    )
     log_scale        = st.toggle("Log scale", value=False,
                                  help="Spreads low values — useful when data spans several orders of magnitude")
     show_tails       = st.toggle("Show P10 / P90", value=False,
@@ -368,6 +376,8 @@ latest_age: float | None = None
 # ── Data pipeline ─────────────────────────────────────────────────────────────
 
 benchmark = _build_benchmark(basis, include_pension, real_terms, gender)
+if wealth_component != "Total":
+    benchmark = apply_component_filter(benchmark, wealth_component, _load_asset_classes())
 
 def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
     if df is None or len(df) == 0:
@@ -611,9 +621,10 @@ def build_main_figure(
         gridcolor="#e2e8f0", showgrid=True,
     )
 
+    component_suffix = f" · {wealth_component} wealth only" if wealth_component != "Total" else ""
     fig.update_layout(
         title=dict(
-            text=f"UK net worth distribution — {basis.lower()} basis, {price_label}",
+            text=f"UK net worth distribution — {basis.lower()} basis, {price_label}{component_suffix}",
             font=dict(size=17, color="#1e293b"), x=0,
         ),
         xaxis=dict(title="Age", range=[age_min - 0.5, age_max + 0.5],
@@ -1484,7 +1495,15 @@ fig = build_main_figure(
 )
 st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
-if basis == "Individual":
+if wealth_component != "Total":
+    st.info(
+        f"Viewing **{wealth_component} wealth** component only. "
+        "Benchmark scaled by approximate WAS Wave 7 asset class shares (derived). "
+        "Your personal net worth overlay shows **total** net worth — "
+        "enter your composition split in the sidebar for per-component context.",
+        icon="ℹ️",
+    )
+elif basis == "Individual":
     st.caption("Individual figures are derived — see methodology panel.")
 else:
     st.caption(

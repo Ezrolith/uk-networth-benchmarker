@@ -95,6 +95,7 @@ sidebar block so goal/savings calculator widgets can safely reference them.
 | Gender (Individual only) | All / Male / Female — WAS-derived gender gap factors |
 | Include pension wealth | Adds/removes private pension component |
 | Real terms (2026 £) | CPI-adjusts benchmark AND personal data to 2026 prices |
+| Wealth component | Total / Property / Pension / Financial / Physical — scales benchmark by WAS component shares |
 | Log scale | Log Y-axis; negative personal values hidden with warning |
 | Show P10 / P90 | Derived tails via log-normal model |
 | Wealth milestones | £100k / £250k / £500k / £1m reference lines |
@@ -134,7 +135,7 @@ For production accuracy, replace with values from:
 
 ## Current version
 
-**v2.1** (May 2026) — full feature set. See NEXT_STEPS.md for remaining backlog.
+**v2.2** (May 2026) — wealth type filter, note annotations, savings projection. See NEXT_STEPS.md for remaining backlog.
 
 ## Workflow
 

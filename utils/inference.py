@@ -406,6 +406,47 @@ def build_asset_class_series(
     return pd.DataFrame(rows)
 
 
+_COMPONENT_COL = {
+    "Property":  "property_pct",
+    "Pension":   "pension_pct",
+    "Financial": "financial_pct",
+    "Physical":  "physical_pct",
+}
+
+def apply_component_filter(
+    bm: pd.DataFrame,
+    component: str,
+    asset_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Scale a benchmark DataFrame so its values represent a single wealth component
+    rather than total wealth, using PCHIP-interpolated WAS asset class shares.
+
+    component must be one of 'Property', 'Pension', 'Financial', 'Physical', or 'Total'.
+    Returns bm unchanged if component == 'Total'.
+    Shares are normalised so they sum to 1 at each age (same as build_asset_class_series).
+    """
+    if component == "Total":
+        return bm
+
+    col = _COMPONENT_COL[component]
+    midpoints = asset_df["band_midpoint"].values.astype(float)
+    all_cols = list(_COMPONENT_COL.values())
+
+    interps = {
+        c: PchipInterpolator(midpoints, asset_df[c].values.astype(float) / 100.0, extrapolate=True)
+        for c in all_cols
+    }
+
+    bm = bm.copy()
+    ages = bm["age"].values.astype(float)
+    component_shares = np.clip(interps[col](ages), 0.0, None)
+    total_shares = sum(np.clip(interps[c](ages), 0.0, None) for c in all_cols)
+    normalised = component_shares / np.maximum(total_shares, 1e-9)
+    bm["value"] = bm["value"].values * normalised
+    return bm
+
+
 def build_percentile_trajectory(
     personal_df: pd.DataFrame, benchmark: pd.DataFrame
 ) -> pd.DataFrame:
