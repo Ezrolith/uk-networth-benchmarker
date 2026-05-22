@@ -277,6 +277,55 @@ def derive_tail_percentiles(benchmark: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(results)
 
 
+def build_asset_class_series(
+    asset_df: pd.DataFrame,
+    benchmark: pd.DataFrame,
+    age_range: np.ndarray,
+) -> pd.DataFrame:
+    """
+    Interpolate asset class component shares and combine with the P50 benchmark
+    to produce £ values per component at each single year of age.
+
+    Returns a tidy DataFrame with columns: age, component, value_pct, value_gbp.
+    All figures are inferred — derived by multiplying the P50 benchmark by
+    approximate component share proportions from WAS Wave 7.
+    """
+    midpoints = asset_df["band_midpoint"].values.astype(float)
+    components = ["property_pct", "pension_pct", "financial_pct", "physical_pct"]
+    labels     = {"property_pct": "Property", "pension_pct": "Pension",
+                  "financial_pct": "Financial", "physical_pct": "Physical"}
+
+    # Interpolate each component share to single years
+    share_series: dict[str, np.ndarray] = {}
+    for col in components:
+        vals = asset_df[col].values.astype(float) / 100.0
+        interp = PchipInterpolator(midpoints, vals, extrapolate=True)
+        raw = interp(age_range.astype(float))
+        share_series[col] = np.clip(raw, 0.0, 1.0)
+
+    # Normalise so shares sum to 1.0 at each age
+    total = sum(share_series.values())
+    share_series = {k: v / np.maximum(total, 1e-9) for k, v in share_series.items()}
+
+    # Get P50 benchmark values (with pension = True)
+    p50 = benchmark[(benchmark["percentile"] == "p50") & (benchmark["with_pension"] == True)
+                    ].set_index("age")["value"]
+
+    rows = []
+    for i, age in enumerate(age_range):
+        p50_val = p50.get(int(age), np.nan)
+        if np.isnan(p50_val):
+            continue
+        for col in components:
+            rows.append({
+                "age":       int(age),
+                "component": labels[col],
+                "value_pct": share_series[col][i] * 100,
+                "value_gbp": share_series[col][i] * p50_val,
+            })
+    return pd.DataFrame(rows)
+
+
 def build_percentile_trajectory(
     personal_df: pd.DataFrame, benchmark: pd.DataFrame
 ) -> pd.DataFrame:

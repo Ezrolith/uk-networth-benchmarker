@@ -5,6 +5,10 @@ import pandas as pd
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 
+def load_asset_class_data() -> pd.DataFrame:
+    return pd.read_csv(DATA_DIR / "was_asset_class.csv")
+
+
 def load_was_data() -> pd.DataFrame:
     df = pd.read_csv(DATA_DIR / "was_data.csv")
     df = df.rename(columns={"value_nominal": "value"})

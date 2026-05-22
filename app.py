@@ -10,7 +10,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 
-from utils.data_loader import load_was_data, parse_personal_csv, encode_personal_data, decode_personal_data
+from utils.data_loader import load_was_data, load_asset_class_data, parse_personal_csv, encode_personal_data, decode_personal_data
 from utils.inference import (
     interpolate_benchmarks,
     convert_to_individual,
@@ -20,6 +20,7 @@ from utils.inference import (
     estimate_exact_percentile,
     build_percentile_trajectory,
     derive_tail_percentiles,
+    build_asset_class_series,
     DATA_YEAR,
     REAL_BASE_YEAR,
 )
@@ -89,6 +90,11 @@ def _load_raw() -> pd.DataFrame:
 
 
 @st.cache_data
+def _load_asset_classes() -> pd.DataFrame:
+    return load_asset_class_data()
+
+
+@st.cache_data
 def _build_benchmark(basis: str, include_pension: bool, real_terms: bool) -> pd.DataFrame:
     raw = _load_raw()
     filtered = raw[raw["with_pension"] == include_pension].copy()
@@ -120,10 +126,12 @@ with st.sidebar:
                                 help="Spreads out low values — useful when your data spans a wide range")
     show_tails      = st.toggle("Show P10 / P90", value=False,
                                 help="Derived tails: modelled from the log-normal fit, not published WAS data")
-    show_milestones = st.toggle("Wealth milestones", value=False,
-                                help="Reference lines at £100k, £250k, £500k and £1m")
-    smooth_traj     = st.toggle("Smooth trajectory", value=False,
-                                help="Apply a rolling average to the percentile trajectory chart (reduces noise with many data points)")
+    show_milestones  = st.toggle("Wealth milestones", value=False,
+                                 help="Reference lines at £100k, £250k, £500k and £1m")
+    smooth_traj      = st.toggle("Smooth trajectory", value=False,
+                                 help="Apply a rolling average to the percentile trajectory chart (reduces noise with many data points)")
+    show_asset_class = st.toggle("Asset class breakdown", value=False,
+                                 help="Stacked area chart showing how property / pension / financial / physical wealth compose the median at each age")
 
     st.divider()
     st.subheader("Your net worth")
@@ -546,6 +554,53 @@ def build_percentile_chart(traj: pd.DataFrame) -> go.Figure:
     return fig
 
 
+# ── Asset class chart ────────────────────────────────────────────────────────
+
+ASSET_COLOURS = {
+    "Property":  "#1d4ed8",
+    "Pension":   "#7c3aed",
+    "Financial": "#059669",
+    "Physical":  "#d97706",
+}
+
+
+def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    for component in ["Physical", "Financial", "Pension", "Property"]:  # bottom to top
+        sub = series[series["component"] == component].sort_values("age")
+        fig.add_trace(go.Scatter(
+            x=sub["age"], y=sub["value_gbp"],
+            mode="lines",
+            stackgroup="one",
+            name=component,
+            line=dict(width=0.5, color=ASSET_COLOURS[component]),
+            hovertemplate=(
+                f"<b>{component}</b><br>"
+                "Age %{x}<br>"
+                "£%{y:,.0f} (~%{customdata:.0f}%)<extra></extra>"
+            ),
+            customdata=sub["value_pct"],
+        ))
+
+    fig.update_layout(
+        title=dict(
+            text="Median wealth composition by age (approximate, WAS Wave 7)",
+            font=dict(size=14, color="#1e293b"),
+            x=0,
+        ),
+        xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
+        yaxis=dict(title="Net worth (£, nominal 2019 prices)", tickprefix="£",
+                   tickformat=",.0f", gridcolor="#e2e8f0"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        height=320,
+        margin=dict(l=70, r=80, t=60, b=50),
+        hovermode="x unified",
+    )
+    return fig
+
+
 # ── Main content ──────────────────────────────────────────────────────────────
 
 st.title("UK Net Worth Benchmarker")
@@ -759,6 +814,24 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             "Percentile estimated by fitting a log-normal distribution to the P25/P50/P75 benchmarks at each age. "
             "Treat as indicative — log-normality is an approximation."
             + (" Rolling average applied." if smooth_traj else "")
+        )
+
+
+# ── Asset class breakdown chart ──────────────────────────────────────────────
+
+if show_asset_class:
+    asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
+    if len(asset_series):
+        st.plotly_chart(
+            build_asset_class_chart(asset_series),
+            use_container_width=True,
+            config=PLOTLY_CONFIG,
+        )
+        st.caption(
+            "Component shares are approximate WAS Wave 7 proportions at the median, interpolated to single years. "
+            "Property = net of mortgage. Pension = private pension (DB present value + DC fund). "
+            "Financial = savings/investments net of non-mortgage debt. Physical = vehicles, contents, valuables. "
+            "All figures are derived estimates — not published WAS breakdowns."
         )
 
 

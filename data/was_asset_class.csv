@@ -1,0 +1,8 @@
+age_band,band_midpoint,property_pct,pension_pct,financial_pct,physical_pct,source,data_year
+16-24,20,8,25,47,20,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+25-34,30,38,22,30,10,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+35-44,40,42,33,18,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+45-54,50,37,43,13,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+55-64,60,30,46,17,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+65-74,70,31,40,23,6,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+75+,80,37,30,28,5,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
