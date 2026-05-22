@@ -220,6 +220,8 @@ with st.sidebar:
                                  help="Rolling average on the percentile trajectory chart")
     show_asset_class = st.toggle("Asset class breakdown", value=False,
                                  help="Stacked chart: property / pension / financial / physical at the median")
+    show_annotations = st.toggle("Show chart annotations", value=True,
+                                 help="Show best-gain arrows and crosshair labels — turn off for clean screenshots")
 
     age_min, age_max = st.slider("Age range shown", 16, 85, (16, 85), step=1,
                                  help="Zoom in on a specific age window")
@@ -322,6 +324,7 @@ def _best_gain(pdf: pd.DataFrame) -> tuple[float, float, float] | None:
 
 def build_main_figure(
     log_scale: bool, show_tails: bool, show_milestones: bool,
+    show_annotations: bool,
     age_min: int, age_max: int,
     latest_age: float | None, latest_nw: float | None,
     partner_latest_age: float | None = None,
@@ -446,26 +449,27 @@ def build_main_figure(
             customdata=custom,
         ))
 
-        # Best gain annotation
-        best = _best_gain(plot)
-        if best:
-            bg_age, bg_amount, bg_pct = best
-            bg_nw = float(plot[plot["age"] == bg_age]["net_worth"].iloc[0]) if bg_age in plot["age"].values else None
-            if bg_nw and bg_amount > 0:
-                fig.add_annotation(
-                    x=bg_age, y=bg_nw,
-                    text=f"Best year<br>{_fmt_delta(bg_amount)} ({bg_pct:.0f}%)",
-                    showarrow=True, arrowhead=2, arrowcolor=colour,
-                    ax=30, ay=-40,
-                    font=dict(size=10, color=colour),
-                    bgcolor="white",
-                    bordercolor=colour, borderwidth=1, borderpad=3,
-                )
+        # Best gain annotation (suppressed when show_annotations=False)
+        if show_annotations:
+            best = _best_gain(plot)
+            if best:
+                bg_age, bg_amount, bg_pct = best
+                bg_nw = float(plot[plot["age"] == bg_age]["net_worth"].iloc[0]) if bg_age in plot["age"].values else None
+                if bg_nw and bg_amount > 0:
+                    fig.add_annotation(
+                        x=bg_age, y=bg_nw,
+                        text=f"Best year<br>{_fmt_delta(bg_amount)} ({bg_pct:.0f}%)",
+                        showarrow=True, arrowhead=2, arrowcolor=colour,
+                        ax=30, ay=-40,
+                        font=dict(size=10, color=colour),
+                        bgcolor="white",
+                        bordercolor=colour, borderwidth=1, borderpad=3,
+                    )
 
         lat_age = float(plot["age"].iloc[-1])
         lat_nw  = float(plot["net_worth"].iloc[-1])
 
-        if show_crosshair:
+        if show_crosshair and show_annotations:
             fig.add_vline(x=lat_age,
                 line=dict(color=colour, width=1.5, dash="dash"),
                 annotation_text=f"{name.split()[0]} (age {lat_age:.1f})",
@@ -473,7 +477,7 @@ def build_main_figure(
                 annotation=dict(font=dict(color=colour, size=11),
                     bgcolor="white", bordercolor=colour, borderwidth=1, borderpad=4),
             )
-        if show_horiz and lat_nw > 0 and not log_scale:
+        if show_horiz and lat_nw > 0 and not log_scale and show_annotations:
             fig.add_hline(y=lat_nw,
                 line=dict(color=colour, width=1, dash="dot"),
                 annotation_text=_fmt(lat_nw),
@@ -922,10 +926,25 @@ if partner_plot_df is not None and len(partner_plot_df) > 0:
         f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}**"
     )
 
-    # Combined household callout (only when both loaded)
+    # Combined household callout + head-to-head leaderboard
     if personal_plot_df is not None and latest_nw is not None:
         combined = latest_nw + p_nw
         st.info(f"Combined household net worth: **{_fmt(combined)}**")
+
+        # Head-to-head at same interpolated benchmark age
+        you_pct = estimate_exact_percentile(latest_nw, round(latest_age or 0), benchmark)
+        if you_pct and p_pct:
+            h2h_col1, h2h_col2, h2h_col3 = st.columns(3)
+            ahead_label = "You" if you_pct >= p_pct else "Partner"
+            ahead_by    = abs(you_pct - p_pct)
+            with h2h_col1:
+                st.metric("You — percentile", f"~{you_pct:.0f}th")
+            with h2h_col2:
+                st.metric("Partner — percentile", f"~{p_pct:.0f}th")
+            with h2h_col3:
+                st.metric("Ahead by", f"{ahead_by:.0f} pct pts",
+                          help=f"{ahead_label} is ahead by {ahead_by:.0f} percentile points "
+                               f"(age-adjusted comparison).")
 
 # ── Goal / FIRE output ────────────────────────────────────────────────────────
 
@@ -985,7 +1004,7 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
 # ── Main chart ────────────────────────────────────────────────────────────────
 
 fig = build_main_figure(
-    log_scale, show_tails, show_milestones,
+    log_scale, show_tails, show_milestones, show_annotations,
     age_min, age_max,
     latest_age, latest_nw, partner_latest_age,
 )
