@@ -120,6 +120,8 @@ with st.sidebar:
             try:
                 personal_df = parse_personal_csv(uploaded)
                 st.success(f"{len(personal_df)} data point(s) loaded.")
+                if "birth_year_warning" in personal_df.attrs:
+                    st.warning(personal_df.attrs["birth_year_warning"], icon="⚠️")
             except ValueError as exc:
                 st.error(str(exc))
 
@@ -271,9 +273,34 @@ def build_main_figure(
     # Personal overlay
     if personal_plot_df is not None and len(personal_plot_df) > 0:
         pdf = personal_plot_df.sort_values("age")
+
+        # Zero line — only when personal data contains negative values
+        if (pdf["net_worth"] < 0).any() and not log_scale:
+            fig.add_hline(
+                y=0,
+                line=dict(color="#94a3b8", width=1.5),
+                annotation_text="Zero",
+                annotation_position="right",
+                annotation=dict(font=dict(color="#94a3b8", size=10)),
+            )
+
         if log_scale:
             pdf = pdf[pdf["net_worth"] > 0]
+
         if len(pdf):
+            # Build rich customdata: [year, p25, p50, p75] per row
+            ages_rounded = pdf["age"].apply(lambda a: min(round(a), 85)).values
+            bm_at_age = benchmark.set_index(["age", "percentile"])["value"]
+            custom = []
+            for yr, ar in zip(pdf["year"], ages_rounded):
+                try:
+                    c_p25 = bm_at_age.loc[(ar, "p25")]
+                    c_p50 = bm_at_age.loc[(ar, "p50")]
+                    c_p75 = bm_at_age.loc[(ar, "p75")]
+                except KeyError:
+                    c_p25 = c_p50 = c_p75 = float("nan")
+                custom.append([yr, c_p25, c_p50, c_p75])
+
             fig.add_trace(go.Scatter(
                 x=pdf["age"], y=pdf["net_worth"],
                 mode="lines+markers",
@@ -283,10 +310,13 @@ def build_main_figure(
                 name="Your net worth",
                 hovertemplate=(
                     "<b>Your net worth</b><br>"
-                    "Age %{x:.1f} (year %{customdata})<br>"
-                    "£%{y:,.0f}<extra></extra>"
+                    "Age %{x:.1f} (year %{customdata[0]})<br>"
+                    "£%{y:,.0f}<br>"
+                    "<i>Benchmark: P25 £%{customdata[1]:,.0f} · "
+                    "Med £%{customdata[2]:,.0f} · "
+                    "P75 £%{customdata[3]:,.0f}</i><extra></extra>"
                 ),
-                customdata=pdf["year"],
+                customdata=custom,
             ))
 
     # Crosshair: vertical "you are here" line

@@ -43,4 +43,17 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     df["age"] = df["age"].astype(float)
     df["net_worth"] = df["net_worth"].astype(float)
 
-    return df.sort_values("age").reset_index(drop=True)
+    df = df.sort_values("age").reset_index(drop=True)
+
+    # Birth-year consistency check: year - age should be roughly constant
+    implied_birth = df["year"] - df["age"]
+    span = implied_birth.max() - implied_birth.min()
+    if span > 3:
+        # Return data plus a warning attribute so the caller can surface it
+        df.attrs["birth_year_warning"] = (
+            f"Implied birth year varies by {span:.0f} years across your data "
+            f"(min {implied_birth.min():.0f}, max {implied_birth.max():.0f}). "
+            "Check that age and year values are consistent."
+        )
+
+    return df
