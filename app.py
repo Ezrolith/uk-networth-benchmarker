@@ -544,6 +544,105 @@ def build_percentile_chart(
     return fig
 
 
+# ── Annual gain bar chart ────────────────────────────────────────────────────
+
+def build_gains_chart(pdf: pd.DataFrame, colour: str, name: str) -> go.Figure:
+    s = pdf.sort_values("age").copy()
+    s["gain"] = s["net_worth"].diff()
+    s["pct_gain"] = s["net_worth"].pct_change() * 100
+    s = s.dropna(subset=["gain"])
+
+    bar_colours = [colour if g >= 0 else "#ef4444" for g in s["gain"]]
+
+    fig = go.Figure(go.Bar(
+        x=s["age"], y=s["gain"],
+        marker_color=bar_colours,
+        name=name,
+        hovertemplate=(
+            "<b>Age %{x:.1f}</b><br>"
+            "Gain: £%{y:,.0f}<br>"
+            "Change: %{customdata:.1f}%<extra></extra>"
+        ),
+        customdata=s["pct_gain"],
+    ))
+    fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
+    fig.update_layout(
+        title=dict(text=f"Net worth change per period — {name}", font=dict(size=14, color="#1e293b"), x=0),
+        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+        yaxis=dict(title="Change (£)", tickprefix="£", tickformat=",.0f", gridcolor="#e2e8f0"),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=240, margin=dict(l=70, r=40, t=50, b=50),
+        showlegend=False,
+    )
+    return fig
+
+
+# ── What-if projection ────────────────────────────────────────────────────────
+
+def build_whatif_figure(
+    pdf: pd.DataFrame, benchmark: pd.DataFrame,
+    scenario_cagr: float, project_to_age: int,
+    colour: str,
+) -> go.Figure:
+    """Forward-project net worth from latest data point under a chosen CAGR."""
+    s = pdf.sort_values("age")
+    latest_age = float(s.iloc[-1]["age"])
+    latest_nw  = float(s.iloc[-1]["net_worth"])
+
+    proj_ages = np.arange(latest_age, project_to_age + 1, 1.0)
+    proj_nw   = [latest_nw * (1 + scenario_cagr) ** (a - latest_age) for a in proj_ages]
+
+    fig = go.Figure()
+
+    p25 = benchmark[benchmark["percentile"] == "p25"].sort_values("age")
+    p50 = benchmark[benchmark["percentile"] == "p50"].sort_values("age")
+    p75 = benchmark[benchmark["percentile"] == "p75"].sort_values("age")
+
+    fig.add_trace(go.Scatter(
+        x=pd.concat([p25["age"], p75["age"].iloc[::-1]]),
+        y=pd.concat([p25["value"], p75["value"].iloc[::-1]]),
+        fill="toself", fillcolor="rgba(147,197,253,0.15)",
+        line=dict(width=0), name="P25–P75 range", hoverinfo="skip",
+    ))
+    for pct_data, dash, label in [(p25,"dash","P25"),(p50,"solid","Median"),(p75,"dash","P75")]:
+        fig.add_trace(go.Scatter(
+            x=pct_data["age"], y=pct_data["value"], mode="lines",
+            line=dict(color="#93c5fd" if label != "Median" else "#1d4ed8",
+                      width=2 if label != "Median" else 3, dash=dash),
+            name=label, hovertemplate=f"<b>{label}</b><br>Age %{{x}}<br>£%{{y:,.0f}}<extra></extra>",
+        ))
+
+    # Historical personal data
+    fig.add_trace(go.Scatter(
+        x=s["age"], y=s["net_worth"], mode="lines+markers",
+        line=dict(color=colour, width=2.5),
+        marker=dict(color=colour, size=7, line=dict(color="white", width=1.5)),
+        name="Actual", hovertemplate="<b>Actual</b><br>Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
+    ))
+
+    # Projection
+    fig.add_trace(go.Scatter(
+        x=proj_ages, y=proj_nw, mode="lines",
+        line=dict(color=colour, width=2, dash="dash"),
+        name=f"Projection ({scenario_cagr*100:+.1f}% CAGR)",
+        hovertemplate="<b>Projected</b><br>Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
+    ))
+
+    price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
+    fig.update_layout(
+        title=dict(text=f"What-if projection — {scenario_cagr*100:.1f}% CAGR from age {latest_age:.1f}",
+                   font=dict(size=14, color="#1e293b"), x=0),
+        xaxis=dict(title="Age", range=[15, project_to_age + 1], dtick=5,
+                   gridcolor="#e2e8f0", zeroline=False),
+        yaxis=dict(title=f"Net worth (£, {price_label})", tickprefix="£",
+                   tickformat=",.0f", gridcolor="#e2e8f0"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=400, margin=dict(l=70, r=40, t=60, b=60), hovermode="x unified",
+    )
+    return fig
+
+
 # ── Asset class chart ─────────────────────────────────────────────────────────
 
 def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
@@ -801,6 +900,51 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
             "Percentile via log-normal fit to P25/P50/P75 — indicative, not authoritative. "
             "Annotation shows total percentile change over the recorded period."
             + (" Rolling average applied." if smooth_traj else "")
+        )
+
+# ── Annual gain chart ────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and len(personal_plot_df) >= 2:
+    with st.expander("Annual gains breakdown"):
+        st.plotly_chart(
+            build_gains_chart(personal_plot_df, COLOURS["person"], "Your net worth"),
+            use_container_width=True, config=PLOTLY_CONFIG,
+        )
+        if partner_plot_df is not None and len(partner_plot_df) >= 2:
+            st.plotly_chart(
+                build_gains_chart(partner_plot_df, COLOURS["partner"], "Partner"),
+                use_container_width=True, config=PLOTLY_CONFIG,
+            )
+        st.caption("Red bars = net worth fell that period. Each bar spans the gap between consecutive data points.")
+
+# ── What-if projection ────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and len(personal_plot_df) >= 1:
+    with st.expander("What-if projection"):
+        st.caption(
+            "Forward-project your net worth from the latest data point under a chosen growth rate, "
+            "overlaid against the benchmark. Descriptive only — not financial advice."
+        )
+        wcol1, wcol2 = st.columns(2)
+        with wcol1:
+            wi_cagr = st.slider(
+                "Annual growth rate (%)", min_value=-5.0, max_value=20.0,
+                value=5.0, step=0.5, key="whatif_cagr",
+                help="Applied as a compound annual rate from your latest net worth."
+            )
+        with wcol2:
+            wi_age = st.slider(
+                "Project to age", min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
+                max_value=85, value=min(70, 85), key="whatif_age",
+            )
+        st.plotly_chart(
+            build_whatif_figure(
+                personal_plot_df, benchmark,
+                scenario_cagr=wi_cagr / 100,
+                project_to_age=wi_age,
+                colour=COLOURS["person"],
+            ),
+            use_container_width=True, config=PLOTLY_CONFIG,
         )
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────
