@@ -198,9 +198,11 @@ def _personal_data_section(
 # ── Helpers (defined before sidebar so they're available everywhere) ───────────
 
 def _fmt(v: float) -> str:
-    if abs(v) >= 1_000_000: return f"£{v/1_000_000:.2f}m"
-    if abs(v) >= 1_000:     return f"£{v/1_000:.0f}k"
-    return f"£{v:.0f}"
+    neg = v < 0; av = abs(v)
+    if av >= 1_000_000: s = f"£{av/1_000_000:.2f}m"
+    elif av >= 1_000:   s = f"£{av/1_000:.0f}k"
+    else:               s = f"£{av:.0f}"
+    return f"-{s}" if neg else s
 
 def _fmt_delta(d: float) -> str:
     return ("+" if d >= 0 else "") + _fmt(d)
