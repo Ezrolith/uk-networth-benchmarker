@@ -269,6 +269,24 @@ with st.sidebar:
         fire_number = fire_spending * 25  # 4% safe withdrawal rate
         st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
 
+        st.markdown("**Pension pot estimator**")
+        retirement_age = st.number_input("Target retirement age", 50, 80, 65, 1, key="ret_age")
+        pension_income = st.number_input("Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
+                                          format="%d", key="pen_income")
+        state_pension  = st.number_input("Expected state pension (£/yr)", 0, 15_000, 11_500, 100,
+                                          format="%d", key="state_pension",
+                                          help="Full new State Pension 2024/25: ~£11,500/yr")
+        if retirement_age and pension_income:
+            private_needed = max(0, pension_income - state_pension)
+            # Use annuity rate approximation: 5% for age 65, adjusting for early/late retirement
+            annuity_rate = 0.05 + (retirement_age - 65) * 0.002
+            pot_needed   = private_needed / max(annuity_rate, 0.02)
+            st.caption(
+                f"Private pension pot needed: **{_fmt(pot_needed)}** "
+                f"(for £{private_needed:,}/yr net of state pension, "
+                f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age})"
+            )
+
         st.markdown("**Savings rate calculator**")
         annual_income = st.number_input(
             "Annual gross income (£)", 0, 1_000_000, 50_000, 1_000,
@@ -1531,6 +1549,66 @@ A region filter is planned for v2.
 - 75+ band uses age-80 midpoint — a modelling assumption over a wide age range.
 - What-if and FIRE projections are illustrative only. Not financial advice.
 """)
+
+# ── Text report export ────────────────────────────────────────────────────────
+
+if personal_plot_df is not None and latest_nw is not None:
+    import datetime as _dt
+    price_note_rpt = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
+    sorted_rpt = personal_plot_df.sort_values("age")
+    first_rpt  = sorted_rpt.iloc[0]
+    last_rpt   = sorted_rpt.iloc[-1]
+    asp_rpt    = float(last_rpt["age"]) - float(first_rpt["age"])
+    cagr_rpt   = None
+    if asp_rpt > 0.5 and float(first_rpt["net_worth"]) > 0 and latest_nw > 0:
+        cagr_rpt = (latest_nw / float(first_rpt["net_worth"])) ** (1 / asp_rpt) - 1
+    exact_pct_rpt = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+
+    lines = [
+        f"# UK Net Worth Benchmarker — Personal Report",
+        f"Generated: {_dt.date.today().isoformat()}",
+        f"Settings: {basis} basis, {price_note_rpt}, {'with' if include_pension else 'without'} pension",
+        f"",
+        f"## Your snapshot",
+        f"- Latest age: {latest_age:.1f}",
+        f"- Latest net worth: {_fmt(latest_nw)}",
+        f"- Estimated percentile: {'~' + str(round(exact_pct_rpt)) + 'th' if exact_pct_rpt else 'n/a'}",
+        f"- Relative wealth index: {latest_nw / float(benchmark[benchmark['age']==min(round(latest_age),85)][benchmark['percentile']=='p50']['value'].iloc[0]) * 100:.0f} (100 = median)" if len(benchmark[(benchmark['age']==min(round(latest_age),85)) & (benchmark['percentile']=='p50')]) else "",
+        f"",
+        f"## Growth",
+        f"- Data covers: age {float(first_rpt['age']):.1f} → {latest_age:.1f} ({asp_rpt:.1f} yrs)",
+        f"- Net worth: {_fmt(float(first_rpt['net_worth']))} → {_fmt(latest_nw)}",
+        f"- Total change: {_fmt_delta(latest_nw - float(first_rpt['net_worth']))}",
+    ]
+    if cagr_rpt:
+        dt_rpt = math.log(2) / math.log(1 + cagr_rpt) if cagr_rpt > 0 else None
+        lines.append(f"- CAGR: {cagr_rpt*100:+.2f}%")
+        if dt_rpt:
+            lines.append(f"- Doubles in: ~{dt_rpt:.0f} years at current rate")
+    lines += [
+        f"",
+        f"## Benchmark context at age {latest_age:.0f}",
+    ]
+    ab_rpt = benchmark[benchmark["age"] == min(round(latest_age), 85)]
+    for pct_lbl, pct_name in [("p25","P25"),("p50","Median"),("p75","P75")]:
+        row = ab_rpt[ab_rpt["percentile"] == pct_lbl]
+        if len(row):
+            lines.append(f"- {pct_name}: {_fmt(float(row['value'].iloc[0]))}")
+    lines += [
+        f"",
+        f"---",
+        f"Data: ONS WAS Wave 7 (2018-2020). Percentile estimates are indicative (log-normal model).",
+        f"Not financial advice.",
+    ]
+
+    report_text = "\n".join(lines)
+    st.download_button(
+        "Download text report (.md)",
+        report_text.encode(),
+        f"networth_report_{_dt.date.today().isoformat()}.md",
+        "text/markdown",
+        use_container_width=False,
+    )
 
 # ── Footer ────────────────────────────────────────────────────────────────────
 
