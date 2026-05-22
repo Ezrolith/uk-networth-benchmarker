@@ -16,7 +16,7 @@ from utils.data_loader import (
     parse_personal_csv, encode_personal_data, decode_personal_data,
 )
 from utils.inference import (
-    interpolate_benchmarks, convert_to_individual,
+    interpolate_benchmarks, convert_to_individual, apply_gender_adjustment,
     adjust_for_inflation, cpi_adjust_personal,
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
@@ -100,12 +100,14 @@ def _load_asset_classes() -> pd.DataFrame:
     return load_asset_class_data()
 
 @st.cache_data
-def _build_benchmark(basis: str, include_pension: bool, real_terms: bool) -> pd.DataFrame:
+def _build_benchmark(basis: str, include_pension: bool, real_terms: bool, gender: str = "All") -> pd.DataFrame:
     raw = _load_raw()
     filtered = raw[raw["with_pension"] == include_pension].copy()
     bm = interpolate_benchmarks(filtered, AGE_RANGE)
     if basis == "Individual":
         bm = convert_to_individual(bm)
+        if gender != "All":
+            bm = apply_gender_adjustment(bm, gender)
     if real_terms:
         bm = adjust_for_inflation(bm, from_year=DATA_YEAR, to_year=REAL_BASE_YEAR)
     return bm
@@ -201,6 +203,13 @@ with st.sidebar:
     )
     include_pension  = st.toggle("Include pension wealth", value=True)
     real_terms       = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
+    gender = "All"
+    if basis == "Individual":
+        gender = st.radio("Gender adjustment", ["All", "Male", "Female"],
+                          horizontal=True,
+                          help="Applies approximate WAS gender wealth-gap factors. "
+                               "Male = baseline. Female ≈ 68–92% of male by age. "
+                               "Derived — treat as indicative (±10–15%).")
     log_scale        = st.toggle("Log scale", value=False,
                                  help="Spreads low values — useful when data spans several orders of magnitude")
     show_tails       = st.toggle("Show P10 / P90", value=False,
@@ -279,7 +288,7 @@ with st.sidebar:
 
 # ── Data pipeline ─────────────────────────────────────────────────────────────
 
-benchmark = _build_benchmark(basis, include_pension, real_terms)
+benchmark = _build_benchmark(basis, include_pension, real_terms, gender)
 
 def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
     if df is None or len(df) == 0:

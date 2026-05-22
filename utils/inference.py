@@ -28,6 +28,46 @@ from scipy.interpolate import PchipInterpolator
 #
 # These are point estimates; treat individual figures as approximate (±15–20%).
 
+# ── Gender adjustment factors ─────────────────────────────────────────────────
+#
+# WAS Wave 7 shows a persistent gender wealth gap, driven primarily by pension wealth.
+# Women in each age band hold approximately the following fraction of male individual
+# wealth (WAS individual-level tables, pension + financial components):
+#
+# These are approximate ratios from WAS analysis. The gap is smallest for property
+# (jointly owned) and largest for pension (career/salary differences).
+
+_GENDER_FACTOR_FEMALE = {   # female wealth as fraction of male wealth, by midpoint
+    20: 0.92,   # small gap at start of career
+    30: 0.82,   # career break / part-time impacts start to appear
+    40: 0.72,   # widest pension gap (peak career-break years)
+    50: 0.68,   # cumulative pension gap dominates
+    60: 0.70,   # DB pension equalisation via survivor benefits begins
+    70: 0.75,   # widowed women inherit some of gap back
+    80: 0.80,   # greater female longevity, more single-female households
+}
+# Male is taken as the baseline (factor = 1.0)
+
+def apply_gender_adjustment(df: pd.DataFrame, gender: str) -> pd.DataFrame:
+    """
+    Adjust individual-basis benchmark values for gender.
+    'Male' = no adjustment (baseline). 'Female' = multiply by age-specific factor.
+    Only meaningful when basis == 'Individual'.
+    This is an inferred adjustment — treat as approximate (±10–15%).
+    """
+    if gender == "Male":
+        return df
+    midpoints = sorted(_GENDER_FACTOR_FEMALE)
+    factors   = [_GENDER_FACTOR_FEMALE[m] for m in midpoints]
+    interp    = PchipInterpolator(midpoints, factors, extrapolate=True)
+    df = df.copy()
+    ages   = df["age"].values.astype(float)
+    scalar = np.clip(interp(ages), 0.5, 1.1)
+    df["value"] = df["value"] * scalar
+    df["is_published"] = False
+    return df
+
+
 _INDIVIDUAL_FACTORS_BY_MIDPOINT = {
     20: 0.71,   # few couples, little pension → mostly single, divide by ~1.4
     30: 0.63,   # growing couples, modest pension
