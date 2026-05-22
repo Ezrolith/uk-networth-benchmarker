@@ -26,14 +26,14 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] **Wealth type filter** — sidebar radio (Total / Property / Pension / Financial / Physical) scales benchmark via PCHIP-interpolated WAS asset class shares; chart title and info banner update accordingly.
 
 ### Export
-- [ ] **Proper PDF report** — use kaleido (already in requirements.txt) to export all active charts as a formatted multi-page PDF. The current text `.md` download is a stopgap.
+- [x] **Proper PDF report** — multi-page PDF with matplotlib charts (benchmark, trajectory, gains, what-if), data history table, benchmark context, and goals summary. Uses matplotlib/fpdf2 — no Chrome required.
 
 ---
 
 ## v3 stretch
 
 - [ ] **International comparison** — US SCF, Canada SFS, normalised to PPP. Useful context, harder to keep current.
-- [ ] **Tax-adjusted view** — net worth after estimated IHT / CGT exposure.
+- [x] **Tax-adjusted view** — IHT exposure calculator: configurable NRB/RNRB/married threshold, shows taxable estate, IHT payable, after-IHT value and % lost.
 - [x] **Forward projection with savings contributions** — what-if model now accepts a monthly savings contribution; uses FV-of-annuity formula alongside CAGR; projected percentile metrics reflect contributions.
 
 ---

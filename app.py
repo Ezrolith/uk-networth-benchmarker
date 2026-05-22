@@ -1456,6 +1456,86 @@ if personal_plot_df is not None and latest_nw is not None:
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
     st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
 
+# ── IHT / estate tax calculator ───────────────────────────────────────────────
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    with st.expander("Estate / inheritance tax (IHT) exposure"):
+        st.caption(
+            "Estimates your approximate UK inheritance tax (IHT) liability based on your current "
+            "net worth. Indicative only — not tax advice. Rules as of 2024/25."
+        )
+        iht_cols = st.columns(3)
+        with iht_cols[0]:
+            iht_threshold = st.selectbox(
+                "NRB threshold",
+                [
+                    "Single — £325k NRB",
+                    "Single + RNRB — £500k (residence to descendants)",
+                    "Married / civil partner — £650k (2× NRB, no RNRB)",
+                    "Married + RNRB — £1m (2× NRB + 2× RNRB)",
+                ],
+                help="Nil-rate band (NRB): £325k per person. "
+                     "Residence nil-rate band (RNRB): up to £175k extra if leaving a main residence to direct descendants. "
+                     "Spouse exemption allows unused NRB to transfer on first death.",
+                key="iht_threshold",
+            )
+        with iht_cols[1]:
+            iht_deductions = st.number_input(
+                "Additional deductions (£)",
+                min_value=0, max_value=5_000_000, value=0, step=10_000, format="%d",
+                help="Business property relief, agricultural relief, charitable gifts, outstanding debts, "
+                     "or any other amounts that reduce the taxable estate.",
+                key="iht_deductions",
+            )
+        with iht_cols[2]:
+            iht_rate_pct = st.number_input(
+                "Rate (%)", min_value=0, max_value=40, value=40, step=1, format="%d",
+                help="Standard rate: 40%. Reduced to 36% if 10%+ of net estate is left to charity.",
+                key="iht_rate",
+            )
+
+        _iht_band = {
+            "Single — £325k NRB": 325_000,
+            "Single + RNRB — £500k (residence to descendants)": 500_000,
+            "Married / civil partner — £650k (2× NRB, no RNRB)": 650_000,
+            "Married + RNRB — £1m (2× NRB + 2× RNRB)": 1_000_000,
+        }[iht_threshold]
+
+        gross_estate   = latest_nw
+        exempt_amount  = _iht_band + iht_deductions
+        taxable_estate = max(0, gross_estate - exempt_amount)
+        iht_payable    = taxable_estate * (iht_rate_pct / 100)
+        after_iht      = gross_estate - iht_payable
+        pct_lost       = iht_payable / gross_estate * 100 if gross_estate > 0 else 0
+
+        iht_m1, iht_m2, iht_m3, iht_m4 = st.columns(4)
+        with iht_m1:
+            st.metric("Gross estate", _fmt(gross_estate))
+        with iht_m2:
+            st.metric("IHT-exempt", _fmt(exempt_amount),
+                      help=f"Threshold ({_fmt(_iht_band)}) + deductions ({_fmt(iht_deductions)})")
+        with iht_m3:
+            st.metric("IHT payable", _fmt(iht_payable),
+                      help=f"{_fmt(taxable_estate)} taxable @ {iht_rate_pct}%")
+        with iht_m4:
+            st.metric("After-IHT estate", _fmt(after_iht),
+                      delta=f"−{pct_lost:.1f}% of estate",
+                      delta_color="inverse",
+                      help="Net amount heirs would receive (excluding admin costs, probate fees, etc.)")
+
+        if taxable_estate == 0:
+            st.success(f"Your estate is within the IHT threshold — no IHT payable under this scenario.", icon="✓")
+        else:
+            st.caption(
+                f"Taxable estate: {_fmt(taxable_estate)} (estate above threshold). "
+                f"Possible mitigation: gifts out of income, seven-year gifting rules, "
+                f"life insurance in trust, pension wealth (outside estate), charitable giving."
+            )
+        st.caption(
+            "Simplified estimate — does not account for taper relief, business/agricultural property relief, "
+            "in-trust assets, lifetime gifts, or other exemptions. Consult a qualified advisor."
+        )
+
 # ── Summary statistics ────────────────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) >= 2:
@@ -1943,52 +2023,61 @@ if personal_plot_df is not None and latest_nw is not None:
             return buf.read()
 
         def _mpl_benchmark():
-            p25 = benchmark[benchmark["percentile"]=="p25"].sort_values("age")
-            p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
-            p75 = benchmark[benchmark["percentile"]=="p75"].sort_values("age")
-            fig, ax = _plt.subplots(figsize=(11, 4.2))
-            ax.fill_between(p25["age"], p25["value"], p75["value"],
-                            alpha=0.15, color="#93c5fd", label="P25-P75 range")
-            ax.plot(p25["age"], p25["value"], "#93c5fd", lw=1.4, ls="--", label="P25")
-            ax.plot(p50["age"], p50["value"], "#1d4ed8", lw=2.5,            label="Median")
-            ax.plot(p75["age"], p75["value"], "#93c5fd", lw=1.4, ls="--", label="P75")
-            ax.plot(_s_rpt["age"], _s_rpt["net_worth"],
-                    _PC, lw=2, marker="o", ms=5, label="You")
-            ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
-            ax.set_xlabel("Age"); ax.set_ylabel(f"Net worth ({_price_lbl})")
-            ax.set_xlim(age_min - 0.5, age_max + 0.5)
-            ax.legend(fontsize=8); ax.grid(True, alpha=0.25)
-            ax.set_title("Net worth vs UK distribution (ONS WAS Wave 7)", fontsize=11)
-            fig.tight_layout(); return _save(fig)
+            try:
+                p25 = benchmark[benchmark["percentile"]=="p25"].sort_values("age")
+                p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
+                p75 = benchmark[benchmark["percentile"]=="p75"].sort_values("age")
+                fig, ax = _plt.subplots(figsize=(11, 4.2))
+                ax.fill_between(p25["age"], p25["value"], p75["value"],
+                                alpha=0.15, color="#93c5fd", label="P25-P75 range")
+                ax.plot(p25["age"], p25["value"], "#93c5fd", lw=1.4, ls="--", label="P25")
+                ax.plot(p50["age"], p50["value"], "#1d4ed8", lw=2.5,            label="Median")
+                ax.plot(p75["age"], p75["value"], "#93c5fd", lw=1.4, ls="--", label="P75")
+                ax.plot(_s_rpt["age"], _s_rpt["net_worth"],
+                        _PC, lw=2, marker="o", ms=5, label="You")
+                ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+                ax.set_xlabel("Age"); ax.set_ylabel(f"Net worth ({_price_lbl})")
+                ax.set_xlim(age_min - 0.5, age_max + 0.5)
+                ax.legend(fontsize=8); ax.grid(True, alpha=0.25)
+                ax.set_title("Net worth vs UK distribution (ONS WAS Wave 7)", fontsize=11)
+                fig.tight_layout(); return _save(fig)
+            except Exception:
+                return None
 
         def _mpl_trajectory(traj):
-            fig, ax = _plt.subplots(figsize=(11, 3.8))
-            for pct, lbl in [(25, "P25"), (50, "Median"), (75, "P75")]:
-                ax.axhline(pct, color="#93c5fd", lw=0.8, ls=":")
-                ax.text(float(traj["age"].iloc[0]), pct + 0.8, lbl,
-                        fontsize=7.5, color="#64748b")
-            ax.fill_between(traj["age"], traj["percentile"], alpha=0.12, color=_PC)
-            ax.plot(traj["age"], traj["percentile"], _PC, lw=2, marker="o", ms=5)
-            ax.set_ylim(0, 100); ax.set_xlabel("Age")
-            ax.set_ylabel("Estimated percentile")
-            ax.grid(True, alpha=0.25)
-            ax.set_title("Percentile trajectory", fontsize=11)
-            fig.tight_layout(); return _save(fig)
+            try:
+                fig, ax = _plt.subplots(figsize=(11, 3.8))
+                for pct, lbl in [(25, "P25"), (50, "Median"), (75, "P75")]:
+                    ax.axhline(pct, color="#93c5fd", lw=0.8, ls=":")
+                    ax.text(float(traj["age"].iloc[0]), pct + 0.8, lbl,
+                            fontsize=7.5, color="#64748b")
+                ax.fill_between(traj["age"], traj["percentile"], alpha=0.12, color=_PC)
+                ax.plot(traj["age"], traj["percentile"], _PC, lw=2, marker="o", ms=5)
+                ax.set_ylim(0, 100); ax.set_xlabel("Age")
+                ax.set_ylabel("Estimated percentile")
+                ax.grid(True, alpha=0.25)
+                ax.set_title("Percentile trajectory", fontsize=11)
+                fig.tight_layout(); return _save(fig)
+            except Exception:
+                return None
 
         def _mpl_gains():
-            s = _s_rpt
-            if len(s) < 2: return None
-            gains  = s["net_worth"].diff().dropna().values
-            ages   = s["age"].iloc[1:].values
-            colors = ["#1d4ed8" if g >= 0 else "#ef4444" for g in gains]
-            fig, ax = _plt.subplots(figsize=(11, 3.5))
-            ax.bar(ages, gains, color=colors, width=0.6)
-            ax.axhline(0, color="black", lw=0.5)
-            ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
-            ax.set_xlabel("Age"); ax.set_ylabel("Change")
-            ax.grid(True, alpha=0.25, axis="y")
-            ax.set_title("Annual gains breakdown  (blue = gain, red = loss)", fontsize=11)
-            fig.tight_layout(); return _save(fig)
+            try:
+                s = _s_rpt
+                if len(s) < 2: return None
+                gains  = s["net_worth"].diff().dropna().values
+                ages   = s["age"].iloc[1:].values
+                colors = ["#1d4ed8" if g >= 0 else "#ef4444" for g in gains]
+                fig, ax = _plt.subplots(figsize=(11, 3.5))
+                ax.bar(ages, gains, color=colors, width=0.6)
+                ax.axhline(0, color="black", lw=0.5)
+                ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+                ax.set_xlabel("Age"); ax.set_ylabel("Change")
+                ax.grid(True, alpha=0.25, axis="y")
+                ax.set_title("Annual gains breakdown  (blue = gain, red = loss)", fontsize=11)
+                fig.tight_layout(); return _save(fig)
+            except Exception:
+                return None
 
         def _mpl_whatif():
             try:
@@ -2079,6 +2168,9 @@ if personal_plot_df is not None and latest_nw is not None:
             pdf.set_text_color(*SLATE)
 
         def CHART(png_b, caption=""):
+            if png_b is None:
+                SM("(chart unavailable)")
+                return
             pdf.image(_io.BytesIO(png_b), x=15, w=180)
             pdf.ln(2)
             if caption:
@@ -2183,7 +2275,7 @@ if personal_plot_df is not None and latest_nw is not None:
         # ── Page 6: What-if projection ─────────────────────────────────────────
         if whatif_png:
             pdf.add_page(); H1("What-if projection")
-            CHART(whatif_png, "Illustrative only — not financial advice.")
+            CHART(whatif_png, "Illustrative only - not financial advice.")
             FOOTER()
 
         # ── Page 7: Goals (if set) ─────────────────────────────────────────────
