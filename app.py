@@ -2244,7 +2244,6 @@ if personal_plot_df is not None and latest_nw is not None:
             _basis_lbl = f"Individual ({gender})"
         pdf.ln(2)
         H1("Report settings")
-        KV("Generated:", _today)
         KV("Basis:", _basis_lbl)
         KV("Prices:", _price_lbl)
         KV("Pension wealth:", "Included" if include_pension else "Excluded")
@@ -2393,15 +2392,48 @@ if personal_plot_df is not None and latest_nw is not None:
         # ── Page 7: What-if projection ─────────────────────────────────────────
         if whatif_png:
             pdf.add_page(); H1("What-if projection")
-            _cagr_note = (f" For context, your historical CAGR is {_cagr_rpt*100:+.1f}%."
+            _cagr_note = (f" Your historical CAGR is {_cagr_rpt*100:+.1f}%."
                           if _cagr_rpt else "")
             SM(
                 f"Projected net worth from age {latest_age:.0f} to {wi_age} under three CAGR "
-                f"scenarios, alongside the benchmark median. Assumes compound growth from your "
-                f"current net worth of {_fmt(latest_nw)}.{_cagr_note} "
-                f"Illustrative only - not financial advice."
+                f"scenarios, alongside the benchmark median. Starting net worth: {_fmt(latest_nw)}."
+                f"{_cagr_note} Illustrative only - not financial advice."
             )
             pdf.ln(3); CHART(whatif_png)
+            # Projected values table
+            pdf.ln(4)
+            pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
+            pdf.cell(0, 6, f"Projected values at age {wi_age}:", ln=True)
+            pdf.ln(1)
+            TH(("Scenario", 55), ("CAGR", 30), (f"Net worth at {wi_age}", 55), ("vs benchmark median", 40))
+            _ann = wi_monthly * 12
+            _p50_at_wi = None
+            _p50_wi_rows = benchmark[
+                (benchmark["percentile"]=="p50") & (benchmark["age"]==min(wi_age,85))]
+            if len(_p50_wi_rows):
+                _p50_at_wi = float(_p50_wi_rows["value"].iloc[0])
+            for _si, (_cagr_v, _lbl) in enumerate([
+                (wi_cagr1/100, f"S1 (conservative)"),
+                (wi_cagr2/100, f"S2 (base case)"),
+                (wi_cagr3/100, f"S3 (optimistic)"),
+            ]):
+                try:
+                    _t = wi_age - latest_age
+                    if _t <= 0: continue
+                    if abs(_cagr_v) < 1e-10:
+                        _proj = latest_nw + _ann * _t
+                    else:
+                        _proj = latest_nw*(1+_cagr_v)**_t + _ann*((1+_cagr_v)**_t - 1)/_cagr_v
+                    _vs_med = ""
+                    if _p50_at_wi:
+                        _diff = _proj - _p50_at_wi
+                        _vs_med = f"{'above' if _diff>=0 else 'below'} by {_fmt(abs(_diff))}"
+                    TR(_si, (_lbl, 55, False),
+                       (f"{wi_cagr1 if _si==0 else wi_cagr2 if _si==1 else wi_cagr3:+.1f}%", 30, False),
+                       (_fmt(_proj), 55, _si==1),
+                       (_vs_med, 40, False))
+                except Exception:
+                    pass
 
         # ── Page 8: Goals (if set) ─────────────────────────────────────────────
         try:
