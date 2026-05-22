@@ -2388,6 +2388,28 @@ if personal_plot_df is not None and latest_nw is not None:
                 "Combines investment returns and saving/spending behaviour."
             )
             pdf.ln(3); CHART(gains_png)
+            # Summary stats below chart
+            try:
+                _gvals = _s_rpt["net_worth"].diff().dropna()
+                if len(_gvals) > 0:
+                    _pos = int((_gvals > 0).sum()); _neg = int((_gvals <= 0).sum())
+                    _ibx = _gvals.idxmax(); _iwx = _gvals.idxmin()
+                    pdf.ln(5)
+                    pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*BLUE)
+                    pdf.cell(0, 6, "Summary statistics", ln=True)
+                    pdf.set_draw_color(*BLUE)
+                    pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+                    pdf.ln(3); pdf.set_draw_color(0,0,0)
+                    KV("Positive periods:", f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
+                    KV("Average change per period:", _fmt_delta(float(_gvals.mean())))
+                    if not pd.isna(_ibx):
+                        KV("Best period:", f"{_fmt_delta(float(_gvals[_ibx]))}  "
+                           f"(age {float(_s_rpt.loc[_ibx,'age']):.1f})")
+                    if not pd.isna(_iwx):
+                        KV("Worst period:", f"{_fmt_delta(float(_gvals[_iwx]))}  "
+                           f"(age {float(_s_rpt.loc[_iwx,'age']):.1f})")
+            except Exception:
+                pass
 
         # ── Page 7: What-if projection ─────────────────────────────────────────
         if whatif_png:
