@@ -23,7 +23,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ### Filters
 - [ ] **Region filter** — WAS publishes regional breakdowns (London vs rest of UK). High value, requires adding regional data to `was_data.csv`.
-- [ ] **Wealth type filter** — toggle to show only property, pension, or financial wealth components rather than total.
+- [x] **Wealth type filter** — sidebar radio (Total / Property / Pension / Financial / Physical) scales benchmark via PCHIP-interpolated WAS asset class shares; chart title and info banner update accordingly.
 
 ### Export
 - [ ] **Proper PDF report** — use kaleido (already in requirements.txt) to export all active charts as a formatted multi-page PDF. The current text `.md` download is a stopgap.
@@ -116,3 +116,4 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Smarter milestone ETA for zero/negative starting NW (avg-gain fallback)
 - [x] Forward projection with savings contributions (monthly £ input, FV-of-annuity formula)
 - [x] Duplicate encode/decode helpers removed from data_loader.py
+- [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
