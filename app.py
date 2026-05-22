@@ -870,6 +870,11 @@ def build_cumulative_chart(
     """Area chart showing net worth level over age — pure cumulative view."""
     fig = go.Figure()
 
+    def _hex_rgba(hex_col: str, alpha: float = 0.12) -> str:
+        h = hex_col.lstrip("#")
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+
     def _add(df, col, nm, fill_mode):
         s = df.sort_values("age")
         fig.add_trace(go.Scatter(
@@ -878,8 +883,7 @@ def build_cumulative_chart(
             line=dict(color=col, width=2.5),
             marker=dict(color=col, size=6),
             fill=fill_mode,
-            fillcolor=col.replace("#", "rgba(").rstrip(")") + ",0.08)"
-                if col.startswith("#") else col,
+            fillcolor=_hex_rgba(col) if col.startswith("#") else col,
             name=nm,
             hovertemplate=f"<b>{nm}</b><br>Age %{{x:.1f}}<br>£%{{y:,.0f}}<extra></extra>",
         ))
