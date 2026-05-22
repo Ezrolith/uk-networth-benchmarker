@@ -19,6 +19,7 @@ from utils.inference import (
     estimate_percentile,
     estimate_exact_percentile,
     build_percentile_trajectory,
+    derive_tail_percentiles,
     DATA_YEAR,
     REAL_BASE_YEAR,
 )
@@ -103,6 +104,8 @@ with st.sidebar:
     real_terms      = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
     log_scale       = st.toggle("Log scale", value=False,
                                 help="Spreads out low values — useful when your data spans a wide range")
+    show_tails      = st.toggle("Show P10 / P90", value=False,
+                                help="Derived tails: modelled from the log-normal fit, not published WAS data")
 
     st.divider()
     st.subheader("Your net worth")
@@ -209,6 +212,7 @@ def _hover(label: str) -> str:
 
 def build_main_figure(
     log_scale: bool,
+    show_tails: bool,
     latest_age: float | None,
     latest_nw: float | None,
 ) -> go.Figure:
@@ -229,6 +233,20 @@ def build_main_figure(
         hoverinfo="skip",
         showlegend=True,
     ))
+
+    # Optional P10 / P90 tails (derived from log-normal fit — not published data)
+    if show_tails:
+        tails = derive_tail_percentiles(benchmark)
+        for pct_label, label in [("p10", "10th percentile (modelled)"), ("p90", "90th percentile (modelled)")]:
+            tail_s = tails[tails["percentile"] == pct_label].sort_values("age")
+            if len(tail_s):
+                fig.add_trace(go.Scatter(
+                    x=tail_s["age"], y=tail_s["value"],
+                    mode="lines",
+                    line=dict(color="#bfdbfe", width=1.5, dash="dot"),
+                    name=label,
+                    hovertemplate=f"<b>{label}</b><br>Age %{{x}}<br>£%{{y:,.0f}}<extra></extra>",
+                ))
 
     # Percentile lines
     for pct_data, colour, width, dash, label in [
@@ -572,7 +590,7 @@ if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"]
 
 # ── Main chart ────────────────────────────────────────────────────────────────
 
-fig = build_main_figure(log_scale, latest_age, latest_nw)
+fig = build_main_figure(log_scale, show_tails, latest_age, latest_nw)
 st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 # Inline note

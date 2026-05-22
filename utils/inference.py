@@ -229,6 +229,54 @@ def estimate_exact_percentile(
     return float(np.clip(_norm.cdf(z) * 100, 0.5, 99.5))
 
 
+def derive_tail_percentiles(benchmark: pd.DataFrame) -> pd.DataFrame:
+    """
+    Derive P10 and P90 series from the log-normal fit used for exact percentile estimation.
+
+    Since WAS only publishes P25/P50/P75, tail percentiles are modelled — clearly an
+    inference. The same log-normal parameters (mu, sigma) are computed per age, then
+    the 10th and 90th quantiles of that distribution are returned.
+
+    Returns a tidy DataFrame with the same schema as the benchmark but with
+    percentile values 'p10' and 'p90', and is_published=False for all rows.
+    """
+    from scipy.stats import norm as _norm
+
+    results = []
+    for age in benchmark["age"].unique():
+        age_data = benchmark[benchmark["age"] == age]
+        for with_pension in [True, False]:
+            sub = age_data[age_data["with_pension"] == with_pension]
+
+            def get_val(pct: str) -> float | None:
+                rows = sub[sub["percentile"] == pct]["value"]
+                return float(rows.iloc[0]) if len(rows) else None
+
+            p25v = get_val("p25")
+            p50v = get_val("p50")
+            p75v = get_val("p75")
+
+            if any(v is None or v <= 0 for v in [p25v, p50v, p75v]):
+                continue
+
+            mu    = np.log(p50v)
+            sigma = (np.log(p75v) - np.log(p25v)) / (2 * 0.6745)
+            if sigma <= 0:
+                continue
+
+            for pct_label, z_score in [("p10", _norm.ppf(0.10)), ("p90", _norm.ppf(0.90))]:
+                value = float(np.exp(mu + z_score * sigma))
+                results.append({
+                    "age":          int(age),
+                    "percentile":   pct_label,
+                    "with_pension": with_pension,
+                    "value":        value,
+                    "is_published": False,
+                })
+
+    return pd.DataFrame(results)
+
+
 def build_percentile_trajectory(
     personal_df: pd.DataFrame, benchmark: pd.DataFrame
 ) -> pd.DataFrame:
