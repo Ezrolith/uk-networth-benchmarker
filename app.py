@@ -548,7 +548,8 @@ def build_main_figure(
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
                     font=dict(size=12)),
         hovermode="x unified", plot_bgcolor="white", paper_bgcolor="white",
-        height=560, margin=dict(l=70, r=90, t=80, b=60),
+        height=max(380, 560 - max(0, (85 - (age_max - age_min)) * 2)),  # taller when zoomed in
+        margin=dict(l=70, r=90, t=80, b=60),
     )
     return fig
 
@@ -748,6 +749,75 @@ def build_whatif_figure(
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
         plot_bgcolor="white", paper_bgcolor="white",
         height=400, margin=dict(l=70, r=40, t=60, b=60), hovermode="x unified",
+    )
+    return fig
+
+
+# ── Percentile heatmap ───────────────────────────────────────────────────────
+
+def build_heatmap(benchmark: pd.DataFrame) -> go.Figure:
+    """
+    Colour-coded grid: age (x) × net worth level (y), shaded by which
+    percentile band the cell falls in. Gives an instant read of the
+    wealth landscape across all ages.
+    """
+    from utils.inference import derive_tail_percentiles
+
+    tails = derive_tail_percentiles(benchmark)
+    all_bm = pd.concat([benchmark, tails]).copy()
+
+    ages = sorted(all_bm["age"].unique())
+    pct_levels = ["p10", "p25", "p50", "p75", "p90"]
+    labels     = ["10th", "25th", "50th (median)", "75th", "90th"]
+    colours    = ["#eff6ff", "#bfdbfe", "#93c5fd", "#3b82f6", "#1d4ed8"]
+
+    fig = go.Figure()
+
+    prev_vals = None
+    for i, (pct, label, colour) in enumerate(zip(pct_levels, labels, colours)):
+        pct_data = all_bm[all_bm["percentile"] == pct].sort_values("age")
+        if len(pct_data) == 0:
+            continue
+        curr_vals = [float(pct_data[pct_data["age"] == a]["value"].iloc[0])
+                     if len(pct_data[pct_data["age"] == a]) > 0 else None for a in ages]
+
+        if prev_vals:
+            fig.add_trace(go.Scatter(
+                x=list(ages) + list(reversed(ages)),
+                y=curr_vals + list(reversed(prev_vals)),
+                fill="toself",
+                fillcolor=colour,
+                line=dict(width=0),
+                name=label,
+                hoverinfo="skip",
+                showlegend=True,
+            ))
+        prev_vals = curr_vals
+
+    # User's trajectory
+    if personal_plot_df is not None and len(personal_plot_df) > 0:
+        pdf = personal_plot_df.sort_values("age")
+        fig.add_trace(go.Scatter(
+            x=pdf["age"], y=pdf["net_worth"],
+            mode="lines+markers",
+            line=dict(color=COLOURS["person"], width=2.5),
+            marker=dict(color=COLOURS["person"], size=7),
+            name="Your net worth",
+            hovertemplate="Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
+        ))
+
+    price_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
+    fig.update_layout(
+        title=dict(text=f"Wealth percentile landscape by age ({price_note})",
+                   font=dict(size=14, color="#1e293b"), x=0),
+        xaxis=dict(title="Age", range=[15, 86], dtick=5, gridcolor="#e2e8f0"),
+        yaxis=dict(title=f"Net worth (£)", tickprefix="£", tickformat=",.0f",
+                   gridcolor="#e2e8f0"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
+                    font=dict(size=11)),
+        plot_bgcolor="white", paper_bgcolor="white",
+        height=380, margin=dict(l=70, r=40, t=60, b=50),
+        hovermode="x unified",
     )
     return fig
 
@@ -1140,6 +1210,17 @@ else:
     st.caption(
         "Filled circles = ONS published data (ages 20,30,40,50,60,70,80). "
         "Lines are PCHIP-interpolated. Dotted verticals = age-band boundaries."
+    )
+
+# ── Percentile heatmap ───────────────────────────────────────────────────────
+
+with st.expander("Percentile landscape heatmap"):
+    hm_fig = build_heatmap(benchmark)
+    st.plotly_chart(hm_fig, use_container_width=True, config=PLOTLY_CONFIG)
+    st.caption(
+        "Shaded bands show which percentile tier each wealth level belongs to at each age. "
+        "P10 and P90 are derived from the log-normal model; P25/P50/P75 are from WAS. "
+        "Your trajectory is overlaid in orange."
     )
 
 # ── Share link ────────────────────────────────────────────────────────────────
