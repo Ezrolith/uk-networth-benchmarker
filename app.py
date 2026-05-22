@@ -118,8 +118,7 @@ def _build_benchmark(basis: str, include_pension: bool, real_terms: bool, gender
     bm = interpolate_benchmarks(filtered, AGE_RANGE)
     if basis == "Individual":
         bm = convert_to_individual(bm)
-        if gender != "All":
-            bm = apply_gender_adjustment(bm, gender)
+        bm = apply_gender_adjustment(bm, gender)  # "All" returns unchanged
     if real_terms:
         bm = adjust_for_inflation(bm, from_year=DATA_YEAR, to_year=REAL_BASE_YEAR)
     return bm

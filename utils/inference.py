@@ -51,18 +51,35 @@ _GENDER_FACTOR_FEMALE = {   # female wealth as fraction of male wealth, by midpo
 def apply_gender_adjustment(df: pd.DataFrame, gender: str) -> pd.DataFrame:
     """
     Adjust individual-basis benchmark values for gender.
-    'Male' = no adjustment (baseline). 'Female' = multiply by age-specific factor.
-    Only meaningful when basis == 'Individual'.
-    This is an inferred adjustment — treat as approximate (±10–15%).
+
+    The individual conversion (`convert_to_individual`) produces a gender-averaged
+    benchmark (both sexes combined).  This function shifts that to a male or female
+    individual view while preserving the all-gender average:
+
+      Male factor   = 2 / (1 + fom)          — above the combined average
+      Female factor = 2 × fom / (1 + fom)    — below the combined average
+      Average of both = 1.0  ✓
+
+    where fom = female wealth as a fraction of male wealth at that age
+    (from _GENDER_FACTOR_FEMALE).  The Male/Female ratio equals the original 1/fom.
+
+    'All' returns df unchanged.  Only meaningful when basis == 'Individual'.
+    Treat as approximate (±10–15%).
     """
-    if gender == "Male":
+    if gender == "All":
         return df
     midpoints = sorted(_GENDER_FACTOR_FEMALE)
-    factors   = [_GENDER_FACTOR_FEMALE[m] for m in midpoints]
-    interp    = PchipInterpolator(midpoints, factors, extrapolate=True)
-    df = df.copy()
-    ages   = df["age"].values.astype(float)
-    scalar = np.clip(interp(ages), 0.5, 1.1)
+    fom_vals  = [_GENDER_FACTOR_FEMALE[m] for m in midpoints]
+    interp    = PchipInterpolator(midpoints, fom_vals, extrapolate=True)
+    df   = df.copy()
+    ages = df["age"].values.astype(float)
+    fom  = np.clip(interp(ages), 0.5, 1.1)   # female-of-male ratio, bounded
+
+    if gender == "Female":
+        scalar = 2.0 * fom / (1.0 + fom)
+    else:  # "Male"
+        scalar = 2.0 / (1.0 + fom)
+
     df["value"] = df["value"] * scalar
     df["is_published"] = False
     return df
