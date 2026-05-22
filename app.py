@@ -872,9 +872,12 @@ def build_whatif_figure(
         ))
 
     sc_title = " vs ".join(f"{c*100:.1f}%" for c, _ in scenarios)
+    contrib_note = (f"+£{monthly_savings:,.0f}/mo contributions"
+                    if monthly_savings > 0 else "no further contributions")
     price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
     fig.update_layout(
-        title=dict(text=f"What-if: {sc_title} CAGR from age {latest_age:.1f}",
+        title=dict(text=f"What-if: {sc_title} CAGR from age {latest_age:.1f}  "
+                        f"<span style='font-size:11px;color:#64748b'>· {contrib_note}</span>",
                    font=dict(size=14, color="#1e293b"), x=0),
         xaxis=dict(title="Age", range=[15, project_to_age + 1], dtick=5,
                    gridcolor="#e2e8f0", zeroline=False),
@@ -1806,8 +1809,11 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
 if personal_plot_df is not None and len(personal_plot_df) >= 1:
     with st.expander("What-if projection"):
         st.caption(
-            "Forward-project your net worth from the latest data point under a chosen growth rate, "
-            "overlaid against the benchmark. Descriptive only — not financial advice."
+            "Forward-project your net worth from the latest data point. "
+            "**By default this is a pure investment-growth projection — no further savings or contributions** "
+            "(your starting balance grows by the chosen CAGR). "
+            "Use the **Monthly contributions** field below to layer in ongoing saving. "
+            "Illustrative only — not financial advice."
         )
         wcol1, wcol2, wcol3, wcol4 = st.columns(4)
         with wcol1:
@@ -1826,10 +1832,17 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
                 max_value=85, value=min(70, 85), key="whatif_age",
             )
         wi_monthly = st.number_input(
-            "Monthly savings contribution (£)", 0, 50_000, 0, 100, format="%d", key="wi_monthly",
-            help="Net savings added each month on top of investment returns — applied equally to all scenarios. "
-                 "Set to 0 for growth-only projection.",
+            "Monthly contributions (£)", 0, 50_000, 0, 100, format="%d", key="wi_monthly",
+            help="Optional ongoing savings, added on top of investment returns. "
+                 "Applied equally to all three scenarios. Leave at 0 for a pure-growth projection.",
         )
+        if wi_monthly == 0:
+            st.caption("ℹ️ Projection assumes **no further contributions** — only investment growth at the CAGR above.")
+        else:
+            st.caption(
+                f"ℹ️ Projection includes **£{wi_monthly:,}/month** ongoing contributions "
+                f"(£{wi_monthly*12:,}/year) on top of investment growth."
+            )
 
         scenarios = [
             (wi_cagr1 / 100, f"Scenario 1 ({wi_cagr1:+.1f}%)"),
@@ -1859,8 +1872,11 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
                         sc_label,
                         _fmt(proj_nw_at),
                         delta=f"~{proj_pct:.0f}th pct" if proj_pct else "n/a",
-                        help=f"Projected net worth at age {wi_age}"
-                             + (f" with £{wi_monthly:,}/mo savings." if wi_monthly else "."),
+                        help=(f"Projected net worth at age {wi_age} with £{wi_monthly:,}/mo "
+                              "ongoing contributions on top of investment growth."
+                              if wi_monthly else
+                              f"Projected net worth at age {wi_age} from pure investment growth "
+                              "(no further contributions)."),
                     )
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────
@@ -2454,10 +2470,16 @@ if personal_plot_df is not None and latest_nw is not None:
             pdf.add_page(); H1("What-if projection")
             _cagr_note = (f" Your historical CAGR is {_cagr_rpt*100:+.1f}%."
                           if _cagr_rpt else "")
+            _contrib_note = (
+                f" Includes ongoing contributions of £{wi_monthly:,}/month "
+                f"(£{wi_monthly*12:,}/year) on top of investment growth."
+                if wi_monthly > 0 else
+                " Assumes no further contributions - only investment growth at the chosen CAGR."
+            )
             SM(
                 f"Projected net worth from age {latest_age:.0f} to {wi_age} under three CAGR "
                 f"scenarios, alongside the benchmark median. Starting net worth: {_fmt(latest_nw)}."
-                f"{_cagr_note} Illustrative only - not financial advice."
+                f"{_contrib_note}{_cagr_note} Illustrative only - not financial advice."
             )
             pdf.ln(3); CHART(whatif_png)
             # Projected values table
