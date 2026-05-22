@@ -2190,37 +2190,66 @@ if personal_plot_df is not None and latest_nw is not None:
 
         # ── Page 1: Cover ──────────────────────────────────────────────────────────
         pdf.add_page()
-        pdf.set_fill_color(*BLUE); pdf.rect(0, 0, 210, 48, "F")
+        pdf.set_fill_color(*BLUE); pdf.rect(0, 0, 210, 52, "F")
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Helvetica", "B", 22); pdf.set_y(11)
+        pdf.set_font("Helvetica", "B", 22); pdf.set_y(10)
         pdf.cell(0, 13, "UK Net Worth Benchmarker", align="C", ln=True)
         pdf.set_font("Helvetica", "", 13)
         pdf.cell(0, 8, "Personal Report", align="C", ln=True)
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(219, 234, 254)
+        pdf.cell(0, 7, f"Generated {_today}  |  ONS WAS Wave 7 (2018-2020)", align="C", ln=True)
         pdf.set_text_color(*SLATE)
-        pdf.set_y(58)
+        pdf.set_y(62)
 
-        H1("Report settings")
+        # ── Hero: big net worth number ─────────────────────────────────────────
+        pdf.set_font("Helvetica", "B", 34); pdf.set_text_color(*BLUE)
+        pdf.cell(0, 18, _fmt(latest_nw), align="C", ln=True)
+        pdf.set_font("Helvetica", "", 11); pdf.set_text_color(*GREY)
+        pdf.cell(0, 7, f"Current net worth  |  Age {latest_age:.1f}", align="C", ln=True)
+        pdf.ln(4)
+
+        # ── Three stat boxes ────────────────────────────────────────────────────
+        p50v = _bm("p50")
+        _stat_y = pdf.get_y()
+        _stat_boxes = []
+        if _pct_rpt:
+            _stat_boxes.append((f"~{_ordinal(round(_pct_rpt))}", "Estimated percentile"))
+        if p50v:
+            _stat_boxes.append((f"{latest_nw/p50v*100:.0f}", "Relative to median (100=avg)"))
+        if _cagr_rpt:
+            _stat_boxes.append((f"{_cagr_rpt*100:+.1f}%", f"Annual CAGR since age {float(_first_rpt['age']):.0f}"))
+
+        _bw = 54  # box width mm
+        _bh = 20  # box height mm
+        _gap = 3
+        _total_w = len(_stat_boxes) * _bw + (len(_stat_boxes)-1) * _gap
+        _start_x = (210 - _total_w) / 2
+        for j, (val, lbl) in enumerate(_stat_boxes):
+            bx = _start_x + j * (_bw + _gap)
+            pdf.set_fill_color(*LBLUE)
+            pdf.rect(bx, _stat_y, _bw, _bh, 'F')
+            pdf.set_xy(bx, _stat_y + 2)
+            pdf.set_font("Helvetica", "B", 15); pdf.set_text_color(*BLUE)
+            pdf.cell(_bw, 8, val, align="C", ln=False)
+            pdf.set_xy(bx, _stat_y + 10)
+            pdf.set_font("Helvetica", "", 7); pdf.set_text_color(*GREY)
+            pdf.cell(_bw, 6, lbl, align="C", ln=False)
+        pdf.set_xy(15, _stat_y + _bh + 5)
+        pdf.set_text_color(*SLATE)
+
+        # ── Settings strip ──────────────────────────────────────────────────────
         _basis_lbl = basis
         if basis == "Individual" and gender != "All":
             _basis_lbl = f"Individual ({gender})"
+        pdf.ln(2)
+        H1("Report settings")
         KV("Generated:", _today)
         KV("Basis:", _basis_lbl)
         KV("Prices:", _price_lbl)
         KV("Pension wealth:", "Included" if include_pension else "Excluded")
         if wealth_component != "Total":
             KV("Wealth component:", wealth_component)
-
-        pdf.ln(4); H1("Your snapshot")
-        KV("Age:", f"{latest_age:.1f}")
-        KV("Net worth:", _fmt(latest_nw))
-        if _pct_rpt:
-            KV("Estimated percentile:", f"~{_ordinal(round(_pct_rpt))}")
-        p50v = _bm("p50")
-        if p50v:
-            KV("Relative to median:", f"{latest_nw/p50v*100:.0f}  (100 = median for your age group)")
-        if _cagr_rpt:
-            KV("Growth rate (CAGR):",
-               f"{_cagr_rpt*100:+.2f}% per year since age {float(_first_rpt['age']):.0f}")
 
         if _pct_rpt:
             pdf.ln(4); H1("Key observations")
@@ -2342,10 +2371,12 @@ if personal_plot_df is not None and latest_nw is not None:
         # ── Page 5: Percentile trajectory ──────────────────────────────────────
         if traj_png:
             pdf.add_page(); H1("Percentile trajectory")
+            _pct_note = (f" Your current estimate is the ~{_ordinal(round(_pct_rpt))} percentile."
+                         if _pct_rpt else "")
             SM(
-                f"Your estimated percentile rank at each data point. A rising line means your "
-                f"wealth is growing faster than the typical UK {_basis_desc[:-1]}. Derived from "
-                f"a log-normal model fitted to P25/P50/P75 - indicative +/-5-10 percentile points."
+                f"Your estimated percentile rank at each data point.{_pct_note} "
+                f"A rising line means your wealth is growing faster than the typical UK {_basis_desc[:-1]}. "
+                f"Derived from a log-normal model fitted to P25/P50/P75 - indicative +/-5-10 pct pts."
             )
             pdf.ln(3); CHART(traj_png)
 
@@ -2362,10 +2393,13 @@ if personal_plot_df is not None and latest_nw is not None:
         # ── Page 7: What-if projection ─────────────────────────────────────────
         if whatif_png:
             pdf.add_page(); H1("What-if projection")
+            _cagr_note = (f" For context, your historical CAGR is {_cagr_rpt*100:+.1f}%."
+                          if _cagr_rpt else "")
             SM(
                 f"Projected net worth from age {latest_age:.0f} to {wi_age} under three CAGR "
                 f"scenarios, alongside the benchmark median. Assumes compound growth from your "
-                f"current net worth. Illustrative only - not financial advice."
+                f"current net worth of {_fmt(latest_nw)}.{_cagr_note} "
+                f"Illustrative only - not financial advice."
             )
             pdf.ln(3); CHART(whatif_png)
 
@@ -2378,11 +2412,27 @@ if personal_plot_df is not None and latest_nw is not None:
                 try: KV("Annual retirement spending:", f"GBP {fire_spending:,}")
                 except NameError: pass
 
+                def _pbar(pct_val, colour=BLUE):
+                    """Draw a simple horizontal progress bar."""
+                    bx = pdf.l_margin; by = pdf.get_y()
+                    bw = 180; bh = 7
+                    pdf.set_fill_color(*LGREY); pdf.rect(bx, by, bw, bh, "F")
+                    fill_w = max(2, min(bw, bw * pct_val / 100))
+                    pdf.set_fill_color(*colour); pdf.rect(bx, by, fill_w, bh, "F")
+                    pdf.set_font("Helvetica", "B", 8); pdf.set_text_color(255, 255, 255)
+                    if fill_w > 14:
+                        pdf.set_xy(bx + 3, by + 0.8)
+                        pdf.cell(fill_w - 3, bh - 1, f"{pct_val:.0f}%", align="L")
+                    pdf.set_xy(bx, by + bh + 3); pdf.set_text_color(*SLATE)
+
                 for tgt_lbl, tgt_v in [("Target net worth", goal_amount),
                                         ("FIRE number", fire_number)]:
                     if tgt_v <= 0: continue
                     pct_t = min(latest_nw / tgt_v * 100, 100)
-                    pdf.ln(3); H2(f"{tgt_lbl}: {pct_t:.0f}% of the way there")
+                    pdf.ln(3); H2(f"{tgt_lbl}")
+                    pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
+                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(tgt_v)}", ln=True)
+                    pdf.ln(1); _pbar(pct_t)
                     if tgt_v > latest_nw:
                         KV("  Remaining gap:", _fmt(tgt_v - latest_nw))
                         if _cagr_rpt and _cagr_rpt > 0:
@@ -2399,8 +2449,11 @@ if personal_plot_df is not None and latest_nw is not None:
                         pdf.set_text_color(*SLATE)
 
                 if fire_number > 0:
+                    _fi_pct = min(latest_nw/fire_number*100, 100)
                     pdf.ln(3); H2("Financial independence tracker")
-                    KV("FI progress:", f"{min(latest_nw/fire_number*100,100):.0f}%")
+                    pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
+                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(fire_number)} FIRE target", ln=True)
+                    pdf.ln(1); _pbar(_fi_pct, colour=(16, 185, 129))
                     KV("Sustainable spending at current NW:",
                        f"{_fmt(latest_nw/25/52)}/week  ({_fmt(latest_nw/25)}/yr)")
                     if fire_number > latest_nw:
