@@ -771,6 +771,39 @@ def build_whatif_figure(
     return fig
 
 
+# ── Data quality score ────────────────────────────────────────────────────────
+
+def compute_data_quality(pdf: pd.DataFrame) -> dict:
+    """Rate the personal data on completeness and consistency (0-100 score)."""
+    n = len(pdf)
+    age_span = float(pdf["age"].max() - pdf["age"].min()) if n >= 2 else 0
+    avg_gap  = age_span / (n - 1) if n >= 2 else 999
+
+    score = 0
+    notes = []
+
+    if n >= 10:    score += 30; notes.append("✅ 10+ data points")
+    elif n >= 5:   score += 20; notes.append("🟡 5–9 data points (10+ recommended)")
+    elif n >= 2:   score += 10; notes.append("⚠️ Only 2–4 data points")
+    else:          notes.append("❌ Need at least 2 data points")
+
+    if "year" in pdf.columns:
+        max_year = int(pdf["year"].max())
+        if max_year >= 2024:   score += 25; notes.append("✅ Data up to 2024/25")
+        elif max_year >= 2022: score += 15; notes.append("🟡 Data to 2022–23 — add recent figures")
+        else:                  score += 5;  notes.append("⚠️ Data older than 2022")
+
+    if avg_gap <= 1.5:  score += 25; notes.append("✅ Annual or more frequent updates")
+    elif avg_gap <= 3:  score += 15; notes.append("🟡 Updates every 1–3 years")
+    else:               score += 5;  notes.append("⚠️ Infrequent updates (gaps > 3 yrs)")
+
+    if age_span >= 10:  score += 20; notes.append("✅ 10+ year history")
+    elif age_span >= 5: score += 12; notes.append("🟡 5–9 year history")
+    else:               score += 5;  notes.append("⚠️ Less than 5 years of history")
+
+    return {"score": min(score, 100), "notes": notes, "n": n, "span": age_span}
+
+
 # ── Percentile heatmap ───────────────────────────────────────────────────────
 
 def build_heatmap(benchmark: pd.DataFrame) -> go.Figure:
@@ -1196,6 +1229,14 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
         if partner_plot_df is not None and len(partner_plot_df) >= 2:
             frames.append(build_summary_stats(partner_plot_df, benchmark, "Partner"))
         st.dataframe(pd.concat(frames, ignore_index=True), use_container_width=True, hide_index=True)
+
+        # Data quality score
+        dq = compute_data_quality(personal_plot_df)
+        st.markdown(f"**Data quality score: {dq['score']}/100**")
+        st.progress(dq["score"] / 100)
+        for note in dq["notes"]:
+            st.caption(note)
+        st.caption("Higher score = more reliable estimates. Add annual updates and extend your history to improve.")
 
         # Downloadable percentile history
         st.markdown("**Percentile history download**")
