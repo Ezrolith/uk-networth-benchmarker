@@ -2160,11 +2160,19 @@ if personal_plot_df is not None and latest_nw is not None:
                 pdf.cell(w, 5.5, str(txt), fill=True)
             pdf.ln()
 
+        def _ordinal(n: int) -> str:
+            n = int(n)
+            if 11 <= (n % 100) <= 13:
+                return f"{n}th"
+            return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+
         def FOOTER():
+            pdf.set_auto_page_break(auto=False)
             pdf.set_y(-14); pdf.set_font("Helvetica", "I", 7); pdf.set_text_color(*GREY)
             pdf.cell(0, 5,
                 f"UK Net Worth Benchmarker  |  ONS WAS Wave 7 (2018-2020)  |  "
                 f"Not financial advice  |  {_today}", align="C")
+            pdf.set_auto_page_break(auto=True, margin=18)
             pdf.set_text_color(*SLATE)
 
         def CHART(png_b, caption=""):
@@ -2200,7 +2208,7 @@ if personal_plot_df is not None and latest_nw is not None:
         KV("Age:", f"{latest_age:.1f}")
         KV("Net worth:", _fmt(latest_nw))
         if _pct_rpt:
-            KV("Estimated percentile:", f"~{round(_pct_rpt)}th")
+            KV("Estimated percentile:", f"~{_ordinal(round(_pct_rpt))}")
         p50v = _bm("p50")
         if p50v:
             KV("Relative wealth index:", f"{latest_nw/p50v*100:.0f}  (100 = median)")
@@ -2244,7 +2252,7 @@ if personal_plot_df is not None and latest_nw is not None:
             yr_d = str(int(rd["year"])) if "year" in rd.index else ""
             note_d = str(rd["note"]) if "note" in rd.index and str(rd.get("note","")).strip() else ""
             TR(i, (f"{a_d:.1f}", 25, False), (yr_d, 25, False),
-               (_fmt(nw_d), 50, False), (f"~{round(p_d)}th" if p_d else "n/a", 40, False))
+               (_fmt(nw_d), 50, False), (f"~{_ordinal(round(p_d))}" if p_d else "n/a", 40, False))
             if note_d:
                 pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
                 pdf.cell(25, 4.5, ""); pdf.cell(0, 4.5, f"  {note_d}", ln=True)
