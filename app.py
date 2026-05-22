@@ -528,6 +528,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         delta_val = latest_nw - prev_nw
         delta_str = _fmt_delta(delta_val)
 
+    # ── Row 1: snapshot ────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.metric("Your latest age", f"{latest_age:.1f}")
@@ -554,22 +555,68 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             }.get(band_desc, band_desc.capitalize())
             st.metric("Percentile band", short_band)
     with col4:
-        # Wealth gap to next milestone
         age_bench = benchmark[benchmark["age"] == min(round(latest_age), 85)]
         p50_val   = age_bench[age_bench["percentile"] == "p50"]["value"]
         p75_val   = age_bench[age_bench["percentile"] == "p75"]["value"]
-        if len(p50_val) and len(p75_val):
-            p50v = float(p50_val.iloc[0])
-            p75v = float(p75_val.iloc[0])
+        p50v      = float(p50_val.iloc[0]) if len(p50_val) else None
+        p75v      = float(p75_val.iloc[0]) if len(p75_val) else None
+        if p50v and p75v:
             if latest_nw < p50v:
-                gap = p50v - latest_nw
-                st.metric("Gap to median", _fmt(gap), help="How much more to reach the P50 benchmark at your age.")
+                st.metric("Gap to median", _fmt(p50v - latest_nw),
+                          help="How much more to reach the P50 benchmark at your age.")
             elif latest_nw < p75v:
-                gap = p75v - latest_nw
-                st.metric("Gap to P75", _fmt(gap), help="How much more to reach the 75th percentile benchmark at your age.")
+                st.metric("Gap to P75", _fmt(p75v - latest_nw),
+                          help="How much more to reach the 75th percentile benchmark at your age.")
             else:
-                above = latest_nw - p75v
-                st.metric("Above P75 by", _fmt(above), help="How far above the 75th percentile you sit.")
+                st.metric("Above P75 by", _fmt(latest_nw - p75v),
+                          help="How far above the 75th percentile you sit.")
+
+    # ── Row 2: growth & milestone progress ────────────────────────────────────
+    if len(sorted_pdf) >= 2:
+        first      = sorted_pdf.iloc[0]
+        first_age  = float(first["age"])
+        first_nw   = float(first["net_worth"])
+        age_span   = latest_age - first_age
+
+        col_a, col_b, col_c = st.columns([1, 1, 2])
+        with col_a:
+            if age_span > 0.5 and first_nw > 0 and latest_nw > 0:
+                cagr = (latest_nw / first_nw) ** (1 / age_span) - 1
+                st.metric(
+                    "CAGR",
+                    f"{cagr * 100:+.1f}%",
+                    help=f"Compound annual growth rate from age {first_age:.1f} to {latest_age:.1f}.",
+                )
+            else:
+                total_change = latest_nw - first_nw
+                st.metric("Total change", _fmt_delta(total_change))
+        with col_b:
+            ann_abs = (latest_nw - first_nw) / age_span if age_span > 0 else None
+            if ann_abs is not None:
+                st.metric(
+                    "Avg annual gain",
+                    _fmt(ann_abs),
+                    help=f"Simple average annual change over {age_span:.1f} years.",
+                )
+        with col_c:
+            # Progress bar toward next benchmark milestone
+            if p50v and p75v:
+                if latest_nw < p50v:
+                    target    = p50v
+                    from_val  = max(0.0, first_nw) if first_nw < p50v else 0.0
+                    label     = f"Progress toward median (£{p50v:,.0f})"
+                elif latest_nw < p75v:
+                    target    = p75v
+                    from_val  = p50v
+                    label     = f"Progress toward P75 (£{p75v:,.0f})"
+                else:
+                    target = label = from_val = None
+
+                if target:
+                    span   = max(target - from_val, 1)
+                    prog   = min(max((latest_nw - from_val) / span, 0.0), 1.0)
+                    st.caption(label)
+                    st.progress(prog)
 
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** "
