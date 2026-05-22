@@ -177,7 +177,7 @@ with st.sidebar:
             column_config={
                 "year":      st.column_config.NumberColumn("Year",     min_value=1960, max_value=2030, step=1,    format="%d"),
                 "age":       st.column_config.NumberColumn("Age",      min_value=16,   max_value=100,  step=1,    format="%d"),
-                "net_worth": st.column_config.NumberColumn("Net worth (£)", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%d"),
+                "net_worth": st.column_config.NumberColumn("Net worth (£)", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%,d"),
             },
             key="personal_editor",
         )
@@ -669,13 +669,19 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                     st.caption(label)
                     st.progress(prog)
 
-                    # Simple linear projection: at current annual gain, when do we hit target?
-                    ann_abs_proj = (latest_nw - first_nw) / age_span if age_span > 0 else None
-                    if ann_abs_proj and ann_abs_proj > 0 and latest_nw < target:
-                        years_needed = (target - latest_nw) / ann_abs_proj
-                        eta_age = latest_age + years_needed
-                        if eta_age <= 100:
-                            st.caption(f"At your current rate: age **{eta_age:.0f}** (in ~{years_needed:.0f} yrs)")
+                    # CAGR-based projection: compound growth to target
+                    if age_span > 0.5 and first_nw > 0 and latest_nw > 0 and latest_nw < target:
+                        cagr_proj = (latest_nw / first_nw) ** (1 / age_span) - 1
+                        if cagr_proj > 0.001:
+                            # Solve: latest_nw * (1 + cagr)^t = target
+                            import math
+                            years_needed = math.log(target / latest_nw) / math.log(1 + cagr_proj)
+                            eta_age = latest_age + years_needed
+                            if eta_age <= 100:
+                                st.caption(
+                                    f"At {cagr_proj*100:.1f}% CAGR: age **{eta_age:.0f}** "
+                                    f"(~{years_needed:.0f} yrs)"
+                                )
 
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** "
