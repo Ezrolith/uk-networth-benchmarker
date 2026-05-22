@@ -87,11 +87,11 @@ UK_CPI = {
     2012: 104.5, 2013: 106.4, 2014: 107.1, 2015: 100.0,
     2016: 101.0, 2017: 103.6, 2018: 106.0, 2019: 108.5,
     2020: 108.5, 2021: 111.8, 2022: 121.9, 2023: 132.0,
-    2024: 136.2, 2025: 139.0,
+    2024: 136.2, 2025: 139.0, 2026: 141.7,  # 2026 estimated: ~1.9% from 2025 (OBR March 2025 forecast)
 }
 
 DATA_YEAR = 2019  # approximate mid-point of WAS Wave 7 (2018–2020)
-REAL_BASE_YEAR = 2024
+REAL_BASE_YEAR = 2026
 
 
 def interpolate_benchmarks(band_data: pd.DataFrame, age_range: np.ndarray) -> pd.DataFrame:

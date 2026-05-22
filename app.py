@@ -353,6 +353,10 @@ with st.sidebar:
 # Apply palette (must be after sidebar reads cb_safe)
 COLOURS = _COLOURS_CB if cb_safe else _COLOURS_STANDARD
 
+# Pre-initialise so sidebar goal calculator can safely reference them
+latest_nw:  float | None = None
+latest_age: float | None = None
+
 # ── Data pipeline ─────────────────────────────────────────────────────────────
 
 benchmark = _build_benchmark(basis, include_pension, real_terms, gender)
@@ -1079,6 +1083,31 @@ def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
 
 
 # ── Summary statistics table ──────────────────────────────────────────────────
+
+def compute_twr(pdf: pd.DataFrame) -> float | None:
+    """
+    Approximate time-weighted return (TWR) using Modified Dietz method.
+    Each period: r_period = (end - start) / start
+    TWR = product of (1 + r_period) - 1
+
+    This removes the effect of when contributions/withdrawals were made,
+    unlike CAGR which is heavily influenced by the starting value.
+    Note: without knowing the exact timing of contributions this is
+    an approximation — treat as indicative.
+    """
+    s = pdf.sort_values("age")
+    if len(s) < 2:
+        return None
+    product = 1.0
+    for i in range(1, len(s)):
+        start = float(s.iloc[i-1]["net_worth"])
+        end   = float(s.iloc[i]["net_worth"])
+        if start <= 0:
+            continue
+        r = (end - start) / start
+        product *= (1 + r)
+    return product - 1
+
 
 def build_summary_stats(
     pdf: pd.DataFrame, bm: pd.DataFrame, label: str = "You"
