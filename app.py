@@ -204,6 +204,11 @@ def _fmt_delta(d: float) -> str:
     return ("+" if d >= 0 else "") + _fmt(d)
 
 
+# Initialised here so sidebar goal/savings calculator can reference them safely
+# (personal_plot_df and latest_nw are populated later, after sidebar renders)
+latest_nw: float | None = None
+personal_plot_df = None
+
 with st.sidebar:
     st.title("Settings")
 
