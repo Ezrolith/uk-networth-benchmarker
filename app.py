@@ -1,8 +1,25 @@
 """
-UK Net Worth Benchmarker
-------------------------
-Visualises ONS Wealth and Assets Survey percentile distributions by age,
-with personal (and optional partner) overlay and a transparent inference layer.
+UK Net Worth Benchmarker (v2.6)
+================================
+
+Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
+distributions by age, with personal (and optional partner) overlays and a
+transparent inference layer.
+
+Features:
+  - Benchmark chart with PCHIP-interpolated P25/P50/P75 from real ONS data
+  - Personal trajectory + partner overlay + percentile-over-time chart
+  - Monte Carlo projection (deterministic + stochastic + equity/bond glide path)
+  - Retirement income forecast + drawdown simulator (deterministic + stochastic)
+  - UK tax wrapper utilisation tracker (ISA, LISA, Pension AA + carryforward + taper)
+  - ISA / accessible-wealth bridge calculator for early retirement
+  - IHT exposure calculator
+  - Multi-page PDF report
+  - 150-test safety net + CI
+
+This file is the Streamlit UI orchestration layer. All chart builders live in
+`charts/`, all maths in `utils/` (inference, monte_carlo, uk_tax). See
+CLAUDE.md for the architecture and NEXT_STEPS.md / REVIEW_LOG.md for history.
 """
 
 import math
