@@ -72,8 +72,9 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Public URL used in the share-link feature. If deployment ever moves, update here.
+# Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
+APP_VERSION = "v2.6"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -3244,7 +3245,6 @@ if personal_plot_df is not None and latest_nw is not None:
 # ── Footer ────────────────────────────────────────────────────────────────────
 
 st.divider()
-APP_VERSION = "v2.6"
 st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem; line-height:1.6;'>"
     f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · "
