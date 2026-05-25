@@ -1,5 +1,7 @@
 # UK Net Worth Benchmarker
 
+[![CI](https://github.com/Ezrolith/uk-networth-benchmarker/actions/workflows/ci.yml/badge.svg)](https://github.com/Ezrolith/uk-networth-benchmarker/actions/workflows/ci.yml)
+
 An interactive web app showing UK net worth distributions (P25 / median / P75)
 by age, with personal overlay, a transparent inference layer, and a polished
 multi-page PDF report.
