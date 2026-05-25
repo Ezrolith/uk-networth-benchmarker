@@ -1,4 +1,10 @@
-"""Tests for utils/uk_tax.py — UK 2025/26 tax wrapper rules."""
+"""
+Tests for utils/uk_tax.py — UK 2025/26 tax rules.
+
+Covers: pension AA + taper + carryforward, ISA + LISA (age-aware) remaining,
+pension relief estimate, LISA bonus, and IHT (nil-rate bands, four scenario
+thresholds, iht_payable function).
+"""
 from __future__ import annotations
 import sys
 from pathlib import Path
