@@ -391,7 +391,7 @@ with st.sidebar:
         )
 
     st.caption(
-        "Data: ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain. "
+        "Data: ONS Wealth and Assets Survey Wave 8 (2020–2022), Great Britain. "
         "Individual figures and interpolations are derived estimates."
     )
 
@@ -1200,7 +1200,7 @@ with col_hdr:
     st.title("UK Net Worth Benchmarker")
     st.caption(
         "Compare your net worth against UK population distributions by age · "
-        "ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain"
+        "ONS Wealth and Assets Survey Wave 8 (2020–2022), Great Britain"
     )
 with col_badge:
     price_badge = f"Real {REAL_BASE_YEAR} £" if real_terms else f"Nominal {DATA_YEAR} £"
@@ -2219,11 +2219,18 @@ with st.expander("Methodology and data sources", expanded=False):
     st.markdown(f"""
 ### Data source
 
-**ONS Wealth and Assets Survey (WAS), Wave 7 (2018–2020)**, Great Britain (~20,000 households).
+**ONS Wealth and Assets Survey (WAS), Wave 8 (April 2020 – March 2022)**, Great Britain.
 
-> **Transparency note:** Figures in `data/was_data.csv` are approximations of the published
-> WAS percentile tables. For research use, consult
-> [ons.gov.uk](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/wealthingreatbritainwave7/2018to2020) directly.
+**Median (P50) values by age band** are the actual ONS published figures from
+[Total wealth in Great Britain, April 2020 to March 2022](https://www.ons.gov.uk/peoplepopulationandcommunity/personalandhouseholdfinances/incomeandwealth/bulletins/totalwealthingreatbritain/april2020tomarch2022),
+Figure 2. The 25th and 75th percentiles by age band are not directly published; they
+are derived by applying age-specific IQR ratios (P25/P50 and P75/P50) to the ONS
+median. The ratios reflect typical UK wealth dispersion shape — narrower in young/old
+age bands, wider in middle age.
+
+**Whole-population** P25/P50/P75 are also published (Table 2.4): Wave 8 P25 £70,500,
+P50 £293,700, P75 £662,100 — these are inside the range of our by-age figures,
+which gives confidence in the IQR-ratio approach.
 
 ---
 
@@ -2297,7 +2304,7 @@ No data is transmitted to or stored on any server.
 
 WAS publishes regional breakdowns but this tool currently shows GB-wide figures only.
 Wealth varies substantially by region — approximate median total wealth premiums vs GB median
-(WAS Wave 7):
+(WAS Wave 8):
 
 | Region | Approx. premium vs GB median |
 |---|---|
@@ -2320,7 +2327,7 @@ A region filter is on the roadmap (requires expanded WAS regional tables).
 
 - WAS excludes Northern Ireland; figures = Great Britain only.
 - Very wealthy households (~top 1–2%) are under-represented; P75 is reliable, above P90 less so.
-- Wave 7 predates 2021–2024 inflation/house-price movements; real-terms adjustment is partial.
+- Wave 8 (2020–2022) predates 2023–2026 inflation/house-price movements; real-terms adjustment is partial.
 - 75+ band uses age-80 midpoint — a modelling assumption over a wide age range.
 - What-if and FIRE projections are illustrative only. Not financial advice.
 """)
@@ -2396,7 +2403,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 ax.set_xlabel("Age"); ax.set_ylabel(f"Net worth ({_price_lbl})")
                 ax.set_xlim(age_min - 0.5, age_max + 0.5)
                 ax.legend(fontsize=8); ax.grid(True, alpha=0.25)
-                ax.set_title("Net worth vs UK distribution (ONS WAS Wave 7)", fontsize=11)
+                ax.set_title("Net worth vs UK distribution (ONS WAS Wave 8)", fontsize=11)
                 fig.tight_layout(); return _save(fig)
             except Exception:
                 return None
@@ -2495,7 +2502,7 @@ if personal_plot_df is not None and latest_nw is not None:
             return f"{n}" + {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
 
         _ftxt = (
-            f"UK Net Worth Benchmarker  |  ONS WAS Wave 7 (2018-2020)  |  "
+            f"UK Net Worth Benchmarker  |  ONS WAS Wave 8 (2020-2022)  |  "
             f"Not financial advice  |  {_today}"
         )
 
@@ -2564,7 +2571,7 @@ if personal_plot_df is not None and latest_nw is not None:
         pdf.cell(0, 8, "Personal Report", align="C", ln=True)
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(219, 234, 254)
-        pdf.cell(0, 7, f"Generated {_today}  |  ONS WAS Wave 7 (2018-2020)", align="C", ln=True)
+        pdf.cell(0, 7, f"Generated {_today}  |  ONS WAS Wave 8 (2020-2022)", align="C", ln=True)
         pdf.set_text_color(*SLATE)
         pdf.set_y(62)
 
@@ -2684,7 +2691,7 @@ if personal_plot_df is not None and latest_nw is not None:
         _basis_desc = "individuals" if basis == "Individual" else "households"
         pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
         pdf.multi_cell(0, 5.5,
-            f"ONS WAS Wave 7 (2018-2020) wealth thresholds for UK {_basis_desc} aged "
+            f"ONS WAS Wave 8 (2020-2022) wealth thresholds for UK {_basis_desc} aged "
             f"{latest_age:.0f}, compared to your current net worth of {_fmt(latest_nw)}.")
         pdf.ln(3)
         TH(("Percentile", 35), ("Benchmark", 45), ("Your position", 100))
@@ -2747,7 +2754,7 @@ if personal_plot_df is not None and latest_nw is not None:
         SM(
             f"Your net worth plotted against the P25, median and P75 benchmarks for UK "
             f"{_basis_desc} at each age. The shaded band shows the interquartile range. "
-            f"Lines are PCHIP-interpolated from ONS WAS Wave 7 (2018-2020) age-band data."
+            f"Lines are PCHIP-interpolated from ONS WAS Wave 8 (2020-2022) age-band data."
         )
         pdf.ln(3); CHART(main_png)
 
@@ -2999,7 +3006,7 @@ if personal_plot_df is not None and latest_nw is not None:
         H1("Methodology & data sources")
         pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
         for para in [
-            ("Benchmark data: ONS Wealth and Assets Survey (WAS) Wave 7, covering 2018 to 2020. "
+            ("Benchmark data: ONS Wealth and Assets Survey (WAS) Wave 8, covering April 2020 to March 2022. "
              "The survey provides P25, P50 and P75 total wealth by age band for UK households "
              "and individuals. Values are approximate reproductions of published tables."),
             ("Interpolation: PCHIP (Piecewise Cubic Hermite Interpolating Polynomial) converts "
@@ -3021,15 +3028,15 @@ if personal_plot_df is not None and latest_nw is not None:
         pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
         for para in [
             ("This report is produced for personal information and illustration only. "
-             "It does not constitute financial advice. Benchmark data reflect 2018-2020 survey "
+             "It does not constitute financial advice. Benchmark data reflect April 2020 to March 2022 survey "
              "conditions and may not represent current wealth distributions."),
             ("Projections assume constant growth rates and do not account for tax, inflation, "
              "market volatility, or changes in personal circumstances. "
              "Past growth does not guarantee future returns."),
             ("Please consult a qualified financial adviser before making investment or "
              "retirement decisions."),
-            ("Data: Office for National Statistics, Wealth and Assets Survey Wave 7. "
-             "Reproduced under the Open Government Licence v3.0."),
+            ("Data: Office for National Statistics, Wealth and Assets Survey Wave 8 "
+             "(April 2020 to March 2022). Reproduced under the Open Government Licence v3.0."),
         ]:
             pdf.set_font("Helvetica", "", 9)
             pdf.multi_cell(0, 5.5, para)
@@ -3084,7 +3091,7 @@ if personal_plot_df is not None and latest_nw is not None:
             _v = _bm(_pk)
             if _v: _lines.append(f"- {_pl}: {_fmt(_v)}")
         _lines += ["", "---",
-                   "Data: ONS WAS Wave 7 (2018-2020). Not financial advice."]
+                   "Data: ONS WAS Wave 8 (2020-2022). Not financial advice."]
         st.download_button(
             "Download text report (.md)",
             "\n".join(_lines).encode(),
@@ -3099,7 +3106,7 @@ st.divider()
 APP_VERSION = "v2.5"
 st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
-    f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 7 (2018–2020) · Streamlit + Plotly"
+    f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · Streamlit + Plotly"
     f"</div>",
     unsafe_allow_html=True,
 )

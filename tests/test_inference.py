@@ -209,16 +209,19 @@ def test_derive_tail_percentiles_orderly(benchmark):
 
 
 def test_build_percentile_trajectory_shape(benchmark):
+    # Use the actual P50 at age 40 from the benchmark, so this test stays
+    # correct whenever the underlying WAS figures are refreshed.
+    p50_at_40 = benchmark[(benchmark["age"] == 40) & (benchmark["percentile"] == "p50")]["value"].iloc[0]
     personal = pd.DataFrame({
         "age":       [30.0, 35.0, 40.0],
         "year":      [2020, 2025, 2030],
-        "net_worth": [25_000.0, 75_000.0, 185_000.0],
+        "net_worth": [25_000.0, 75_000.0, p50_at_40],
     })
     traj = build_percentile_trajectory(personal, benchmark)
     assert len(traj) == 3
     assert set(traj.columns) >= {"age", "percentile", "net_worth"}
-    # The 40-year-old at the P50 value should be ~50th percentile
-    assert traj.iloc[-1]["percentile"] == pytest.approx(50, abs=1)
+    # The 40-year-old at the P50 value should be exactly the 50th percentile
+    assert traj.iloc[-1]["percentile"] == pytest.approx(50, abs=0.5)
 
 
 def test_decile_table_contains_eleven_rows(benchmark):

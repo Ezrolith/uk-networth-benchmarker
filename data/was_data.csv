@@ -1,43 +1,43 @@
 age_band,age_band_min,age_band_max,band_midpoint,percentile,value_nominal,data_year,source,with_pension
-16-24,16,24,20,p25,4000,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-16-24,16,24,20,p50,14800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-16-24,16,24,20,p75,43800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-25-34,25,34,30,p25,22800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-25-34,25,34,30,p50,72400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-25-34,25,34,30,p75,175800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-35-44,35,44,40,p25,58900,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-35-44,35,44,40,p50,184600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-35-44,35,44,40,p75,399500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-45-54,45,54,50,p25,119500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-45-54,45,54,50,p50,328200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-45-54,45,54,50,p75,680400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-55-64,55,64,60,p25,178400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-55-64,55,64,60,p50,492700,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-55-64,55,64,60,p75,970800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-65-74,65,74,70,p25,208600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-65-74,65,74,70,p50,538400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-65-74,65,74,70,p75,1048700,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-75+,75,89,80,p25,183200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-75+,75,89,80,p50,438900,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-75+,75,89,80,p75,867500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),true
-16-24,16,24,20,p25,3200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-16-24,16,24,20,p50,10600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-16-24,16,24,20,p75,35200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-25-34,25,34,30,p25,14600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-25-34,25,34,30,p50,46800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-25-34,25,34,30,p75,128400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-35-44,35,44,40,p25,32900,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-35-44,35,44,40,p50,118200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-35-44,35,44,40,p75,290500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-45-54,45,54,50,p25,60400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-45-54,45,54,50,p50,194300,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-45-54,45,54,50,p75,468500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-55-64,55,64,60,p25,82500,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-55-64,55,64,60,p50,287400,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-55-64,55,64,60,p75,674700,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-65-74,65,74,70,p25,140800,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-65-74,65,74,70,p50,402600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-65-74,65,74,70,p75,862300,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-75+,75,89,80,p25,143600,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-75+,75,89,80,p50,380200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
-75+,75,89,80,p75,772200,2019,ONS Wealth and Assets Survey Wave 7 (2018-2020),false
+16-24,16,24,20,p25,4104,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+16-24,16,24,20,p50,15200,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+16-24,16,24,20,p75,44977,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+25-34,25,34,30,p25,34587,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+25-34,25,34,30,p50,109800,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+25-34,25,34,30,p75,266594,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+35-44,35,44,40,p25,66862,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+35-44,35,44,40,p50,209600,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+35-44,35,44,40,p75,453574,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+45-54,45,54,50,p25,109892,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+45-54,45,54,50,p50,301900,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+45-54,45,54,50,p75,625839,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+55-64,55,64,60,p25,179733,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+55-64,55,64,60,p50,496500,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+55-64,55,64,60,p75,978105,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+65-74,65,74,70,p25,194468,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+65-74,65,74,70,p50,502500,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+65-74,65,74,70,p75,978870,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+75+,75,89,80,p25,155583,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+75+,75,89,80,p50,373100,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+75+,75,89,80,p75,737246,2021,"ONS Wealth in Great Britain Wave 8 (April 2020-March 2022), Figure 2 median; P25/P75 derived by IQR-ratio scaling",True
+16-24,16,24,20,p25,2938,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+16-24,16,24,20,p50,10883,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+16-24,16,24,20,p75,32203,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+25-34,25,34,30,p25,22343,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+25-34,25,34,30,p50,70931,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+25-34,25,34,30,p75,172220,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+35-44,35,44,40,p25,42792,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+35-44,35,44,40,p50,134144,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+35-44,35,44,40,p75,290288,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+45-54,45,54,50,p25,65056,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+45-54,45,54,50,p50,178725,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+45-54,45,54,50,p75,370497,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+55-64,55,64,60,p25,104785,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+55-64,55,64,60,p50,289460,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+55-64,55,64,60,p75,570236,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+65-74,65,74,70,p25,145462,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+65-74,65,74,70,p50,375870,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+65-74,65,74,70,p75,732195,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+75+,75,89,80,p25,134735,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+75+,75,89,80,p50,323105,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False
+75+,75,89,80,p75,638455,2021,ONS Wealth in Great Britain Wave 8 (April 2020-March 2022); excluding-pension series derived using age-specific component shares,False

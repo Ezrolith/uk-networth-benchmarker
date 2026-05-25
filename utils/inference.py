@@ -107,7 +107,7 @@ UK_CPI = {
     2024: 136.2, 2025: 139.0, 2026: 141.7,  # 2026 estimated: ~1.9% from 2025 (OBR March 2025 forecast)
 }
 
-DATA_YEAR = 2019  # approximate mid-point of WAS Wave 7 (2018–2020)
+DATA_YEAR = 2021  # mid-point of WAS Wave 8 (April 2020 to March 2022)
 REAL_BASE_YEAR = 2026
 
 

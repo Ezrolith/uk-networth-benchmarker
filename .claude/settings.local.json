@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile app.py utils/inference.py utils/data_loader.py)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(python -m py_compile app.py)",
+      "Bash(git commit *)",
+      "Bash(python -c ' *)",
+      "Bash(python _patch_pdf.py)",
+      "Bash(del _patch_pdf.py)",
+      "Bash(python _test_pdf.py)"
+    ]
+  }
+}
