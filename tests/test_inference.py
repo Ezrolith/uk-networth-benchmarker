@@ -6,11 +6,9 @@ fit, CPI adjustment, household→individual sharing, and gender adjustment. Catc
 silent breakage here is the highest-value test surface.
 """
 from __future__ import annotations
-import math
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -18,7 +16,6 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from utils.inference import (  # noqa: E402
-    interpolate_benchmarks,
     convert_to_individual,
     apply_gender_adjustment,
     adjust_for_inflation,
@@ -30,8 +27,6 @@ from utils.inference import (  # noqa: E402
     build_decile_table,
     apply_component_filter,
     UK_CPI,
-    DATA_YEAR,
-    REAL_BASE_YEAR,
 )
 
 # Fixtures (raw_was, benchmark) live in tests/conftest.py
