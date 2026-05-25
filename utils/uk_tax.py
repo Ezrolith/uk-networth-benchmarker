@@ -1,10 +1,21 @@
 """
-UK tax calculations: pension annual allowance taper for high earners.
+UK 2025/26 tax-rule constants and helpers.
 
-Centralises the rules so they can be unit-tested independently of the
-Streamlit UI.
+Centralises every UK-specific calculation so the rules can be unit-tested
+independently of the Streamlit UI and refreshed in one place each new
+tax year.
 
-Allowances as of 2025/26 tax year.
+Covers:
+- ISA total + Lifetime ISA allowances and remaining-headroom helpers
+- Pension Annual Allowance, with high-earner taper (£260k+ adjusted income)
+  and 3-year carryforward
+- Pension tax-relief estimates at given marginal rates
+- LISA government bonus (25%, capped at £1,000/yr)
+- Inheritance Tax: NRB + RNRB, the four common scenario thresholds,
+  iht_payable() computing taxable estate, IHT due, and after-IHT value
+- State pension assumption for forecasts (2026/27 estimate)
+
+All money values in £. All rates as fractions (0.40 not 40).
 """
 from __future__ import annotations
 

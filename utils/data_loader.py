@@ -1,3 +1,16 @@
+"""
+Data-loading and personal-data helpers.
+
+- load_was_data, load_asset_class_data: read the bundled WAS Wave 8 CSVs
+  and normalise their schema (e.g. rename value_nominal → value).
+- parse_personal_csv: parse a user-uploaded net worth CSV with tolerance
+  for Excel date-formatted years, ISO dates, whitespace in headers, and
+  extra columns. Attaches `excel_year_warning` and `birth_year_warning`
+  via DataFrame.attrs when relevant.
+- encode_personal_data / decode_personal_data: zlib + URL-safe base64
+  round-trip for sharing personal data via the URL query param. ~100
+  characters for a typical history.
+"""
 from pathlib import Path
 import json, base64, zlib
 import pandas as pd
