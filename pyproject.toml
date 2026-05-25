@@ -1,0 +1,35 @@
+# Project metadata + tool configuration for the UK Net Worth Benchmarker.
+#
+# This is NOT a packaged distribution (we don't ship a wheel or upload to
+# PyPI). It's a Streamlit app. The pyproject.toml exists so pytest, mypy,
+# and similar tools have a canonical config location — and so anyone
+# cloning the repo gets sensible defaults.
+
+[project]
+name = "uk-networth-benchmarker"
+version = "2.6"
+description = "UK net worth distribution visualiser using ONS Wealth and Assets Survey data."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary (private portfolio piece)" }
+
+# Runtime dependencies are listed in requirements.txt — kept there so
+# Streamlit Cloud picks them up automatically. We don't duplicate here.
+
+[tool.pytest.ini_options]
+# Default discovery is fine; just make output a bit friendlier
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = [
+    "-ra",              # Show short summary for all non-passing tests
+    "--strict-markers", # Unknown @pytest.mark.foo decorators fail (typo catcher)
+    "--strict-config",  # Unknown config keys in this file fail
+]
+filterwarnings = [
+    # Treat genuine warnings as warnings (not errors) but suppress
+    # the noisy ones we can't fix downstream.
+    "default",
+    "ignore::DeprecationWarning:streamlit.*",  # Streamlit internal deprecations
+    "ignore::PendingDeprecationWarning",
+]
