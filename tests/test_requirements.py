@@ -17,15 +17,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# stdlib modules we expect to use freely (Python 3.11+)
-STDLIB = {
-    "ast", "base64", "collections", "contextlib", "copy", "csv",
-    "dataclasses", "datetime", "enum", "functools", "importlib", "io",
-    "itertools", "json", "math", "os", "pathlib", "random", "re", "shutil",
-    "string", "sys", "tempfile", "textwrap", "time", "typing", "urllib",
-    "uuid", "warnings", "zipfile", "zlib",
-    "__future__",
-}
+# All Python stdlib top-level modules (Python 3.10+ provides this directly).
+# Using sys.stdlib_module_names avoids maintaining a hand-rolled allowlist
+# that drifts every time a test imports a new stdlib module (caught e.g.
+# the missing 'subprocess' which broke the suite on its first introduction).
+STDLIB = set(sys.stdlib_module_names) | {"__future__"}
 
 # Project modules (imports of our own code shouldn't need a pip package)
 PROJECT_PACKAGES = {"app", "charts", "utils", "tests", "scripts", "data"}
