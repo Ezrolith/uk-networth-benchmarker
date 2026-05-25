@@ -3192,8 +3192,12 @@ if personal_plot_df is not None and latest_nw is not None:
 st.divider()
 APP_VERSION = "v2.6"
 st.markdown(
-    f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
-    f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · Streamlit + Plotly"
+    f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem; line-height:1.6;'>"
+    f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · "
+    f"Built with Streamlit & Plotly<br>"
+    f"<a href='https://github.com/Ezrolith/uk-networth-benchmarker' "
+    f"style='color:#94a3b8; text-decoration:none;'>Source on GitHub</a> · "
+    f"Indicative figures only — not financial advice"
     f"</div>",
     unsafe_allow_html=True,
 )
