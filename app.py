@@ -1777,6 +1777,38 @@ now anchored to the real Wave 8 aggregate at the population level.
 
 Derived from the same log-normal model: `value = exp(mu + z×sigma)` where z = Phi⁻¹(0.10/0.90).
 
+### Monte Carlo projection (stochastic returns)
+
+The deterministic what-if uses a fixed CAGR; Monte Carlo replaces that with
+**1,000 simulations of random annual returns** to expose sequence-of-returns risk.
+
+**Two modes:**
+
+1. **Fixed return assumption** — each year's return drawn from `N(μ, σ)` where the
+   user supplies μ (expected return) and σ (volatility). All years use the same
+   distribution.
+
+2. **Equity/bond glide path** — each year uses a portfolio mean/sigma derived from
+   a linear glide between two equity weights. Real asset-class assumptions:
+    - Equity: μ = 5.5% real, σ = 18%
+    - Bonds:  μ = 1.5% real, σ = 6%
+    - Equity-bond correlation: 0.10
+
+   Portfolio variance includes the covariance term, so the resulting
+   sigma is below the weighted average for any mixed allocation. Allows
+   modelling "de-risk over time" (e.g. 100% equity at 30 → 60/40 at 65).
+
+**Outputs:** P10/P50/P90 of net worth at the target age, plus the probability
+of finishing at or above any chosen target (computed empirically from the
+simulation paths, not a closed-form formula).
+
+**Random seed is fixed at 42** so the same input sliders give the same
+result — important for UX (sliders don't jitter the chart on rerun).
+
+**Caveats** — returns are assumed normally distributed and independent
+year-to-year. Real markets exhibit mean reversion, fat tails, and bursts of
+correlated bad years. Treat as a planning aid, not a forecast.
+
 ### Retirement income forecast
 
 Projects your net worth to your chosen retirement age using a configurable real
