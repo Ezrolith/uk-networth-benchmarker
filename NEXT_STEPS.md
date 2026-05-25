@@ -148,9 +148,15 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] `utils/uk_tax.py` extracted with all UK 2025/26 rules: `tapered_pension_allowance`, `effective_pension_allowance`, `isa_remaining`, `lisa_remaining` (age-aware), `pension_relief_estimate`, `lisa_bonus`. 29 tests in `test_uk_tax.py` cover the taper threshold and floor, ISA/LISA remaining clamps, pension relief at basic/higher/additional rates, LISA bonus cap.
 
 **Polish — v2.6:**
-- [x] "Try with demo data" button on the empty-state banner. One-click load of a plausible 10-year sample history so first-time users can explore every feature without uploading their own data.
+- [x] "Try with demo data" button on the empty-state banner. One-click load of a plausible 11-year sample history (2016-2026, ages 25-35, including note annotations) so first-time users can explore every feature without uploading their own data. Backed by 8 dedicated tests in `tests/test_demo_data.py`.
 - [x] CSV download for personal + partner data. Round-trips with upload schema (year, age, net_worth, note) so users can save → re-upload across devices. "Share your chart" expander renamed "Share / export your data" and split into URL + CSV columns.
 - [x] **ISA / accessible-wealth bridge calculator** for early-retirement planners. Sizes the bridge fund needed to cover spending from FIRE age until pension access age (currently 57, rising to 58 in 2028). Shows two pot sizings (conservative no-growth, 4% real return) and projects when you'd reach the target at your current CAGR.
+- [x] **IHT calculator extracted to `utils/uk_tax.py`** with 8 dedicated tests. All UK tax rules (wrappers + IHT) now live in one tested module. Variable rename fixed a subtle bug where the local `iht_payable` shadowed the function.
+- [x] **CSV parser robustness** — tolerates whitespace in column headers ('year, age, net_worth' vs 'year,age,net_worth'), accepts ISO dates (2024-01-15) without warnings, ignores extra columns, gives a clear error for unparseable years. 5 new tests cover these edge cases.
+- [x] **LISA age awareness** — `lisa_remaining()` now receives the user's age and correctly returns 0 capacity for over-50s. Banner warns over-50s who have entered LISA contributions.
+- [x] **CPI out-of-range warning** — when real-terms mode is on and any personal data year is outside the CPI table (2000–2026), surface a clear warning listing the affected years.
+- [x] **Footer disclaimer** — "Not financial advice" line + pointer to the in-app methodology panel.
+- [x] **`tests/conftest.py`** — shared fixtures (benchmark, raw_was, asset_series, personal_history) with session scope. Test runtime: 5.5s → 4.2s.
 
 **New feature: Monte Carlo (accumulation + decumulation) — v2.6:**
 - [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.
