@@ -1,8 +1,8 @@
 age_band,band_midpoint,property_pct,pension_pct,financial_pct,physical_pct,source,data_year
-16-24,20,8,25,47,20,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-25-34,30,38,22,30,10,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-35-44,40,42,33,18,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-45-54,50,37,43,13,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-55-64,60,30,46,17,7,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-65-74,70,31,40,23,6,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
-75+,80,37,30,28,5,ONS WAS Wave 7 (2018-2020) approximate component shares at median,2019
+16-24,20,9.9,25.8,33.5,30.8,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+25-34,30,44.1,21.3,20.1,14.5,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+35-44,40,47.4,31.1,11.7,9.8,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+45-54,50,41.5,40.3,8.4,9.8,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+55-64,60,34.5,44.2,11.3,10.0,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+65-74,70,36.4,39.2,15.6,8.8,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021
+75+,80,43.8,29.6,19.1,7.4,"Wave 7 age-band shape rescaled to match ONS Wave 8 aggregate components (property 40%, pension 35%, financial 14%, physical 10%)",2021

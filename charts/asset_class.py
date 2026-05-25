@@ -18,7 +18,7 @@ def build_asset_class_chart(
     price_label: str = "nominal 2021 prices",
     asset_colours: dict[str, str] | None = None,
     title: str = "Median wealth composition by age",
-    subtitle: str = "Component shares: approx WAS Wave 7; median anchor: ONS Wave 8",
+    subtitle: str = "Wave 7 age-band shape rescaled to ONS Wave 8 aggregate shares (40/35/14/10)",
 ) -> go.Figure:
     """
     Stacked area chart showing how property / pension / financial / physical wealth

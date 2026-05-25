@@ -1846,7 +1846,7 @@ st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
 if wealth_component != "Total":
     st.info(
         f"Viewing **{wealth_component} wealth** component only. "
-        "Benchmark scaled by approximate WAS Wave 7 asset class shares (derived). "
+        "Benchmark scaled by component shares rescaled to ONS Wave 8 aggregates. "
         "Your personal net worth overlay shows **total** net worth — "
         "enter your composition split in the sidebar for per-component context.",
         icon="ℹ️",
@@ -2162,7 +2162,7 @@ if show_asset_class:
 
         st.plotly_chart(ac_fig, use_container_width=True, config=PLOTLY_CONFIG)
         st.caption(
-            "Benchmark: approximate WAS Wave 7 component shares at the median. "
+            "Component shares anchored to ONS Wave 8 aggregates (property 40%, pension 35%, financial 14%, physical 10%). "
             "Your composition (if entered) shown as horizontal lines. "
             "Property = net of mortgage · Pension = private (DB PV + DC) · "
             "Financial = savings/investments net of non-mortgage debt · Physical = vehicles/contents/valuables."
@@ -2213,9 +2213,14 @@ Personal entries are each adjusted from their recorded year.
 
 ### Asset class breakdown
 
-Component shares (property/pension/financial/physical) are approximate WAS Wave 7 proportions
-at the median, interpolated to single years and normalised. £ values = share × P50.
-All derived — not published WAS component tables.
+Component shares (property/pension/financial/physical) use the Wave 7 age-band shape
+rescaled so the population-weighted aggregate matches the **ONS Wave 8 published
+aggregate** (property 40%, pension 35%, financial 14%, physical 10%). Values are
+PCHIP-interpolated to single years, each row renormalised to 100%, then multiplied
+by the P50 benchmark to give £ values per component.
+
+This is a derived series — not a published WAS age-band component table — but it is
+now anchored to the real Wave 8 aggregate at the population level.
 
 ### P10 / P90
 
