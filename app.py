@@ -23,6 +23,13 @@ from utils.inference import (
     build_asset_class_series, build_decile_table, apply_component_filter,
     DATA_YEAR, REAL_BASE_YEAR,
 )
+# Helpers and chart builders being migrated out of app.py into charts/
+from charts._helpers import (
+    fmt as _fmt, fmt_delta as _fmt_delta,
+    clean_note as _clean_note, safe_cagr as _safe_cagr,
+    hover_template as _hover, best_gain as _best_gain,
+)
+from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces local builder)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -197,39 +204,8 @@ def _personal_data_section(
 
 # ── Helpers (defined before sidebar so they're available everywhere) ───────────
 
-def _fmt(v: float) -> str:
-    neg = v < 0; av = abs(v)
-    if av >= 1_000_000: s = f"£{av/1_000_000:.2f}m"
-    elif av >= 1_000:   s = f"£{av/1_000:.0f}k"
-    else:               s = f"£{av:.0f}"
-    return f"-{s}" if neg else s
-
-def _fmt_delta(d: float) -> str:
-    return ("+" if d >= 0 else "") + _fmt(d)
-
-def _clean_note(row) -> str:
-    """Extract a row's note as a clean string. Treats NaN, 'nan', and blanks as empty."""
-    if "note" not in row.index:
-        return ""
-    val = row.get("note")
-    if val is None or (isinstance(val, float) and pd.isna(val)):
-        return ""
-    s = str(val).strip()
-    return "" if s.lower() == "nan" else s
-
-# CAGR is only meaningful if the starting balance is non-trivial.
-# Tiny starts (e.g. £100 → £8k) compute as 100%+ CAGR but tell us nothing useful.
-_CAGR_MIN_START = 5_000
-
-def _safe_cagr(start_nw: float, end_nw: float, years: float) -> float | None:
-    """Return CAGR if it would be meaningful, else None."""
-    if years is None or years <= 0.5:
-        return None
-    if start_nw is None or end_nw is None:
-        return None
-    if start_nw < _CAGR_MIN_START or end_nw <= 0:
-        return None
-    return (end_nw / start_nw) ** (1 / years) - 1
+# Formatting helpers (_fmt, _fmt_delta, _clean_note, _safe_cagr) and small chart utils
+# (_hover, _best_gain) have moved to charts/_helpers.py — imported at top of file.
 
 
 # Initialised here so sidebar goal/savings calculator can reference them safely
@@ -313,62 +289,73 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Goal / FIRE calculator ─────────────────────────────────────────────────
-    with st.expander("Goal calculator"):
-        st.caption("Set a net worth target and see your trajectory toward it.")
-        goal_amount = st.number_input("Target net worth (£)", min_value=0,
-                                      max_value=10_000_000, value=500_000, step=10_000,
-                                      format="%d", key="goal_amount")
-        fire_spending = st.number_input("Annual retirement spending (£, for FIRE estimate)",
-                                        min_value=0, max_value=500_000, value=30_000,
-                                        step=1_000, format="%d", key="fire_spend")
+    # ── Wealth goals: target + FIRE ────────────────────────────────────────────
+    with st.expander("Wealth goal & FIRE number"):
+        st.caption("Set net worth targets to track progress against.")
+        goal_amount = st.number_input(
+            "Target net worth (£)", 0, 10_000_000, 500_000, 10_000,
+            format="%d", key="goal_amount",
+            help="A custom net worth milestone you're working toward.",
+        )
+        fire_spending = st.number_input(
+            "Annual retirement spending (£)", 0, 500_000, 30_000, 1_000,
+            format="%d", key="fire_spend",
+            help="Used to compute your FIRE number (25× spending, 4% SWR).",
+        )
         fire_number = fire_spending * 25  # 4% safe withdrawal rate
         st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
 
-        st.markdown("**Pension pot estimator**")
-        retirement_age = st.number_input("Target retirement age", 50, 80, 65, 1, key="ret_age")
-        pension_income = st.number_input("Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
-                                          format="%d", key="pen_income")
-        # 2026/27 full new State Pension projected: ~£12,400/yr (uprated by triple lock)
-        state_pension  = st.number_input("Expected state pension (£/yr)", 0, 20_000, 12_400, 100,
-                                          format="%d", key="state_pension",
-                                          help="Full new State Pension 2025/26: £11,973/yr; "
-                                               "2026/27 estimate ~£12,400/yr (triple-lock).")
+    # ── Retirement income & pension pot ────────────────────────────────────────
+    with st.expander("Retirement income & pension pot"):
+        retirement_age = st.number_input(
+            "Target retirement age", 50, 80, 65, 1, key="ret_age",
+        )
+        pension_income = st.number_input(
+            "Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
+            format="%d", key="pen_income",
+        )
+        # 2026/27 full new State Pension projected: ~£12,400/yr (triple-lock uprated)
+        state_pension = st.number_input(
+            "Expected state pension (£/yr)", 0, 20_000, 12_400, 100,
+            format="%d", key="state_pension",
+            help="Full new State Pension 2025/26: £11,973/yr; "
+                 "2026/27 estimate ~£12,400/yr (triple-lock).",
+        )
         if retirement_age and pension_income:
             private_needed = max(0, pension_income - state_pension)
-            # Annuity rate approximation: gilt-linked rates have been ~6.5% at age 65
-            # in late 2024 / 2025. Use 6.5% baseline with small age adjustment.
+            # Annuity rate: gilt-linked rates ~6.5% at age 65 in late 2024/25
             annuity_rate = 0.065 + (retirement_age - 65) * 0.0025
             pot_needed   = private_needed / max(annuity_rate, 0.02)
             st.caption(
                 f"Private pension pot needed: **{_fmt(pot_needed)}** "
                 f"(for £{private_needed:,}/yr net of state pension, "
                 f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age}). "
-                f"Annuity rates from a single-life level annuity quote — drawdown can be more flexible."
+                f"Single-life level annuity assumption — drawdown can be more flexible."
             )
 
-        st.markdown("**Savings rate calculator**")
+    # ── Savings rate calculator ────────────────────────────────────────────────
+    with st.expander("Savings rate calculator"):
+        st.caption("How much of your income do you need to save to hit each target?")
         annual_income = st.number_input(
             "Annual gross income (£)", 0, 1_000_000, 50_000, 1_000,
             format="%d", key="annual_income",
-            help="Used to estimate required savings rate to reach your goal."
         )
         if annual_income > 0 and latest_nw is not None and latest_nw > 0:
-            for tgt_label, tgt_val in [("goal", goal_amount), ("FIRE number", fire_number)]:
-                if tgt_val > latest_nw:
-                    # At current CAGR: years to target; savings needed = (target - compound_growth) / years
-                    # Simplified: use CAGR from personal data if available
-                    sorted_pdf2 = personal_plot_df.sort_values("age") if personal_plot_df is not None else None
-                    if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
-                        fs = float(sorted_pdf2.iloc[0]["net_worth"])
-                        asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
-                        if asp > 0.5 and fs > 0 and latest_nw > 0:
-                            cagr_s = (latest_nw / fs) ** (1 / asp) - 1
-                            if cagr_s > 0:
+            sorted_pdf2 = personal_plot_df.sort_values("age") if personal_plot_df is not None else None
+            if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
+                fs  = float(sorted_pdf2.iloc[0]["net_worth"])
+                asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
+                if asp > 0.5 and fs > 0 and latest_nw > 0:
+                    cagr_s = (latest_nw / fs) ** (1 / asp) - 1
+                    if cagr_s > 0:
+                        for tgt_label, tgt_val in [
+                            ("goal", goal_amount),
+                            ("FIRE number", fire_number),
+                        ]:
+                            if tgt_val > latest_nw:
                                 yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
                                 if 0 < yrs_s < 60:
                                     savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
-                                    # savings_needed may be negative if compound growth alone gets there
                                     savings_rate = max(0, savings_needed) / annual_income * 100
                                     st.caption(
                                         f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
@@ -376,6 +363,12 @@ with st.sidebar:
                                         f"save **{savings_rate:.0f}%** of income "
                                         f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
                                     )
+                    else:
+                        st.caption("Your historical CAGR is non-positive — cannot project savings rate from compound growth alone.")
+            else:
+                st.caption("Add at least 2 personal data points to enable the savings rate projection.")
+        elif latest_nw is None:
+            st.caption("Add your net worth data above to enable this calculator.")
 
     st.divider()
 
@@ -421,20 +414,7 @@ partner_plot_df  = _prep_plot_df(partner_df)
 def _pct_series(pct: str) -> pd.DataFrame:
     return benchmark[benchmark["percentile"] == pct].sort_values("age")
 
-def _hover(label: str) -> str:
-    return f"<b>{label}</b><br>Age %{{x}}<br>£%{{y:,.0f}}<extra></extra>"
-
-def _best_gain(pdf: pd.DataFrame) -> tuple[float, float, float] | None:
-    """Return (age_at_gain, gain_amount, pct_gain) for the biggest single YoY jump."""
-    if len(pdf) < 2:
-        return None
-    s = pdf.sort_values("age")
-    gains = s["net_worth"].diff()
-    pct_gains = s["net_worth"].pct_change()
-    idx = gains.idxmax()
-    if pd.isna(idx):
-        return None
-    return float(s.loc[idx, "age"]), float(gains[idx]), float(pct_gains[idx] * 100)
+# _hover and _best_gain now imported from charts/_helpers.py
 
 
 # ── Main benchmark + personal chart ──────────────────────────────────────────
@@ -1123,33 +1103,7 @@ def build_distribution_chart(
     return fig
 
 
-# ── Asset class chart ─────────────────────────────────────────────────────────
-
-def build_asset_class_chart(series: pd.DataFrame) -> go.Figure:
-    fig = go.Figure()
-    for component in ["Physical", "Financial", "Pension", "Property"]:
-        sub = series[series["component"] == component].sort_values("age")
-        fig.add_trace(go.Scatter(
-            x=sub["age"], y=sub["value_gbp"],
-            mode="lines", stackgroup="one", name=component,
-            line=dict(width=0.5, color=ASSET_COLOURS[component]),
-            hovertemplate=(
-                f"<b>{component}</b><br>Age %{{x}}<br>"
-                "£%{y:,.0f} (~%{customdata:.0f}%)<extra></extra>"
-            ),
-            customdata=sub["value_pct"],
-        ))
-    fig.update_layout(
-        title=dict(text="Median wealth composition by age (approx, WAS Wave 7)",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
-        yaxis=dict(title="Net worth (£, nominal 2019)", tickprefix="£",
-                   tickformat=",.0f", gridcolor="#e2e8f0"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=320, margin=dict(l=70, r=80, t=60, b=50), hovermode="x unified",
-    )
-    return fig
+# build_asset_class_chart moved to charts/asset_class.py — imported at top of file.
 
 
 # ── Summary statistics table ──────────────────────────────────────────────────
@@ -2187,7 +2141,8 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
 if show_asset_class:
     asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
     if len(asset_series):
-        ac_fig = build_asset_class_chart(asset_series)
+        ac_price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR}"
+        ac_fig = build_asset_class_chart(asset_series, price_label=ac_price_label)
 
         # Overlay user's own composition as annotation lines if latest net worth known
         if personal_asset_split and latest_nw and latest_nw > 0:
