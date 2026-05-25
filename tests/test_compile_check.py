@@ -8,10 +8,7 @@ writing a temp file with a deliberate SyntaxError and running the script.
 from __future__ import annotations
 import subprocess
 import sys
-import textwrap
 from pathlib import Path
-
-import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,7 +25,7 @@ def test_compile_check_passes_on_clean_tree():
     assert "compile cleanly" in result.stdout
 
 
-def test_compile_check_detects_syntax_error(tmp_path: Path):
+def test_compile_check_detects_syntax_error():
     """
     Place a deliberately broken .py file at the project root, run the script,
     and verify it exits 1 with a useful error message.
@@ -53,7 +50,7 @@ def test_compile_check_detects_syntax_error(tmp_path: Path):
             bad_file.unlink()
 
 
-def test_compile_check_skips_cache_dirs(tmp_path: Path):
+def test_compile_check_skips_cache_dirs():
     """
     A broken .py file inside __pycache__ or .pytest_cache must NOT trigger
     a failure (those are tooling-managed and we don't author them).
