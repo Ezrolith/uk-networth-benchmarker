@@ -1,0 +1,132 @@
+"""
+Tests for utils/data_loader.py — CSV parsing, URL encode/decode, validation warnings.
+"""
+from __future__ import annotations
+import io
+import sys
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from utils.data_loader import (  # noqa: E402
+    parse_personal_csv,
+    encode_personal_data,
+    decode_personal_data,
+    load_was_data,
+    load_asset_class_data,
+)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CSV parsing
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_parse_basic_csv():
+    csv = "year,age,net_worth\n2020,28,12000\n2024,32,52000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert len(df) == 2
+    assert list(df.columns)[:3] == ["year", "age", "net_worth"]
+    assert df.iloc[0]["year"] == 2020
+    assert df.iloc[1]["net_worth"] == 52000.0
+
+
+def test_parse_excel_date_year_extracts_year():
+    """Excel often auto-formats a year column as dd/mm/yyyy. Parser must extract the year."""
+    csv = "year,age,net_worth\n01/05/2024,32,52000\n01/05/2025,33,65000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert df.iloc[0]["year"] == 2024
+    assert df.iloc[1]["year"] == 2025
+
+
+def test_parse_accepts_decimal_age():
+    csv = "year,age,net_worth\n2024,32.5,52000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert df.iloc[0]["age"] == pytest.approx(32.5)
+
+
+def test_parse_optional_note_column():
+    csv = "year,age,net_worth,note\n2024,32,52000,bought flat\n2025,33,65000,\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "note" in df.columns
+    assert df.iloc[0]["note"] == "bought flat"
+    assert df.iloc[1]["note"] == ""
+
+
+def test_parse_missing_required_column_raises():
+    csv = "year,age\n2024,32\n"
+    with pytest.raises(ValueError, match="missing required columns"):
+        parse_personal_csv(io.StringIO(csv))
+
+
+def test_birth_year_warning_when_inconsistent():
+    """Implied birth year varying by >3 yrs should trigger a warning attribute."""
+    csv = "year,age,net_worth\n2015,25,5000\n2020,35,50000\n2025,41,183000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "birth_year_warning" in df.attrs
+
+
+def test_no_warning_for_consistent_data():
+    csv = "year,age,net_worth\n2015,28,5000\n2020,33,50000\n2025,38,183000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "birth_year_warning" not in df.attrs
+
+
+def test_excel_year_artifact_warning():
+    """Years before 1940 are flagged as likely Excel date-format artefacts."""
+    csv = "year,age,net_worth\n1905,32,5000\n2024,32,5000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "excel_year_warning" in df.attrs
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# URL encoding round-trip
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_encode_decode_roundtrip():
+    original = pd.DataFrame({
+        "year":      [2020, 2023, 2026],
+        "age":       [31.0, 34.0, 37.5],
+        "net_worth": [18500.0, 90000.0, 183871.5],
+    })
+    token = encode_personal_data(original)
+    assert isinstance(token, str)
+    assert len(token) < 500  # compression should keep tokens small
+    restored = decode_personal_data(token)
+    pd.testing.assert_frame_equal(
+        restored[["year", "age", "net_worth"]].reset_index(drop=True),
+        original.reset_index(drop=True),
+        check_dtype=False,
+    )
+
+
+def test_encoded_token_is_url_safe():
+    df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0]})
+    token = encode_personal_data(df)
+    # URL-safe base64 uses '-' and '_' instead of '+' and '/'
+    assert "+" not in token
+    assert "/" not in token
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Static data loaders
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_load_was_data_schema():
+    df = load_was_data()
+    assert {"age_band", "band_midpoint", "percentile", "value", "with_pension"}.issubset(df.columns)
+    assert set(df["percentile"].unique()) == {"p25", "p50", "p75"}
+    assert df["with_pension"].dtype == bool
+
+
+def test_load_asset_class_data_schema():
+    df = load_asset_class_data()
+    needed = {"age_band", "band_midpoint", "property_pct", "pension_pct",
+              "financial_pct", "physical_pct"}
+    assert needed.issubset(df.columns)
+    # Component shares should sum to 100 per row (within rounding)
+    pct_sum = df[["property_pct", "pension_pct", "financial_pct", "physical_pct"]].sum(axis=1)
+    for v in pct_sum:
+        assert v == pytest.approx(100, abs=1)
