@@ -60,6 +60,7 @@ from utils.uk_tax        import (  # noqa: F401
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
     iht_payable, IHT_BANDS, IHT_STANDARD_RATE,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
+    STATE_PENSION_AGE,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -1177,7 +1178,7 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         _dd_pots = [_dd_pot]
         _dd_runout_age = None
         _max_sim_age = 100
-        _state_pen_age = 67  # planned for cohorts retiring 2028+
+        _state_pen_age = STATE_PENSION_AGE  # imported from utils/uk_tax.py
 
         for age in range(dd_start_age, _max_sim_age):
             # Annual withdrawal in real terms (already adjusted because we work in real £)

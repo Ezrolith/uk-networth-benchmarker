@@ -19,7 +19,7 @@ from utils.uk_tax import (  # noqa: E402
     iht_payable,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD, TAPER_FLOOR,
     NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, IHT_STANDARD_RATE, IHT_REDUCED_RATE,
-    IHT_BANDS,
+    IHT_BANDS, STATE_PENSION_AGE, STATE_PENSION_2026_27,
 )
 
 
@@ -219,3 +219,19 @@ def test_iht_payable_zero_estate_safe():
     taxable, due, after = iht_payable(0, threshold=NIL_RATE_BAND)
     assert taxable == due == 0
     assert after == 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# State pension constants
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_state_pension_age_currently_67():
+    """SPA for cohorts retiring 2028+ is 67. Bump this assertion when it changes."""
+    assert STATE_PENSION_AGE == 67
+
+
+def test_state_pension_amount_realistic():
+    """2026/27 estimate should be in a plausible band given recent triple-lock uprating."""
+    # 2024/25 was £11,502. 2025/26 was £11,973. 2026/27 estimate ~£12,400.
+    # If this assertion fails because the figure was refreshed, just update it.
+    assert 11_500 <= STATE_PENSION_2026_27 <= 13_500

@@ -27,6 +27,9 @@ PENSION_AA            = 60_000   # Standard pension Annual Allowance
 TAPER_THRESHOLD       = 260_000  # Adjusted income above which taper begins
 TAPER_FLOOR           = 10_000   # Minimum tapered AA (reached at £360k adjusted income)
 STATE_PENSION_2026_27 = 12_400   # Full new State Pension estimate for 2026/27 (£/yr)
+STATE_PENSION_AGE      = 67      # SPA for cohorts retiring 2028+; rises to 68 from 2044
+                                 # (proposed; could be brought forward). 66 for cohorts
+                                 # who already qualified pre-2028.
 
 # ── IHT (Inheritance Tax) thresholds 2025/26 ───────────────────────────────────
 # Both nil-rate bands are frozen at these values until April 2030.
