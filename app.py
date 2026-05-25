@@ -1619,7 +1619,8 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
     with st.expander("Estate / inheritance tax (IHT) exposure"):
         st.caption(
             "Estimates your approximate UK inheritance tax (IHT) liability based on your current "
-            "net worth. Indicative only — not tax advice. Rules as of 2024/25."
+            "net worth. Indicative only — not tax advice. Rules as of 2025/26 "
+            "(nil-rate bands frozen until April 2030)."
         )
         iht_cols = st.columns(3)
         with iht_cols[0]:
