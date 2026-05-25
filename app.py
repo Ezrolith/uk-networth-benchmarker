@@ -1584,20 +1584,54 @@ with st.expander("Percentile landscape heatmap"):
         "Your trajectory is overlaid in orange."
     )
 
-# ── Share link ────────────────────────────────────────────────────────────────
+# ── Share / export your data ──────────────────────────────────────────────────
 
 if personal_plot_df is not None and len(personal_plot_df) > 0:
-    with st.expander("Share your chart"):
-        try:
-            token = encode_personal_data(personal_plot_df)
-            share_url = f"https://uk-networth-benchmarker.streamlit.app/?d={token}"
-            st.text_input(
-                "Copy this link (data encoded in the URL — nothing stored on any server):",
-                value=share_url, key="share_url_box",
+    with st.expander("Share / export your data"):
+        # Two columns: shareable URL on the left, CSV download on the right
+        share_col1, share_col2 = st.columns([3, 2])
+
+        with share_col1:
+            st.markdown("**Shareable link**")
+            try:
+                token = encode_personal_data(personal_plot_df)
+                share_url = f"https://uk-networth-benchmarker.streamlit.app/?d={token}"
+                st.text_input(
+                    "Data is encoded in the URL — nothing is stored on any server:",
+                    value=share_url, key="share_url_box",
+                )
+                st.caption(
+                    "Anyone with this link sees your figures. Share only with people you trust."
+                )
+            except Exception:
+                st.info("Share link unavailable — data may be too large to encode.")
+
+        with share_col2:
+            st.markdown("**Download as CSV**")
+            export_df = personal_plot_df[["year", "age", "net_worth"]].copy()
+            if "note" in personal_plot_df.columns:
+                export_df["note"] = personal_plot_df["note"]
+            csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+            from datetime import datetime as _dt
+            fname = f"my_net_worth_{_dt.now():%Y-%m-%d}.csv"
+            st.download_button(
+                "Download my net worth history",
+                csv_bytes, fname, "text/csv",
+                use_container_width=True,
+                help="Save what you've entered (manual entries or merged CSV) "
+                     "for backup or to re-upload later.",
             )
-            st.caption("Anyone with this link can see your figures. Share only with people you trust.")
-        except Exception:
-            st.info("Share link unavailable — data may be too large to encode.")
+            if partner_plot_df is not None and len(partner_plot_df) > 0:
+                p_export = partner_plot_df[["year", "age", "net_worth"]].copy()
+                if "note" in partner_plot_df.columns:
+                    p_export["note"] = partner_plot_df["note"]
+                p_csv = p_export.to_csv(index=False).encode("utf-8")
+                p_fname = f"partner_net_worth_{_dt.now():%Y-%m-%d}.csv"
+                st.download_button(
+                    "Download partner's history",
+                    p_csv, p_fname, "text/csv",
+                    use_container_width=True,
+                )
 
 # ── Decile table ─────────────────────────────────────────────────────────────
 
