@@ -8,8 +8,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ### New features (high value, moderate effort)
 - [ ] **Tax wrapper tracker** — ISA / LISA / Pension AA utilisation by year. Important for UK planning; needs new sidebar UI.
-- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations.
-- [ ] **Bond/equity glide path option** — Monte Carlo currently uses constant mean/sigma; let the user enter a glide path (e.g. 100% equity to age 50, then de-risking to 60/40 by 65).
+- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
@@ -142,11 +141,13 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] `charts/main_figure.py` — build_main_figure fully extracted; all dependencies (benchmark, personal_plot_df, partner_plot_df, colours, basis, wealth_component, age range, latest_*, etc.) passed explicitly. Migration complete.
 - [x] **Sidebar Goal calculator split** — was one bundled expander with four sub-tools; now three focused expanders: "Wealth goal & FIRE number", "Retirement income & pension pot", "Savings rate calculator". Savings calculator gives helpful guidance when no personal data or non-positive CAGR.
 
-**New feature: Monte Carlo projection (v2.6):**
+**New feature: Monte Carlo (accumulation + decumulation) — v2.6:**
 - [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.
 - [x] `charts/monte_carlo.py` — band envelope (P10-P90 outer, P25-P75 inner) + median path + optional sample paths + target line.
 - [x] App expander "Monte Carlo projection (stochastic returns)": sliders for expected return, volatility, target age, monthly contribution, target NW, number of sample paths. Outputs P10/P50/P90 final values + probability of reaching target.
-- [x] 15 dedicated tests in tests/test_monte_carlo.py — shape, seeding determinism, mean ≈ FV at low vol, zero-vol determinism, contributions, envelope ordering, probability calculations, chart smoke tests.
+- [x] **Equity/bond glide path option**: linear glide from start_equity_pct to end_equity_pct. Asset class assumptions: equity 5.5%/18%, bonds 1.5%/6%, equity-bond correlation 0.10. Portfolio variance includes the covariance term. UI radio toggles between fixed N(μ,σ) and glide-path mode.
+- [x] **Stochastic drawdown** (inside the existing Retirement drawdown expander): 1,000 simulations with random returns of the pot during retirement. Shows probability of surviving to each age + colour-coded verdict (≥85% comfortable, ≥60% warning, <60% high risk). State pension correctly reduces withdrawal need from age 67.
+- [x] 24 dedicated tests in tests/test_monte_carlo.py — shape, seeding determinism, mean ≈ FV at low vol, zero-vol determinism, contributions, envelope ordering, probability calculations, glide-path endpoints/monotonicity/single-year, portfolio_moments equity/bond/60-40, glide reduces P10-P90 spread, glide ignores mean/std args, chart smoke tests.
 
 ### Session 6 (May 2026) — retirement planning push (v2.5)
 - [x] **Retirement income forecast** (new) — combines projected NW at retirement, pension share, state pension, annuity rate, and 4% drawdown into a single annual-income view with target comparison. In-app expander + PDF page.
