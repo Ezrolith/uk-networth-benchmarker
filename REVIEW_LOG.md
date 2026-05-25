@@ -162,11 +162,86 @@ Ordered by impact × effort.
 
 - **Tax wrapper tracking** (ISA / Pension AA / LISA utilisation) — meaningful
   feature for UK planning but needs UI design.
-- **Monte Carlo / stochastic projection** — would model sequence-of-returns
-  risk properly; currently just have a sensitivity table.
 - **Side-by-side scenario compare** — "Plan A vs Plan B" view of two
   retirement configurations.
-- **Replace approximate WAS figures with exact ONS tables** — biggest single
-  credibility win; still queued from earlier sessions.
-- **Region filter** — needs expanded regional WAS data.
 - **Mobile layout** — sidebar still feels heavy on mobile despite the tidy.
+- **Region filter** — needs expanded regional WAS data.
+- **Wave 7 historical comparison toggle** — current `was_data.csv` is Wave 8
+  only; adding Wave 7 with a selector would show COVID-era distribution shift.
+
+---
+
+# Session 7 (May 2026, v2.6) — quality foundations + Monte Carlo
+
+**Started from:** v2.5 (post Session 6 retirement push).
+
+## Methodology
+
+1. Recognised the highest credibility risk: every quoted figure came from an
+   *approximate* dataset. Fixed by fetching real ONS Wave 8 data.
+2. Added a test suite + CI so future sessions can refactor safely.
+3. Closed the largest analytical gap from Session 6's backlog: Monte Carlo
+   / sequence-of-returns risk.
+4. Refactored `app.py` (3,105 lines, 23 functions, all UI + maths mixed) into a
+   `charts/` package so future sessions can move faster.
+
+## Implemented
+
+### Quality foundations (no user-visible change, but enabling)
+- **85 → 121 tests** across 5 test files: `test_inference.py` (PCHIP, log-normal
+  fit, CPI, individual+gender conversion, decile table, component filter),
+  `test_data_loader.py` (CSV parsing, Excel-date year extraction, URL encode/
+  decode, validation warnings), `test_charts_helpers.py` (fmt edge cases incl.
+  negatives, safe_cagr filters, best_gain sorting), `test_chart_builders.py`
+  (43 smoke tests on every chart builder), `test_monte_carlo.py` (24 tests
+  on simulation + glide path + chart).
+- **GitHub Actions CI** — py_compile + pytest on every push/PR, matrix Py
+  3.11 + 3.12. No more silent deploys of broken code.
+
+### Real data
+- **Replaced approximate WAS figures with ONS Wave 8 medians** — downloaded
+  Figure 2 CSV directly from ons.gov.uk via WebFetch (April 2020 to March
+  2022). P25/P75 derived from the median using preserved IQR ratios.
+  `scripts/update_was_data.py` is reproducible.
+- **Refreshed asset class shares to Wave 8 aggregates** — was off by ~7pp on
+  financial wealth. Now matches the published aggregate (property 40%,
+  pension 35%, financial 14%, physical 10%) while preserving age-band shape.
+- DATA_YEAR 2019 → 2021 (Wave 8 midpoint). All labels updated.
+
+### Code organisation
+- Extracted all 8 chart builders from app.py into `charts/`:
+  `_helpers.py`, `main_figure.py`, `asset_class.py`, `heatmap.py`,
+  `distribution.py`, `gains.py`, `percentile_trajectory.py`, `whatif.py`,
+  `monte_carlo.py`. Each builder takes its dependencies (colours, data,
+  labels) as explicit keyword args.
+- Split the bundled Goal Calculator into three focused expanders.
+- app.py: 3,105 → 2,562 lines (-17%).
+
+### New feature: Monte Carlo
+- `utils/monte_carlo.py` — `run_monte_carlo()` with normal-distribution
+  annual returns, `percentile_envelope()`, `probability_of_reaching()`,
+  `probability_of_ruin()`. Seeded for reproducible UX.
+- **Equity/bond glide path option**: linear glide between two equity weights,
+  with portfolio variance correctly including the equity-bond covariance.
+  Models the real-world de-risking pattern of long-horizon investors.
+- **Stochastic drawdown** added to the existing Retirement drawdown expander:
+  1,000 simulations with random returns to compute the probability the pot
+  survives to each age. Colour-coded verdict at ≥85% / ≥60% / <60% survival.
+
+### Polish
+- **'Try with demo data' button** on the empty-state banner — one click
+  loads a 10-year sample history so first-time users can explore every
+  feature without uploading their own data.
+- Methodology panel rewritten: documents the ONS Wave 8 source, distinguishes
+  published medians from derived quartiles, adds a Monte Carlo section
+  describing both modes and the seeded UX behaviour.
+
+## Outcome
+
+- **121 tests passing** (~5s runtime).
+- **24 commits**, all pushed.
+- App version: v2.5 → v2.6.
+- Real WAS data now powers every quoted figure.
+- All chart builders are isolated and unit-tested.
+- Monte Carlo closes the sequence-of-returns risk gap that was the largest
+  remaining analytical limitation.

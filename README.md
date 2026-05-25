@@ -40,10 +40,16 @@ Open http://localhost:8501 in your browser.
 - Percentile trajectory chart over time
 - Year-on-year gains (auto-aggregates monthly entries to annual)
 - What-if projection with three CAGR scenarios + monthly savings
+- **Monte Carlo projection** with stochastic returns (fixed N(μ,σ) or
+  equity/bond glide path); shows P10/P50/P90 outcomes + probability of
+  reaching target
+- **Stochastic drawdown survival** — probability the pot lasts to each age
+  in retirement under random returns; closes sequence-of-returns risk gap
 - Wealth-distribution density curve at any age
 - Decile table at user's age
 - Milestone tracker (£10k → £1m) with CAGR-based ETAs
 - Goal & FIRE calculators with progress bars
+- Retirement income forecast (pension annuity + drawdown + state pension)
 - IHT exposure calculator (configurable thresholds and reliefs)
 - Data-quality score for the personal history
 
@@ -68,9 +74,20 @@ Download the template from the sidebar.
 
 ## Data source
 
-ONS Wealth and Assets Survey Wave 7 (2018–2020), Great Britain. The figures in
-`data/was_data.csv` are approximations of published WAS percentile tables. For
-research use, replace with primary ONS data tables.
+**ONS Wealth and Assets Survey Wave 8 (April 2020 – March 2022), Great Britain.**
+
+`data/was_data.csv` uses the actual ONS-published median household wealth by
+age band (from the Wealth in Great Britain bulletin, Figure 2). The 25th and
+75th percentiles by age band are derived from the published median using
+age-specific IQR ratios. Whole-population P25/P50/P75 (Table 2.4: £70,500 /
+£293,700 / £662,100) cross-check the IQR approach. See the in-app
+methodology panel for full details.
+
+Reproducible refresh:
+```bash
+python scripts/update_was_data.py
+python scripts/update_asset_class_data.py
+```
 
 ## Deploy to Streamlit Community Cloud
 
@@ -82,20 +99,41 @@ research use, replace with primary ONS data tables.
 ## File structure
 
 ```
-├── app.py                    Main Streamlit application
+├── app.py                          Main Streamlit application
 ├── requirements.txt
 ├── data/
-│   ├── was_data.csv          WAS Wave 7 benchmark data (tidy format)
-│   ├── was_asset_class.csv   Approximate WAS component shares by age band
+│   ├── was_data.csv                Real ONS Wave 8 medians + derived quartiles
+│   ├── was_asset_class.csv         Wave 8-aligned component shares
 │   └── personal_template.csv
+├── charts/                         Chart builders (extracted from app.py)
+│   ├── _helpers.py                 fmt, hover_template, best_gain, etc.
+│   ├── main_figure.py              The main benchmark + overlay chart
+│   ├── asset_class.py              Stacked composition chart
+│   ├── heatmap.py                  Percentile landscape
+│   ├── distribution.py             Log-normal density at a chosen age
+│   ├── gains.py                    Gains / velocity / cumulative
+│   ├── percentile_trajectory.py    Percentile-over-time chart
+│   ├── whatif.py                   Deterministic CAGR projection
+│   └── monte_carlo.py              Stochastic projection (bands + paths)
 ├── utils/
-│   ├── inference.py          Interpolation, individual conversion, CPI,
-│                              log-normal percentile model, asset-class series
-│   └── data_loader.py        CSV loading and share-link encode/decode
-├── .streamlit/
-│   └── config.toml           Blue theme
-├── CLAUDE.md                 Project knowledge file
-└── NEXT_STEPS.md             Backlog
+│   ├── inference.py                Interpolation, log-normal percentiles,
+│                                    individual/gender conversion, CPI
+│   ├── monte_carlo.py              Simulation engine + glide path
+│   └── data_loader.py              CSV loading + share-link encode/decode
+├── tests/                          121 tests, ~5s runtime
+│   ├── test_inference.py
+│   ├── test_data_loader.py
+│   ├── test_charts_helpers.py
+│   ├── test_chart_builders.py
+│   └── test_monte_carlo.py
+├── scripts/                        Data refresh scripts
+│   ├── update_was_data.py
+│   └── update_asset_class_data.py
+├── .github/workflows/ci.yml        py_compile + pytest on every push
+├── .streamlit/config.toml          Blue theme
+├── CLAUDE.md                       Project knowledge file
+├── REVIEW_LOG.md                   Session-by-session audit notes
+└── NEXT_STEPS.md                   Backlog
 ```
 
 ## Current version
