@@ -30,6 +30,7 @@ from charts._helpers import (
     hover_template as _hover, best_gain as _best_gain,
 )
 from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces local builder)
+from charts.heatmap     import build_heatmap            # noqa: F401  (replaces local builder)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -953,73 +954,7 @@ def compute_data_quality(pdf: pd.DataFrame) -> dict:
     return {"score": min(score, 100), "notes": notes, "n": n, "span": age_span}
 
 
-# ── Percentile heatmap ───────────────────────────────────────────────────────
-
-def build_heatmap(benchmark: pd.DataFrame) -> go.Figure:
-    """
-    Colour-coded grid: age (x) × net worth level (y), shaded by which
-    percentile band the cell falls in. Gives an instant read of the
-    wealth landscape across all ages.
-    """
-    from utils.inference import derive_tail_percentiles
-
-    tails = derive_tail_percentiles(benchmark)
-    all_bm = pd.concat([benchmark, tails]).copy()
-
-    ages = sorted(all_bm["age"].unique())
-    pct_levels = ["p10", "p25", "p50", "p75", "p90"]
-    labels     = ["10th", "25th", "50th (median)", "75th", "90th"]
-    colours    = ["#eff6ff", "#bfdbfe", "#93c5fd", "#3b82f6", "#1d4ed8"]
-
-    fig = go.Figure()
-
-    prev_vals = None
-    for i, (pct, label, colour) in enumerate(zip(pct_levels, labels, colours)):
-        pct_data = all_bm[all_bm["percentile"] == pct].sort_values("age")
-        if len(pct_data) == 0:
-            continue
-        curr_vals = [float(pct_data[pct_data["age"] == a]["value"].iloc[0])
-                     if len(pct_data[pct_data["age"] == a]) > 0 else None for a in ages]
-
-        if prev_vals:
-            fig.add_trace(go.Scatter(
-                x=list(ages) + list(reversed(ages)),
-                y=curr_vals + list(reversed(prev_vals)),
-                fill="toself",
-                fillcolor=colour,
-                line=dict(width=0),
-                name=label,
-                hoverinfo="skip",
-                showlegend=True,
-            ))
-        prev_vals = curr_vals
-
-    # User's trajectory
-    if personal_plot_df is not None and len(personal_plot_df) > 0:
-        pdf = personal_plot_df.sort_values("age")
-        fig.add_trace(go.Scatter(
-            x=pdf["age"], y=pdf["net_worth"],
-            mode="lines+markers",
-            line=dict(color=COLOURS["person"], width=2.5),
-            marker=dict(color=COLOURS["person"], size=7),
-            name="Your net worth",
-            hovertemplate="Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
-        ))
-
-    price_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
-    fig.update_layout(
-        title=dict(text=f"Wealth percentile landscape by age ({price_note})",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", range=[15, 86], dtick=5, gridcolor="#e2e8f0"),
-        yaxis=dict(title=f"Net worth (£)", tickprefix="£", tickformat=",.0f",
-                   gridcolor="#e2e8f0"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
-                    font=dict(size=11)),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=380, margin=dict(l=70, r=40, t=60, b=50),
-        hovermode="x unified",
-    )
-    return fig
+# build_heatmap moved to charts/heatmap.py — imported at top of file.
 
 
 # ── Distribution histogram at user's age ─────────────────────────────────────
@@ -1862,7 +1797,15 @@ else:
 # ── Percentile heatmap ───────────────────────────────────────────────────────
 
 with st.expander("Percentile landscape heatmap"):
-    hm_fig = build_heatmap(benchmark)
+    hm_price = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
+    hm_fig = build_heatmap(
+        benchmark,
+        personal_plot_df=personal_plot_df,
+        partner_plot_df=partner_plot_df,
+        person_colour=COLOURS["person"],
+        partner_colour=COLOURS["partner"],
+        price_label=hm_price,
+    )
     st.plotly_chart(hm_fig, use_container_width=True, config=PLOTLY_CONFIG)
     st.caption(
         "Shaded bands show which percentile tier each wealth level belongs to at each age. "
