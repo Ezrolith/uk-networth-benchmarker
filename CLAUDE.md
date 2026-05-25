@@ -88,9 +88,13 @@ tests/
                           its target module. Catches the 2026-05-25 deploy
                           incident class of bug (app.py references X but
                           utils/uk_tax.py is stale) in CI.
+  test_requirements.py    4 tests verifying requirements.txt covers every
+                          third-party import in the codebase and is well-formed.
+                          Catches the other deploy failure mode (forgot to add
+                          a new dep to requirements.txt).
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (176 tests total, ~5s runtime)
+                          (180 tests total, ~5s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
