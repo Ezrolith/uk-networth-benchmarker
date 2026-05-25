@@ -1239,6 +1239,145 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             st.plotly_chart(sd_fig, use_container_width=True, config=PLOTLY_CONFIG)
 
 
+# ── UK tax wrapper utilisation tracker ────────────────────────────────────────
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    with st.expander("UK tax wrapper utilisation (ISA · LISA · Pension)"):
+        st.caption(
+            "Track how much of each year's UK tax-advantaged wrapper allowance you're using. "
+            "Pension annual allowance includes 3-year carryforward of unused capacity. "
+            "**Allowances as of 2025/26.** Indicative — not tax advice."
+        )
+
+        # 2025/26 allowances
+        ISA_ALLOWANCE  = 20_000
+        LISA_ALLOWANCE = 4_000      # counts against ISA allowance; max age 50
+        PENSION_AA     = 60_000     # standard annual allowance
+        TAPER_THRESHOLD_INCOME = 260_000  # taper kicks in over this (adjusted income)
+
+        tw_col1, tw_col2, tw_col3 = st.columns(3)
+        with tw_col1:
+            tw_isa = st.number_input(
+                "ISA contributed this year (£)", 0, 20_000, 0, 500, format="%d", key="tw_isa",
+                help="Cash, S&S, Innovative Finance and LISA combined — max £20k.",
+            )
+        with tw_col2:
+            tw_lisa = st.number_input(
+                "Of which LISA (£)", 0, 4_000, 0, 500, format="%d", key="tw_lisa",
+                help="LISA: max £4,000/yr, counts against ISA allowance. Only available "
+                     "if you're 18-50 and opened before age 40. Government 25% bonus.",
+            )
+        with tw_col3:
+            tw_pension = st.number_input(
+                "Pension contributions this year (£)", 0, 200_000, 0, 1_000,
+                format="%d", key="tw_pension",
+                help="All gross pension contributions across employer + personal pensions, "
+                     "salary sacrifice, and tax-relievable personal contributions.",
+            )
+
+        st.markdown("**Pension carryforward** (use unused allowance from the previous 3 years)")
+        cf_cols = st.columns(3)
+        with cf_cols[0]:
+            cf_3 = st.number_input("Unused 3 years ago (£)", 0, 60_000, 0, 1_000,
+                                   format="%d", key="cf_3")
+        with cf_cols[1]:
+            cf_2 = st.number_input("Unused 2 years ago (£)", 0, 60_000, 0, 1_000,
+                                   format="%d", key="cf_2")
+        with cf_cols[2]:
+            cf_1 = st.number_input("Unused 1 year ago (£)", 0, 60_000, 0, 1_000,
+                                   format="%d", key="cf_1")
+        carryforward = cf_1 + cf_2 + cf_3
+        effective_pension_allowance = PENSION_AA + carryforward
+
+        # Calculations
+        isa_remaining     = max(0, ISA_ALLOWANCE - tw_isa)
+        lisa_remaining    = max(0, LISA_ALLOWANCE - tw_lisa)
+        pension_remaining = max(0, effective_pension_allowance - tw_pension)
+
+        isa_pct     = tw_isa / ISA_ALLOWANCE * 100
+        lisa_pct    = tw_lisa / LISA_ALLOWANCE * 100
+        pension_pct = tw_pension / max(effective_pension_allowance, 1) * 100
+
+        # Headline metrics
+        st.markdown("")
+        st.markdown("**Utilisation this year**")
+        u_col1, u_col2, u_col3 = st.columns(3)
+        with u_col1:
+            st.metric(
+                "ISA",
+                f"{isa_pct:.0f}%",
+                delta=f"£{tw_isa:,} / £{ISA_ALLOWANCE:,}",
+                delta_color="off",
+                help=f"£{isa_remaining:,} remaining before 5 April.",
+            )
+            st.progress(min(tw_isa / ISA_ALLOWANCE, 1.0))
+        with u_col2:
+            st.metric(
+                "LISA (of ISA)",
+                f"{lisa_pct:.0f}%",
+                delta=f"£{tw_lisa:,} / £{LISA_ALLOWANCE:,}",
+                delta_color="off",
+                help=f"£{lisa_remaining:,} remaining. Government tops up 25% (up to £1k/yr).",
+            )
+            st.progress(min(tw_lisa / LISA_ALLOWANCE, 1.0))
+        with u_col3:
+            st.metric(
+                "Pension",
+                f"{pension_pct:.0f}%",
+                delta=f"£{tw_pension:,} / £{effective_pension_allowance:,}",
+                delta_color="off",
+                help=f"£{pension_remaining:,} remaining (includes £{carryforward:,} carryforward).",
+            )
+            st.progress(min(tw_pension / max(effective_pension_allowance, 1), 1.0))
+
+        # Smart recommendation banner
+        recs = []
+        if pension_remaining >= 5_000:
+            tax_relief_high = pension_remaining * 0.40  # higher rate
+            recs.append(
+                f"£{pension_remaining:,} pension headroom — adding it could save "
+                f"up to £{tax_relief_high:,.0f} in tax relief at 40% (or £{pension_remaining * 0.20:,.0f} at basic rate)."
+            )
+        if isa_remaining >= 1_000:
+            recs.append(
+                f"£{isa_remaining:,} ISA headroom — sheltered from CGT and dividend tax. "
+                f"Use it or lose it (no carryforward)."
+            )
+        if tw_lisa < LISA_ALLOWANCE and tw_lisa > 0:
+            recs.append(
+                f"£{lisa_remaining:,} LISA headroom — government adds 25% on top "
+                f"(up to £{lisa_remaining * 0.25:,.0f} this year)."
+            )
+
+        if recs:
+            st.info("**Suggestions:**\n\n" + "\n\n".join(f"- {r}" for r in recs), icon="💡")
+        elif tw_isa > 0 or tw_pension > 0 or tw_lisa > 0:
+            st.success(
+                "You've used all your immediate wrapper allowances for this tax year. "
+                "Consider building up carryforward for next year if you're earning above £60k.",
+                icon="✅",
+            )
+
+        # Summary table
+        st.markdown("**Annual allowance reference (2025/26)**")
+        ref = pd.DataFrame({
+            "Wrapper": ["ISA (total)", "  └─ Lifetime ISA", "Pension AA", "Pension AA + carryforward"],
+            "2025/26 limit": [
+                f"£{ISA_ALLOWANCE:,}",
+                f"£{LISA_ALLOWANCE:,}",
+                f"£{PENSION_AA:,}",
+                f"£{effective_pension_allowance:,}",
+            ],
+            "Notes": [
+                "Cash + S&S + IF + LISA combined",
+                "Max age 50; 25% government bonus",
+                "Tapered to £10k for adjusted income > £260k",
+                f"Includes £{carryforward:,} from prior 3 yrs",
+            ],
+        })
+        st.dataframe(ref, use_container_width=True, hide_index=True)
+
+
 # ── IHT / estate tax calculator ───────────────────────────────────────────────
 
 if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
@@ -1916,6 +2055,19 @@ now anchored to the real Wave 8 aggregate at the population level.
 ### P10 / P90
 
 Derived from the same log-normal model: `value = exp(mu + z×sigma)` where z = Phi⁻¹(0.10/0.90).
+
+### UK tax wrapper utilisation
+
+Tracks your contributions this tax year against:
+- **ISA total allowance** £20,000 (2025/26) — cash, S&S, Innovative Finance and LISA combined.
+- **Lifetime ISA** £4,000 — counts inside the ISA total; 25% government bonus added on top.
+- **Pension Annual Allowance** £60,000 — plus carryforward from unused allowance in the
+  previous 3 tax years. Tapered to £10k for adjusted income over £260k (not modelled).
+
+Progress bars and headroom show how much you have left to contribute before 5 April.
+Smart suggestions appear when headroom × marginal tax relief is material (>£1k pension,
+>£0 ISA/LISA). Indicative only — pension recycling rules, salary sacrifice mechanics,
+LISA age limits, and many other details are not modelled.
 
 ### Monte Carlo projection (stochastic returns)
 
