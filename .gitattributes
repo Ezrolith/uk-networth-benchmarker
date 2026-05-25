@@ -1,0 +1,37 @@
+# Git attributes — line-ending policy for the repo
+#
+# Background: this project is developed on Windows. Without rules, git's
+# autocrlf setting either:
+#   - Converts LF → CRLF on checkout (Windows default), which surfaces a
+#     warning on every commit if files were authored LF, or
+#   - Leaves files as-is, which means committed CRLF leaks into Streamlit
+#     Cloud (Linux) and can confuse heredoc/shebang handling.
+#
+# This file makes both ends well-defined: text files are LF in the repo,
+# rendered however the working copy wants them. Binary files are untouched.
+
+# Default: treat everything as text and normalise to LF in the repo
+* text=auto eol=lf
+
+# Explicit declarations for the file types we actually have
+*.py     text eol=lf
+*.md     text eol=lf
+*.csv    text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+*.txt    text eol=lf
+*.cfg    text eol=lf
+*.ini    text eol=lf
+*.sh     text eol=lf
+Makefile text eol=lf
+
+# Binary files: never convert
+*.xlsx   binary
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.pdf    binary
+*.ico    binary
