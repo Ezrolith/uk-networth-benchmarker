@@ -61,9 +61,14 @@ utils/
                           decile table, build_percentile_trajectory
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
-  uk_tax.py               UK 2025/26 tax wrapper rules: pension AA taper, ISA/LISA
-                          remaining, pension relief estimate, LISA bonus.
-                          All constants exported (ISA_ALLOWANCE, PENSION_AA, etc.)
+  uk_tax.py               All UK 2025/26 tax rules in one tested module:
+                          - Pension AA taper for £260k+ adjusted income
+                          - effective_pension_allowance (AA + carryforward)
+                          - isa_remaining / lisa_remaining (age-aware)
+                          - pension_relief_estimate / lisa_bonus
+                          - iht_payable + IHT_BANDS (4 scenarios up to £1m)
+                          - All constants exported (ISA_ALLOWANCE, PENSION_AA,
+                            NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, etc.)
 scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
@@ -74,9 +79,13 @@ tests/
   test_chart_builders.py  43 smoke tests on chart builders (includes main_figure)
   test_monte_carlo.py     24 tests on simulation, glide path, envelope,
                           probabilities, chart
-  test_uk_tax.py          29 tests on pension taper, ISA/LISA remaining,
-                          relief estimates, LISA bonus
-                          (150 tests total, ~6s runtime)
+  test_uk_tax.py          37 tests on pension taper, ISA/LISA remaining,
+                          relief estimates, LISA bonus, IHT payable + bands
+  test_demo_data.py       8 tests verifying the demo data shape, CPI round-trip,
+                          and percentile trajectory upward
+  conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
+                          asset_series, personal_history)
+                          (170 tests total, ~5s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -185,17 +194,22 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 **v2.6** (May 2026) — Session 7 added:
 - Full charts/ package extraction (all 8 builders out of app.py)
-- pytest suite: 150 tests, ~6s runtime
+- pytest suite: 170 tests, ~5s runtime, with shared fixtures in conftest.py
 - GitHub Actions CI on Py 3.11 + 3.12
 - Real ONS Wave 8 data + Wave 8-aligned asset class shares
 - Monte Carlo projection with stochastic returns + equity/bond glide path
 - Stochastic drawdown / pot survival probability (sequence-of-returns risk)
-- UK tax wrapper tracker: ISA + LISA + Pension AA with carryforward and
-  high-earner taper, backed by a tested `utils/uk_tax.py` module
-- 'Try with demo data' empty-state button
-- CSV download for personal + partner data (round-trips with upload)
+- UK tax rules consolidated in `utils/uk_tax.py`: pension AA + taper +
+  carryforward, ISA + LISA (age-aware), pension relief, LISA bonus,
+  IHT with 4 scenarios up to £1m
+- ISA / accessible-wealth bridge calculator (early retirement)
+- 'Try with demo data' empty-state button + CSV download
+- CSV parser robustness (whitespace, ISO dates, extra columns)
+- CPI out-of-range warning when real-terms mode is on
+- Footer disclaimer
 
-app.py: 3,105 → 2,706 lines. charts/: 0 → 8 builders. utils/: +monte_carlo +uk_tax.
+app.py: 3,105 → 2,737 lines (-12%). charts/: 0 → 8 builders.
+utils/: +monte_carlo +uk_tax. tests/: 0 → 170 tests across 6 files.
 
 See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
 
