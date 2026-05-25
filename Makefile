@@ -7,7 +7,9 @@
 #   make compile     py_compile sanity check on every source file
 #   make run         start the Streamlit app on http://localhost:8501
 #   make check       compile + test (what CI runs)
-#   make data        refresh was_data.csv + was_asset_class.csv from scripts
+#   make data        refresh was_data.csv + was_asset_class.csv from scripts,
+#                    then verify tests still pass
+#   make data-only   just regenerate the CSVs without verifying
 #   make help        show this list
 #
 # Cross-platform note: most targets use python directly (not shell-specific
@@ -18,7 +20,7 @@ PYTHON ?= python
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install test test-quick compile run check data clean
+.PHONY: help install test test-quick compile run check data data-only clean
 
 help:
 	@echo "UK Net Worth Benchmarker - common dev tasks"
@@ -29,7 +31,8 @@ help:
 	@echo "  make compile     py_compile sanity check on every source file"
 	@echo "  make run         start the Streamlit app on http://localhost:8501"
 	@echo "  make check       compile + test (matches CI)"
-	@echo "  make data        refresh was_data.csv + was_asset_class.csv"
+	@echo "  make data        refresh CSVs + verify tests pass"
+	@echo "  make data-only   refresh CSVs without verifying"
 	@echo "  make clean       remove __pycache__ and .pytest_cache"
 
 install:
@@ -56,11 +59,14 @@ run:
 check: compile test-quick
 	@echo "All checks passed."
 
-data:
+data: data-only test-quick
+	@echo ""
+	@echo "Data refreshed and tests pass."
+
+# data-only just regenerates the CSVs without verifying — useful when iterating
+data-only:
 	$(PYTHON) scripts/update_was_data.py
 	$(PYTHON) scripts/update_asset_class_data.py
-	@echo ""
-	@echo "Data refreshed. Run 'make test' to verify nothing broke."
 
 clean:
 	$(PYTHON) -c "import shutil, pathlib; \
