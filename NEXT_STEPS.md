@@ -6,13 +6,10 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ## Highest priority remaining
 
-### Code organisation
-- [ ] **Extract `build_main_figure` into `charts/main_figure.py`** — the last and largest chart builder still in app.py (~225 lines). It uses many globals (COLOURS, benchmark, basis, real_terms, DATA_YEAR, personal_plot_df, partner_plot_df, AGE_RANGE, wealth_component); a clean extraction needs to pass them all explicitly. Tests cover the inputs so regressions will be caught.
-
 ### New features (high value, moderate effort)
-- [ ] **Monte Carlo projection** — extend the what-if model with stochastic returns (μ, σ). Show P10/P50/P90 outcome paths over the forecast horizon plus probability-of-reaching-goal. Closes the sequence-of-returns risk gap noted in REVIEW_LOG.
 - [ ] **Tax wrapper tracker** — ISA / LISA / Pension AA utilisation by year. Important for UK planning; needs new sidebar UI.
 - [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations.
+- [ ] **Bond/equity glide path option** — Monte Carlo currently uses constant mean/sigma; let the user enter a glide path (e.g. 100% equity to age 50, then de-risking to 60/40 by 65).
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
@@ -134,7 +131,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] **DATA_YEAR: 2019 → 2021** — Wave 8 midpoint. Nominal/real labels updated everywhere.
 - [x] **Methodology panel rewritten** — distinguishes "ONS-published medians" from "derived quartiles", links to the ONS source, notes cross-check with the whole-population Table 2.4. All asset-class "approximate Wave 7" language replaced with the Wave 8 anchor description.
 
-**Charts package extraction** (app.py: 3,105 → 2,656 lines):
+**Charts package extraction** (app.py: 3,105 → 2,486 lines; -20% in one session):
 - [x] `charts/_helpers.py` — fmt, fmt_delta, clean_note, safe_cagr, best_gain, hover_template. Decoupled from Streamlit and module state.
 - [x] `charts/asset_class.py` — build_asset_class_chart with price_label parameter.
 - [x] `charts/heatmap.py` — build_heatmap; partner overlay added (was missing in original).
@@ -142,7 +139,14 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] `charts/gains.py` — build_gains_chart, build_velocity_chart, build_cumulative_chart. All three return None for single-point input (was silent empty figure).
 - [x] `charts/percentile_trajectory.py` — build_percentile_chart with explicit colour params, band shading, delta annotation.
 - [x] `charts/whatif.py` — build_whatif_figure refactored to take project_to_age / monthly_savings / actual_colour / price_label / scenario_colours as keyword args.
+- [x] `charts/main_figure.py` — build_main_figure fully extracted; all dependencies (benchmark, personal_plot_df, partner_plot_df, colours, basis, wealth_component, age range, latest_*, etc.) passed explicitly. Migration complete.
 - [x] **Sidebar Goal calculator split** — was one bundled expander with four sub-tools; now three focused expanders: "Wealth goal & FIRE number", "Retirement income & pension pot", "Savings rate calculator". Savings calculator gives helpful guidance when no personal data or non-positive CAGR.
+
+**New feature: Monte Carlo projection (v2.6):**
+- [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.
+- [x] `charts/monte_carlo.py` — band envelope (P10-P90 outer, P25-P75 inner) + median path + optional sample paths + target line.
+- [x] App expander "Monte Carlo projection (stochastic returns)": sliders for expected return, volatility, target age, monthly contribution, target NW, number of sample paths. Outputs P10/P50/P90 final values + probability of reaching target.
+- [x] 15 dedicated tests in tests/test_monte_carlo.py — shape, seeding determinism, mean ≈ FV at low vol, zero-vol determinism, contributions, envelope ordering, probability calculations, chart smoke tests.
 
 ### Session 6 (May 2026) — retirement planning push (v2.5)
 - [x] **Retirement income forecast** (new) — combines projected NW at retirement, pension share, state pension, annuity rate, and 4% drawdown into a single annual-income view with target comparison. In-app expander + PDF page.

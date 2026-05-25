@@ -45,19 +45,22 @@ data/
                           Schema: age_band, band_midpoint, property_pct, pension_pct,
                                   financial_pct, physical_pct, source, data_year
   personal_template.csv   CSV template for user net worth upload (year, age, net_worth, note)
-charts/                   Chart builders extracted from app.py — see __init__.py for status
+charts/                   All chart builders (extraction complete — see __init__.py)
   _helpers.py             fmt, fmt_delta, clean_note, safe_cagr, best_gain, hover_template
+  main_figure.py          THE main benchmark + personal overlay chart
   asset_class.py          Stacked area: median wealth composition by age
   heatmap.py              Percentile landscape (P10–P90 bands across all ages)
   distribution.py         Log-normal density curve at a chosen age
   gains.py                Three builders: gains bars, velocity bars, cumulative area
   percentile_trajectory.py How estimated percentile has changed over time
   whatif.py               Forward projection: CAGR scenarios + monthly savings
+  monte_carlo.py          Stochastic projection: band envelope + sample paths
 utils/
   inference.py            All maths: interpolation, individual/gender conversion, CPI,
                           log-normal percentile model, tail derivation, asset class series,
                           decile table, build_percentile_trajectory
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
+  monte_carlo.py          run_monte_carlo + envelope + probability functions
 scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
@@ -65,8 +68,9 @@ tests/
   test_inference.py       18 tests on inference layer
   test_data_loader.py     12 tests on CSV parsing + URL encode/decode
   test_charts_helpers.py  24 tests on formatting helpers
-  test_chart_builders.py  31 smoke tests on chart builder signatures + behaviour
-                          (85 tests total, ~4s runtime)
+  test_chart_builders.py  43 smoke tests on chart builders (includes main_figure)
+  test_monte_carlo.py     15 tests on simulation, envelope, probabilities, chart
+                          (112 tests total, ~5s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -173,9 +177,13 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
-**v2.5+** (May 2026) — Session 7 added pytest suite (85 tests), GitHub Actions CI,
-real ONS Wave 8 data, rescaled asset class shares, charts/ package extraction
-(7 of 8 builders moved out — only `build_main_figure` remains in app.py).
+**v2.6** (May 2026) — Session 7 finished:
+- Full charts/ package extraction (all 8 builders out of app.py)
+- pytest suite: 112 tests, ~5s runtime
+- GitHub Actions CI on Py 3.11 + 3.12
+- Real ONS Wave 8 data + Wave 8-aligned asset class shares
+- New: Monte Carlo projection with stochastic returns (closes the sequence-of-
+  returns risk gap from REVIEW_LOG)
 
 See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
 

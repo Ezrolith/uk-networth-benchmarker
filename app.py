@@ -2582,7 +2582,7 @@ if personal_plot_df is not None and latest_nw is not None:
 # ── Footer ────────────────────────────────────────────────────────────────────
 
 st.divider()
-APP_VERSION = "v2.5"
+APP_VERSION = "v2.6"
 st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem;'>"
     f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · Streamlit + Plotly"
