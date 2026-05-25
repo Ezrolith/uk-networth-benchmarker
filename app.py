@@ -3195,9 +3195,8 @@ st.markdown(
     f"<div style='text-align:center; color:#94a3b8; font-size:0.8rem; line-height:1.6;'>"
     f"UK Net Worth Benchmarker {APP_VERSION} · ONS WAS Wave 8 (2020–2022) · "
     f"Built with Streamlit & Plotly<br>"
-    f"<a href='https://github.com/Ezrolith/uk-networth-benchmarker' "
-    f"style='color:#94a3b8; text-decoration:none;'>Source on GitHub</a> · "
-    f"Indicative figures only — not financial advice"
+    f"Indicative figures only — not financial advice. "
+    f"See the methodology panel above for sources and assumptions."
     f"</div>",
     unsafe_allow_html=True,
 )
