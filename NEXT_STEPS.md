@@ -6,16 +6,15 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ## Highest priority remaining
 
-### Data accuracy (biggest single improvement available)
-- [ ] **Replace approximate WAS figures with actual ONS data tables** — download WAS Wave 7 Bulletin Table 3.2 (Total Wealth by age and percentile) and transcribe exact numbers into `data/was_data.csv`. Current figures are close but not identical. This is the single change that most improves credibility.
-- [ ] **Add WAS Wave 8 (2020–2022) data** — when published, update `was_data.csv`, add new rows with `data_year=2021`, and add a wave selector toggle so users can compare waves.
+### Code organisation
+- [ ] **Continue charts/ package migration** — Session 7 extracted helpers + asset_class chart. Still to move from app.py: `build_main_figure`, `build_percentile_chart`, `build_gains_chart`, `build_velocity_chart`, `build_cumulative_chart`, `build_whatif_figure`, `build_heatmap`, `build_distribution_chart`. Each will need its dependencies (COLOURS, benchmark, personal_plot_df) passed as explicit parameters. Tests will catch regressions.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
-- [x] **Smarter milestone ETA** for negative/zero starting net worth — falls back to average annual gain when CAGR is undefined; fixes Goal/FIRE ETA and milestone tracker.
 
-### Personal data
-- [x] **Note annotations on data points** — optional `note` column in CSV and manual entry editor; notes appear in hover tooltips on the main chart.
+### Data accuracy (next refresh)
+- [ ] **Add WAS Wave 7 (2018–2020) as a historical comparison** — `was_data.csv` currently holds Wave 8 only. Adding Wave 7 with a wave selector toggle would let users compare distributions across the COVID period.
+- [ ] **Refresh asset class component shares to Wave 8** — `was_asset_class.csv` still has Wave 7 approximations. Pull Wave 8 component breakdowns from the ONS bulletin and update the source label.
 
 ---
 
@@ -117,6 +116,16 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Forward projection with savings contributions (monthly £ input, FV-of-annuity formula)
 - [x] Duplicate encode/decode helpers removed from data_loader.py
 - [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
+
+### Session 7 (May 2026) — quality & data foundations
+- [x] **pytest suite (54 tests)** — `tests/test_inference.py` (18 tests on PCHIP interpolation, log-normal percentile fit, CPI math, individual + gender conversion, tail derivation, decile table, component filter), `tests/test_data_loader.py` (12 tests on CSV parsing, Excel-date year extraction, validation warnings, URL encode/decode round-trip, static loader schemas), `tests/test_charts_helpers.py` (24 tests on fmt edge cases including negative formatting, clean_note, safe_cagr filters, best_gain sorting).
+- [x] **GitHub Actions CI** — `.github/workflows/ci.yml` runs on push/PR to master; matrix on Python 3.11 + 3.12; py_compile + pytest. First broken deploy caught before it ships.
+- [x] **Real ONS Wave 8 wealth data** (biggest credibility win) — `data/was_data.csv` now uses actual ONS-published median household wealth by age band from the Wealth in Great Britain bulletin (April 2020 to March 2022, Figure 2). Downloaded directly from ons.gov.uk. P25 and P75 are derived from the published median using preserved age-specific IQR ratios. `scripts/update_was_data.py` documents the derivation and is rerunnable.
+- [x] **DATA_YEAR: 2019 → 2021** — Wave 8 midpoint. Nominal/real labels updated everywhere.
+- [x] **Methodology panel rewritten** — distinguishes "ONS-published medians" from "derived quartiles", links to the ONS source, notes cross-check with the whole-population Table 2.4.
+- [x] **`charts/` package foundation** — `charts/_helpers.py` (fmt, clean_note, safe_cagr, best_gain, hover_template — all decoupled from Streamlit and module state); `charts/asset_class.py` (build_asset_class_chart with price_label parameter so labels are correct under real-terms mode). Sets the pattern for migrating the remaining chart builders.
+- [x] **Sidebar Goal calculator split** — was one bundled expander with four sub-tools; now three focused expanders: "Wealth goal & FIRE number", "Retirement income & pension pot", "Savings rate calculator". Savings calculator gives helpful guidance when no personal data or non-positive CAGR.
+- [x] **`.gitignore`** updated to exclude `.claude/`, `.pytest_cache/`, `.coverage`.
 
 ### Session 6 (May 2026) — retirement planning push (v2.5)
 - [x] **Retirement income forecast** (new) — combines projected NW at retirement, pension share, state pension, annuity rate, and 4% drawdown into a single annual-income view with target comparison. In-app expander + PDF page.
