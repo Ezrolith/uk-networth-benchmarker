@@ -555,13 +555,35 @@ partner_latest_age: float | None = None
 # Empty-state guidance — shown when no personal data is entered yet
 if personal_plot_df is None or len(personal_plot_df) == 0:
     with st.container():
-        st.info(
-            "**Add your net worth history to get started.** "
-            "Open **Your net worth** in the sidebar → choose *Upload CSV* (template provided) "
-            "or *Manual entry* to type in a few rows. Even 2–3 data points unlocks the "
-            "percentile, growth-rate, retirement and goal calculators below the chart.",
-            icon="👋",
-        )
+        empty_col1, empty_col2 = st.columns([3, 1])
+        with empty_col1:
+            st.info(
+                "**Add your net worth history to get started.** "
+                "Open **Your net worth** in the sidebar → choose *Upload CSV* (template provided) "
+                "or *Manual entry* to type in a few rows. Even 2–3 data points unlocks the "
+                "percentile, growth-rate, retirement and goal calculators below the chart.",
+                icon="👋",
+            )
+        with empty_col2:
+            st.write("")  # spacer
+            if st.button("Try with demo data", use_container_width=True,
+                         help="Load a 10-year sample history so you can explore every feature."):
+                # Use a plausible 10-year arc: starting 25, NW £8k → growing to 35 / £180k
+                # roughly tracking the median for a moderate saver.
+                st.session_state["you_method"] = "Manual entry"
+                st.session_state["you_rows"] = [
+                    {"year": 2016, "age": 25, "net_worth":   8_000, "note": "first real job"},
+                    {"year": 2017, "age": 26, "net_worth":  18_000, "note": ""},
+                    {"year": 2018, "age": 27, "net_worth":  29_000, "note": ""},
+                    {"year": 2019, "age": 28, "net_worth":  45_000, "note": "bought first flat"},
+                    {"year": 2020, "age": 29, "net_worth":  62_000, "note": ""},
+                    {"year": 2021, "age": 30, "net_worth":  88_000, "note": ""},
+                    {"year": 2022, "age": 31, "net_worth": 112_000, "note": ""},
+                    {"year": 2023, "age": 32, "net_worth": 138_000, "note": "promotion"},
+                    {"year": 2024, "age": 33, "net_worth": 155_000, "note": ""},
+                    {"year": 2025, "age": 34, "net_worth": 180_000, "note": ""},
+                ]
+                st.rerun()
 
 if personal_plot_df is not None and len(personal_plot_df) > 0:
     sorted_pdf = personal_plot_df.sort_values("age")
