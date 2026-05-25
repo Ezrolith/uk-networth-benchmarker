@@ -17,7 +17,6 @@ import pytest
 # Make project root importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from utils.data_loader import load_was_data  # noqa: E402
 from utils.inference import (  # noqa: E402
     interpolate_benchmarks,
     convert_to_individual,
@@ -35,21 +34,7 @@ from utils.inference import (  # noqa: E402
     REAL_BASE_YEAR,
 )
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ──────────────────────────────────────────────────────────────────────────────
-
-@pytest.fixture(scope="module")
-def raw_was() -> pd.DataFrame:
-    return load_was_data()
-
-
-@pytest.fixture(scope="module")
-def benchmark(raw_was: pd.DataFrame) -> pd.DataFrame:
-    """Household, with pension, nominal 2019 — the baseline series."""
-    filtered = raw_was[raw_was["with_pension"] == True]
-    return interpolate_benchmarks(filtered, np.arange(16, 86))
+# Fixtures (raw_was, benchmark) live in tests/conftest.py
 
 
 # ──────────────────────────────────────────────────────────────────────────────

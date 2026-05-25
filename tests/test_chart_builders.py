@@ -15,9 +15,6 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from utils.data_loader import load_was_data, load_asset_class_data  # noqa: E402
-from utils.inference import interpolate_benchmarks, build_asset_class_series  # noqa: E402
-
 from charts.asset_class import build_asset_class_chart  # noqa: E402
 from charts.heatmap import build_heatmap  # noqa: E402
 from charts.distribution import build_distribution_chart  # noqa: E402
@@ -27,29 +24,7 @@ from charts.whatif import build_whatif_figure  # noqa: E402
 from charts.main_figure import build_main_figure  # noqa: E402
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-# Fixtures
-# ──────────────────────────────────────────────────────────────────────────────
-
-@pytest.fixture(scope="module")
-def benchmark() -> pd.DataFrame:
-    raw = load_was_data()
-    filtered = raw[raw["with_pension"] == True]
-    return interpolate_benchmarks(filtered, np.arange(16, 86))
-
-
-@pytest.fixture(scope="module")
-def asset_series(benchmark: pd.DataFrame) -> pd.DataFrame:
-    return build_asset_class_series(load_asset_class_data(), benchmark, np.arange(16, 86))
-
-
-@pytest.fixture
-def personal_history() -> pd.DataFrame:
-    return pd.DataFrame({
-        "year": [2020, 2022, 2024, 2026],
-        "age":  [30.0, 32.0, 34.0, 36.0],
-        "net_worth": [25_000.0, 60_000.0, 110_000.0, 175_000.0],
-    })
+# Fixtures (benchmark, asset_series, personal_history) live in tests/conftest.py
 
 
 # ──────────────────────────────────────────────────────────────────────────────
