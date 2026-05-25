@@ -7,9 +7,9 @@ Ranked by value vs effort. Completed items archived at the bottom.
 ## Highest priority remaining
 
 ### New features (high value, moderate effort)
-- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side. The biggest remaining UX feature.
-- [ ] **ISA bridge calculator** — model the "save in ISA until 55+, then access tax-free" strategy that bridges between FIRE-able age and pension access age. Touches both the goal calculator and the drawdown section.
+- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side. The biggest remaining UX feature; would touch every projection expander.
 - [ ] **CGT annual exemption tracker** — £3,000/yr (2025/26, reduced from £12,300 in 2022/23). Would need a "realised gains this year" input. Limited value without per-asset cost-basis tracking.
+- [ ] **Second mini-bridge (pension access → state pension)** — the ISA bridge calculator currently covers FIRE age to pension access. A second leg from pension access to state pension age would round out the gap analysis.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
@@ -150,6 +150,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 **Polish — v2.6:**
 - [x] "Try with demo data" button on the empty-state banner. One-click load of a plausible 10-year sample history so first-time users can explore every feature without uploading their own data.
 - [x] CSV download for personal + partner data. Round-trips with upload schema (year, age, net_worth, note) so users can save → re-upload across devices. "Share your chart" expander renamed "Share / export your data" and split into URL + CSV columns.
+- [x] **ISA / accessible-wealth bridge calculator** for early-retirement planners. Sizes the bridge fund needed to cover spending from FIRE age until pension access age (currently 57, rising to 58 in 2028). Shows two pot sizings (conservative no-growth, 4% real return) and projects when you'd reach the target at your current CAGR.
 
 **New feature: Monte Carlo (accumulation + decumulation) — v2.6:**
 - [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.
