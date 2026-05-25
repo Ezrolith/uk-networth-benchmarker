@@ -74,7 +74,7 @@ scripts/
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
   test_inference.py       18 tests on inference layer
-  test_data_loader.py     12 tests on CSV parsing + URL encode/decode
+  test_data_loader.py     17 tests on CSV parsing + URL encode/decode
   test_charts_helpers.py  24 tests on formatting helpers
   test_chart_builders.py  43 smoke tests on chart builders (includes main_figure)
   test_monte_carlo.py     24 tests on simulation, glide path, envelope,
@@ -83,9 +83,14 @@ tests/
                           relief estimates, LISA bonus, IHT payable + bands
   test_demo_data.py       8 tests verifying the demo data shape, CPI round-trip,
                           and percentile trajectory upward
+  test_app_imports.py     6 defensive tests that parse app.py's import block
+                          with `ast` and verify every imported name exists in
+                          its target module. Catches the 2026-05-25 deploy
+                          incident class of bug (app.py references X but
+                          utils/uk_tax.py is stale) in CI.
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (170 tests total, ~5s runtime)
+                          (176 tests total, ~5s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
