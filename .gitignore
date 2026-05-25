@@ -1,12 +1,52 @@
+# Python
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
-.env
+*.egg
+build/
+dist/
+
+# Virtualenvs
 .venv/
 venv/
+env/
+ENV/
+
+# Environment
+.env
+.env.local
+
+# Logs
 *.log
+
+# OS
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.spyderproject
+.spyproject
+
+# Tooling
 .claude/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Streamlit local secrets (should never be committed)
+.streamlit/secrets.toml
+
+# Misc
+*.bak
+*.tmp
