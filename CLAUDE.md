@@ -32,23 +32,45 @@ No secrets or env vars needed. scipy + kaleido + plotly install takes ~3 min on 
 ## File structure
 
 ```
-app.py                    Main Streamlit app — all UI, chart builders, rendering (~1800 lines)
-requirements.txt          streamlit, plotly, pandas, numpy, scipy, kaleido
+app.py                    Main Streamlit app — UI, sidebar, rendering, plus build_main_figure
+                          (the last builder not yet in charts/). ~2,650 lines.
+requirements.txt          streamlit, plotly, pandas, numpy, scipy, matplotlib, fpdf2
 data/
-  was_data.csv            ONS WAS Wave 7 (2018-2020) approximate percentiles (42 rows)
+  was_data.csv            ONS WAS Wave 8 (Apr 2020 – Mar 2022) — real published P50 by age,
+                          P25/P75 derived from IQR ratios (42 rows)
                           Schema: age_band, band_midpoint, percentile (p25/p50/p75),
                                   value_nominal, data_year, source, with_pension (bool)
-  was_asset_class.csv     Approximate WAS Wave 7 component share proportions by age band
+  was_asset_class.csv     Wave 7 age-band shape rescaled to ONS Wave 8 aggregates
+                          (property 40%, pension 35%, financial 14%, physical 10%)
                           Schema: age_band, band_midpoint, property_pct, pension_pct,
                                   financial_pct, physical_pct, source, data_year
-  personal_template.csv   CSV template for user net worth upload
+  personal_template.csv   CSV template for user net worth upload (year, age, net_worth, note)
+charts/                   Chart builders extracted from app.py — see __init__.py for status
+  _helpers.py             fmt, fmt_delta, clean_note, safe_cagr, best_gain, hover_template
+  asset_class.py          Stacked area: median wealth composition by age
+  heatmap.py              Percentile landscape (P10–P90 bands across all ages)
+  distribution.py         Log-normal density curve at a chosen age
+  gains.py                Three builders: gains bars, velocity bars, cumulative area
+  percentile_trajectory.py How estimated percentile has changed over time
+  whatif.py               Forward projection: CAGR scenarios + monthly savings
 utils/
   inference.py            All maths: interpolation, individual/gender conversion, CPI,
                           log-normal percentile model, tail derivation, asset class series,
-                          decile table, build_percentile_trajectory, build_distribution_chart
-  data_loader.py          CSV loading, URL encode/decode (zlib+base64), data quality utils
+                          decile table, build_percentile_trajectory
+  data_loader.py          CSV loading, URL encode/decode (zlib+base64)
+scripts/
+  update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
+  update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
+tests/
+  test_inference.py       18 tests on inference layer
+  test_data_loader.py     12 tests on CSV parsing + URL encode/decode
+  test_charts_helpers.py  24 tests on formatting helpers
+  test_chart_builders.py  31 smoke tests on chart builder signatures + behaviour
+                          (85 tests total, ~4s runtime)
+.github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
+REVIEW_LOG.md             Session-by-session audit notes
 ```
 
 ## Key architectural decisions
@@ -128,18 +150,39 @@ sidebar block so goal/savings calculator widgets can safely reference them.
 
 ## Data source note
 
-`data/was_data.csv` contains **approximations** of WAS Wave 7 published tables.
-For production accuracy, replace with values from:
-- ONS WAS Wave 7 Bulletin: Table 3.2 — Total Wealth by percentile and age band
-- URL: ons.gov.uk → Wealth and Assets Survey → Wave 7 (2018 to 2020)
+`data/was_data.csv` now contains the **actual ONS-published medians** by age band
+from Wealth in Great Britain, April 2020 to March 2022 (Wave 8, Figure 2). P25 and
+P75 are derived from the published median using age-specific IQR ratios — these
+are derived not published. The whole-population published quartiles (Table 2.4:
+P25 £70,500, P50 £293,700, P75 £662,100) sit inside the by-age range, which
+cross-checks the IQR-ratio approach.
+
+`data/was_asset_class.csv` shares are rescaled so the population-weighted
+aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
+`scripts/update_was_data.py` and `scripts/update_asset_class_data.py`.
+
+## Testing
+
+```bash
+python -m pytest tests/ -v          # 85 tests, ~4s
+python -m pytest tests/test_inference.py    # just the maths
+python -m py_compile app.py utils/inference.py utils/data_loader.py
+```
+
+CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12).
 
 ## Current version
 
-**v2.5** (May 2026) — retirement income forecast + drawdown / pot longevity simulator added; sidebar display toggles consolidated; empty-state guidance for new users; state pension and annuity defaults refreshed to 2025/26 rates. See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
+**v2.5+** (May 2026) — Session 7 added pytest suite (85 tests), GitHub Actions CI,
+real ONS Wave 8 data, rescaled asset class shares, charts/ package extraction
+(7 of 8 builders moved out — only `build_main_figure` remains in app.py).
+
+See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
 
 ## Workflow
 
 - Always commit to GitHub after changes (Streamlit auto-deploys on push to master)
-- Run `python -m py_compile app.py utils/inference.py utils/data_loader.py` before committing
+- Run `python -m pytest tests/ -q` before committing — should be all green
+- Run `python -m py_compile app.py utils/inference.py utils/data_loader.py` if you skipped tests
 - Bump version string `APP_VERSION` in `app.py` footer for significant releases
 - Bump version note in CLAUDE.md to match
