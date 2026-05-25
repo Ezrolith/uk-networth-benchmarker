@@ -38,7 +38,7 @@ from utils.inference import (
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
     build_asset_class_series, build_decile_table, apply_component_filter,
-    DATA_YEAR, REAL_BASE_YEAR,
+    DATA_YEAR, REAL_BASE_YEAR, UK_CPI,
 )
 # Helpers and chart builders being migrated out of app.py into charts/
 from charts._helpers import (
@@ -608,6 +608,23 @@ if personal_plot_df is None or len(personal_plot_df) == 0:
                     {"year": 2026, "age": 35, "net_worth": 210_000, "note": "married"},
                 ]
                 st.rerun()
+
+# Warn if real-terms mode is on and some personal data falls outside the
+# CPI table (silently passed through uncorrected). Treat 'you' and 'partner'
+# uniformly because both are CPI-adjusted by _prep_plot_df.
+if real_terms:
+    _cpi_min, _cpi_max = min(UK_CPI), max(UK_CPI)
+    for _label, _df in [("your", personal_df), ("partner's", partner_df)]:
+        if _df is not None and len(_df) > 0:
+            _out_of_range = _df[(_df["year"] < _cpi_min) | (_df["year"] > _cpi_max)]
+            if len(_out_of_range) > 0:
+                _yrs = sorted(_out_of_range["year"].unique())
+                st.warning(
+                    f"{len(_out_of_range)} {_label} data row(s) have years outside the CPI "
+                    f"table ({_cpi_min}–{_cpi_max}): {_yrs}. Those rows are shown in "
+                    f"nominal terms even though real-terms mode is on.",
+                    icon="⚠️",
+                )
 
 if personal_plot_df is not None and len(personal_plot_df) > 0:
     sorted_pdf = personal_plot_df.sort_values("age")
