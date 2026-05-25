@@ -1095,9 +1095,127 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         st.dataframe(pd.DataFrame(sens_rows), use_container_width=True, hide_index=True)
         st.caption(
             "Sensitivity is one of the most important things to check — small changes in assumed "
-            "real return swing the depletion age by years. Sequence-of-returns risk (bad early years) "
-            "is not modelled here; consider stress-testing with 1–2% real return as a 'rough patch' floor."
+            "real return swing the depletion age by years."
         )
+
+        # ── Stochastic drawdown ───────────────────────────────────────────────
+        st.markdown("---")
+        st.markdown("**Stochastic stress test (sequence-of-returns risk)**")
+        st.caption(
+            "Same setup, but with **random year-to-year returns** instead of the fixed real "
+            "return. Runs 1,000 simulations to compute the probability that your pot survives "
+            "to each age. A bad first decade — even with the same long-run average — can deplete "
+            "much faster than the deterministic model suggests."
+        )
+
+        sd_col1, sd_col2 = st.columns(2)
+        with sd_col1:
+            sd_sigma = st.number_input(
+                "Annual volatility (%)", 0.0, 25.0, 10.0, 0.5, key="sd_sigma",
+                help="Volatility of the retirement portfolio. Conservative 60/40 ≈ 9-10%, "
+                     "balanced ≈ 11-13%, equity-heavy ≈ 14-18%.",
+            )
+        with sd_col2:
+            sd_horizon_age = st.number_input(
+                "Plan to age", _le_at_retire, 100, max(_le_at_retire + 5, 90), 1, key="sd_horizon",
+                help="Age you want your pot to last to. The success rate is computed at this age.",
+            )
+
+        # Build simulation: withdrawals = -annual_contribution
+        # Each year's net withdrawal varies if state pension kicks in mid-horizon,
+        # so we run it ourselves rather than calling run_monte_carlo directly.
+        sd_years = sd_horizon_age - dd_start_age
+        if sd_years > 0:
+            sd_rng = np.random.default_rng(seed=42)
+            sd_n_sims = 1_000
+            sd_returns = sd_rng.normal(
+                loc=dd_real_return / 100,
+                scale=sd_sigma / 100,
+                size=(sd_n_sims, sd_years),
+            )
+            sd_paths = np.zeros((sd_n_sims, sd_years + 1), dtype=float)
+            sd_paths[:, 0] = float(dd_start_pot)
+            for t in range(sd_years):
+                age_t = dd_start_age + t
+                sp = state_pension if (dd_include_sp and age_t >= _state_pen_age) else 0
+                net_w = max(0, dd_annual_spend - sp)
+                sd_paths[:, t + 1] = np.maximum(0, sd_paths[:, t] * (1 + sd_returns[:, t]) - net_w)
+                # Once a path hits zero it stays zero (no further negative draw)
+
+            # Survival probability over time
+            sd_alive = (sd_paths > 0).mean(axis=0)
+            sd_ages_arr = np.arange(dd_start_age, dd_start_age + sd_years + 1)
+
+            survival_at_horizon = float(sd_alive[-1])
+            survival_at_le = float(sd_alive[_le_at_retire - dd_start_age]) \
+                if _le_at_retire - dd_start_age <= sd_years else 1.0
+
+            sd_m1, sd_m2 = st.columns(2)
+            with sd_m1:
+                st.metric(
+                    f"Survive to avg life expectancy (~{_le_at_retire})",
+                    f"{survival_at_le*100:.0f}%",
+                    help=f"Probability the pot still has funds at age {_le_at_retire}.",
+                )
+            with sd_m2:
+                st.metric(
+                    f"Survive to age {sd_horizon_age}",
+                    f"{survival_at_horizon*100:.0f}%",
+                    help=f"Probability the pot still has funds at age {sd_horizon_age}.",
+                )
+
+            # Verdict colour for the headline
+            if survival_at_horizon >= 0.85:
+                st.success(
+                    f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
+                    f"age {sd_horizon_age} under the chosen volatility — comfortable cushion.",
+                    icon="✅",
+                )
+            elif survival_at_horizon >= 0.6:
+                st.warning(
+                    f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
+                    f"age {sd_horizon_age}. Reasonable but not safe — consider a lower spend or "
+                    "more cautious assumptions.",
+                    icon="⚠️",
+                )
+            else:
+                st.error(
+                    f"Pot has only a **{survival_at_horizon*100:.0f}% probability** of surviving "
+                    f"to age {sd_horizon_age}. High risk of running out — reduce spend, retire later, "
+                    "or save more.",
+                    icon="🚨",
+                )
+
+            # Survival probability chart
+            sd_fig = go.Figure()
+            sd_fig.add_trace(go.Scatter(
+                x=sd_ages_arr, y=sd_alive * 100,
+                mode="lines",
+                line=dict(color=COLOURS["p50"], width=3),
+                fill="tozeroy", fillcolor="rgba(29,78,216,0.10)",
+                name="Survival probability",
+                hovertemplate="Age %{x}<br>%{y:.0f}% chance pot survives<extra></extra>",
+            ))
+            sd_fig.add_hline(y=50, line=dict(color="#94a3b8", width=1, dash="dot"),
+                             annotation_text="50%", annotation_position="right",
+                             annotation=dict(font=dict(size=10, color="#94a3b8")))
+            sd_fig.add_vline(x=_le_at_retire,
+                             line=dict(color="#64748b", width=1, dash="dash"),
+                             annotation_text=f"Avg life exp ~{_le_at_retire}",
+                             annotation_position="top left",
+                             annotation=dict(font=dict(size=10, color="#64748b")))
+            sd_fig.update_layout(
+                title=dict(text="Probability the pot survives to each age",
+                           font=dict(size=13, color="#1e293b"), x=0),
+                xaxis=dict(title="Age", gridcolor="#e2e8f0"),
+                yaxis=dict(title="Survival probability (%)", ticksuffix="%",
+                           range=[0, 105], gridcolor="#e2e8f0"),
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=260, margin=dict(l=60, r=40, t=50, b=50),
+                showlegend=False, hovermode="x unified",
+            )
+            st.plotly_chart(sd_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
 
 # ── IHT / estate tax calculator ───────────────────────────────────────────────
 
@@ -1832,11 +1950,12 @@ because we work in real terms), and reports the depletion age. Compares against
 ONS cohort life expectancy at the retirement age. Includes a sensitivity table
 showing how the depletion age changes at real returns from 1% to 6%.
 
-**Important caveat:** sequence-of-returns risk is not modelled here — the
-simulation assumes constant returns each year. In reality, the order of returns
-matters (a bad first 5 years is much worse than a bad last 5 years). For
-robustness, stress-test with a 1–2% real-return floor and ensure the pot still
-covers your planning horizon.
+**Stochastic stress test:** Below the deterministic chart, the same setup runs
+1,000 simulations with random year-to-year returns (configurable volatility).
+This explicitly models sequence-of-returns risk — a bad first decade is much
+worse than a bad last decade, even with the same long-run average. The output
+shows the probability the pot survives to each age. **Aim for ≥85% probability
+of survival** at your planning horizon for a comfortable cushion.
 
 ### Privacy
 
