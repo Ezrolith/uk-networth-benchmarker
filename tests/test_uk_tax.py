@@ -10,7 +10,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.uk_tax import (  # noqa: E402
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
+    iht_payable,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD, TAPER_FLOOR,
+    NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, IHT_STANDARD_RATE, IHT_REDUCED_RATE,
+    IHT_BANDS,
 )
 
 
@@ -139,3 +142,74 @@ def test_lisa_bonus_capped_at_1k():
     """LISA bonus capped at £1k/yr regardless of contribution size."""
     assert lisa_bonus(4_000) == 1_000   # 25% of £4k
     assert lisa_bonus(10_000) == 1_000  # cap still applies
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# IHT (Inheritance Tax)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_iht_bands_dict_matches_constants():
+    """The four named scenarios should match their math."""
+    assert IHT_BANDS["single"]            == NIL_RATE_BAND
+    assert IHT_BANDS["single_with_rnrb"]  == NIL_RATE_BAND + RESIDENCE_NIL_RATE_BAND
+    assert IHT_BANDS["married"]           == 2 * NIL_RATE_BAND
+    assert IHT_BANDS["married_with_rnrb"] == 2 * NIL_RATE_BAND + 2 * RESIDENCE_NIL_RATE_BAND
+    assert IHT_BANDS["married_with_rnrb"] == 1_000_000  # The famous £1m
+
+
+def test_iht_payable_below_threshold_is_zero():
+    """Estate below NRB → no IHT due."""
+    taxable, due, after = iht_payable(300_000, threshold=NIL_RATE_BAND)
+    assert taxable == 0
+    assert due == 0
+    assert after == 300_000
+
+
+def test_iht_payable_at_threshold_exactly_zero():
+    """Estate equal to threshold → no IHT due."""
+    taxable, due, after = iht_payable(NIL_RATE_BAND, threshold=NIL_RATE_BAND)
+    assert taxable == 0
+    assert due == 0
+
+
+def test_iht_payable_single_above_nrb():
+    """Single, £500k estate, £325k NRB, 40% → 40% × £175k = £70k IHT due."""
+    taxable, due, after = iht_payable(500_000, threshold=NIL_RATE_BAND)
+    assert taxable == 175_000
+    assert due == 70_000
+    assert after == 430_000
+
+
+def test_iht_payable_married_with_rnrb_1m():
+    """The famous £1m family threshold — £1.5m estate, £200k IHT due."""
+    taxable, due, after = iht_payable(1_500_000, threshold=IHT_BANDS["married_with_rnrb"])
+    assert taxable == 500_000
+    assert due == 200_000
+    assert after == 1_300_000
+
+
+def test_iht_payable_with_deductions():
+    """Deductions (charitable gifts, business relief, etc.) reduce the taxable estate."""
+    taxable, due, _ = iht_payable(
+        500_000, threshold=NIL_RATE_BAND, deductions=50_000,
+    )
+    # Exempt = 325 + 50 = 375k → taxable = 500 - 375 = 125k → due = 50k
+    assert taxable == 125_000
+    assert due == 50_000
+
+
+def test_iht_payable_reduced_rate():
+    """36% rate (10%+ charitable gift) reduces IHT due."""
+    _, due_full, _ = iht_payable(1_000_000, threshold=NIL_RATE_BAND, rate=IHT_STANDARD_RATE)
+    _, due_red,  _ = iht_payable(1_000_000, threshold=NIL_RATE_BAND, rate=IHT_REDUCED_RATE)
+    assert due_red < due_full
+    # Specifically: taxable = 675k → 40% = 270k, 36% = 243k
+    assert due_full == 270_000
+    assert due_red  == 243_000
+
+
+def test_iht_payable_zero_estate_safe():
+    """Zero or negative estate produces no IHT and doesn't crash."""
+    taxable, due, after = iht_payable(0, threshold=NIL_RATE_BAND)
+    assert taxable == due == 0
+    assert after == 0

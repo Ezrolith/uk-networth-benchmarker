@@ -17,6 +17,40 @@ TAPER_THRESHOLD       = 260_000  # Adjusted income above which taper begins
 TAPER_FLOOR           = 10_000   # Minimum tapered AA (reached at £360k adjusted income)
 STATE_PENSION_2026_27 = 12_400   # Full new State Pension estimate for 2026/27 (£/yr)
 
+# ── IHT (Inheritance Tax) thresholds 2025/26 ───────────────────────────────────
+# Both nil-rate bands are frozen at these values until April 2030.
+NIL_RATE_BAND          = 325_000  # Per person standard nil-rate band
+RESIDENCE_NIL_RATE_BAND = 175_000  # Extra if main residence left to direct descendants
+IHT_STANDARD_RATE      = 0.40     # Standard IHT rate above the thresholds
+IHT_REDUCED_RATE       = 0.36     # Reduced rate if 10%+ of net estate left to charity
+
+# Combined thresholds for the four common scenarios
+IHT_BANDS = {
+    "single":             NIL_RATE_BAND,
+    "single_with_rnrb":   NIL_RATE_BAND + RESIDENCE_NIL_RATE_BAND,
+    "married":            2 * NIL_RATE_BAND,
+    "married_with_rnrb":  2 * NIL_RATE_BAND + 2 * RESIDENCE_NIL_RATE_BAND,
+}
+
+
+def iht_payable(
+    gross_estate: float,
+    threshold: float,
+    deductions: float = 0.0,
+    rate: float = IHT_STANDARD_RATE,
+) -> tuple[float, float, float]:
+    """
+    Compute UK Inheritance Tax due on an estate.
+
+    Returns (taxable_estate, iht_due, after_iht).
+    All inputs and outputs in £.
+    """
+    exempt = max(0.0, threshold + max(0.0, deductions))
+    taxable = max(0.0, gross_estate - exempt)
+    due = taxable * rate
+    after = gross_estate - due
+    return taxable, due, after
+
 
 def tapered_pension_allowance(adjusted_income: float) -> tuple[float, float]:
     """

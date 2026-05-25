@@ -58,6 +58,7 @@ from utils.monte_carlo   import run_monte_carlo, probability_of_reaching  # noqa
 from utils.uk_tax        import (  # noqa: F401
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
+    iht_payable, IHT_BANDS, IHT_STANDARD_RATE,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
 )
 
@@ -1635,19 +1636,22 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 key="iht_rate",
             )
 
+        # Map UI labels to scenario keys for the tested utility
         _iht_band = {
-            "Single — £325k NRB": 325_000,
-            "Single + RNRB — £500k (residence to descendants)": 500_000,
-            "Married / civil partner — £650k (2× NRB, no RNRB)": 650_000,
-            "Married + RNRB — £1m (2× NRB + 2× RNRB)": 1_000_000,
+            "Single — £325k NRB":                                    IHT_BANDS["single"],
+            "Single + RNRB — £500k (residence to descendants)":      IHT_BANDS["single_with_rnrb"],
+            "Married / civil partner — £650k (2× NRB, no RNRB)":     IHT_BANDS["married"],
+            "Married + RNRB — £1m (2× NRB + 2× RNRB)":               IHT_BANDS["married_with_rnrb"],
         }[iht_threshold]
 
-        gross_estate   = latest_nw
-        exempt_amount  = _iht_band + iht_deductions
-        taxable_estate = max(0, gross_estate - exempt_amount)
-        iht_payable    = taxable_estate * (iht_rate_pct / 100)
-        after_iht      = gross_estate - iht_payable
-        pct_lost       = iht_payable / gross_estate * 100 if gross_estate > 0 else 0
+        gross_estate  = latest_nw
+        exempt_amount = _iht_band + iht_deductions
+        # Use the tested utility — same math, but now centralised + tested
+        taxable_estate, iht_due, after_iht = iht_payable(
+            gross_estate, threshold=_iht_band, deductions=iht_deductions,
+            rate=iht_rate_pct / 100,
+        )
+        pct_lost = iht_due / gross_estate * 100 if gross_estate > 0 else 0
 
         iht_m1, iht_m2, iht_m3, iht_m4 = st.columns(4)
         with iht_m1:
@@ -1656,7 +1660,7 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             st.metric("IHT-exempt", _fmt(exempt_amount),
                       help=f"Threshold ({_fmt(_iht_band)}) + deductions ({_fmt(iht_deductions)})")
         with iht_m3:
-            st.metric("IHT payable", _fmt(iht_payable),
+            st.metric("IHT payable", _fmt(iht_due),
                       help=f"{_fmt(taxable_estate)} taxable @ {iht_rate_pct}%")
         with iht_m4:
             st.metric("After-IHT estate", _fmt(after_iht),
