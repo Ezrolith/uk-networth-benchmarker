@@ -11,6 +11,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.monte_carlo import (  # noqa: E402
     run_monte_carlo, percentile_envelope,
     probability_of_reaching, probability_of_ruin,
+    _glide_allocation, _portfolio_moments,
+    EQUITY_MEAN, EQUITY_SIGMA, BOND_MEAN, BOND_SIGMA,
 )
 from charts.monte_carlo import build_monte_carlo_chart  # noqa: E402
 
@@ -159,3 +161,90 @@ def test_monte_carlo_chart_title_includes_sim_count_and_years(sample_paths):
     title = fig.layout.title.text
     assert "500" in title  # n_sims
     assert "15" in title   # years
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Glide path
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_glide_allocation_endpoints():
+    """First year = start_equity, last year = end_equity."""
+    w = _glide_allocation(20, 1.0, 0.4)
+    assert w[0] == pytest.approx(1.0)
+    assert w[-1] == pytest.approx(0.4)
+    assert len(w) == 20
+
+
+def test_glide_allocation_monotone():
+    w = _glide_allocation(15, 1.0, 0.5)
+    diffs = np.diff(w)
+    assert (diffs <= 0).all()  # decreasing each year
+
+
+def test_glide_allocation_handles_single_year():
+    w = _glide_allocation(1, 0.9, 0.4)
+    assert len(w) == 1
+    assert w[0] == 0.9  # only start value used
+
+
+def test_portfolio_moments_pure_equity():
+    mu, sigma = _portfolio_moments(1.0)
+    assert mu == pytest.approx(EQUITY_MEAN)
+    assert sigma == pytest.approx(EQUITY_SIGMA)
+
+
+def test_portfolio_moments_pure_bonds():
+    mu, sigma = _portfolio_moments(0.0)
+    assert mu == pytest.approx(BOND_MEAN)
+    assert sigma == pytest.approx(BOND_SIGMA)
+
+
+def test_portfolio_moments_60_40_lower_vol_than_equity():
+    mu_eq,  sigma_eq  = _portfolio_moments(1.0)
+    mu_60,  sigma_60  = _portfolio_moments(0.6)
+    # Mixed portfolio: lower mean than pure equity, lower vol than pure equity
+    assert mu_60 < mu_eq
+    assert sigma_60 < sigma_eq
+    # And higher than pure bonds
+    assert mu_60 > BOND_MEAN
+    assert sigma_60 > BOND_SIGMA
+
+
+def test_run_monte_carlo_with_glide_path_shape():
+    paths = run_monte_carlo(
+        start_nw=100_000, years=20, n_sims=200,
+        glide_path=(1.0, 0.4), seed=42,
+    )
+    assert paths.shape == (200, 21)
+
+
+def test_run_monte_carlo_glide_path_reduces_endpoint_volatility():
+    """De-risking glide should produce a TIGHTER P10-P90 spread at the end
+    vs holding constant 100% equity for the same period."""
+    fixed = run_monte_carlo(
+        start_nw=100_000, years=30,
+        mean_return=EQUITY_MEAN, std_return=EQUITY_SIGMA,
+        n_sims=2_000, seed=42,
+    )
+    glided = run_monte_carlo(
+        start_nw=100_000, years=30, n_sims=2_000,
+        glide_path=(1.0, 0.4), seed=42,
+    )
+    spread_fixed  = np.percentile(fixed[:, -1], 90)  - np.percentile(fixed[:, -1], 10)
+    spread_glided = np.percentile(glided[:, -1], 90) - np.percentile(glided[:, -1], 10)
+    assert spread_glided < spread_fixed
+
+
+def test_run_monte_carlo_glide_path_ignores_mean_std_args():
+    """When glide_path is supplied, mean_return/std_return should not affect output."""
+    p1 = run_monte_carlo(
+        start_nw=100_000, years=10, n_sims=100,
+        mean_return=0.20, std_return=0.50,  # nonsense values
+        glide_path=(0.6, 0.6), seed=1,
+    )
+    p2 = run_monte_carlo(
+        start_nw=100_000, years=10, n_sims=100,
+        mean_return=-0.10, std_return=0.01,  # different nonsense
+        glide_path=(0.6, 0.6), seed=1,
+    )
+    np.testing.assert_array_equal(p1, p2)

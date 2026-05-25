@@ -1562,19 +1562,45 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and
             "the shaded bands show the range of likely outcomes. "
             "This captures sequence-of-returns risk that the deterministic what-if can't show."
         )
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        with mc1:
-            mc_mean = st.number_input(
-                "Expected real return (%)", -5.0, 15.0, 5.0, 0.5, key="mc_mean",
-                help="Long-run real return assumption. 60/40 portfolio ≈ 4-5%, "
-                     "100% equity ≈ 5-7%.",
-            )
-        with mc2:
-            mc_sigma = st.number_input(
-                "Annual volatility (%)", 0.0, 30.0, 12.0, 1.0, key="mc_sigma",
-                help="Standard deviation of annual returns. 60/40 portfolio ≈ 9-11%, "
-                     "100% global equity ≈ 16-18%.",
-            )
+
+        # Mode toggle: fixed allocation vs glide path
+        mc_mode = st.radio(
+            "Allocation",
+            ["Fixed return assumption", "Equity/bond glide path"],
+            key="mc_mode", horizontal=True,
+            help="Glide path uses real asset-class assumptions (equity ~5.5%/18%, "
+                 "bond ~1.5%/6%) and lets you de-risk over time.",
+        )
+
+        mc_glide_path: tuple[float, float] | None = None
+
+        if mc_mode == "Fixed return assumption":
+            mc1, mc2 = st.columns(2)
+            with mc1:
+                mc_mean = st.number_input(
+                    "Expected real return (%)", -5.0, 15.0, 5.0, 0.5, key="mc_mean",
+                    help="60/40 portfolio ≈ 4-5%, 100% equity ≈ 5-7%.",
+                )
+            with mc2:
+                mc_sigma = st.number_input(
+                    "Annual volatility (%)", 0.0, 30.0, 12.0, 1.0, key="mc_sigma",
+                    help="60/40 portfolio ≈ 9-11%, 100% global equity ≈ 16-18%.",
+                )
+        else:
+            g1, g2 = st.columns(2)
+            with g1:
+                gp_start = st.slider(
+                    "Equity allocation now (%)", 0, 100, 90, 5, key="mc_gp_start",
+                )
+            with g2:
+                gp_end = st.slider(
+                    "Equity allocation at target age (%)", 0, 100, 40, 5, key="mc_gp_end",
+                )
+            mc_glide_path = (gp_start / 100, gp_end / 100)
+            # mc_mean / mc_sigma not used when glide path active
+            mc_mean = mc_sigma = 0  # placeholder for downstream caption logic
+
+        mc3, mc4 = st.columns(2)
         with mc3:
             mc_target_age = st.slider(
                 "Project to age",
@@ -1604,11 +1630,12 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and
         mc_paths = run_monte_carlo(
             start_nw=float(latest_nw),
             years=mc_years,
-            mean_return=mc_mean / 100,
-            std_return=mc_sigma / 100,
+            mean_return=mc_mean / 100 if mc_glide_path is None else 0.05,
+            std_return=mc_sigma / 100 if mc_glide_path is None else 0.12,
             n_sims=1_000,
             annual_contribution=mc_monthly * 12,
             seed=42,  # deterministic for reproducible UX
+            glide_path=mc_glide_path,
         )
 
         mc_fig = build_monte_carlo_chart(
@@ -1647,11 +1674,16 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and
                     help=f"Fraction of simulations that finish at or above £{mc_target_nw:,}.",
                 )
 
+        if mc_glide_path is None:
+            assumption_text = f"N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) fixed each year"
+        else:
+            assumption_text = (
+                f"glide from {mc_glide_path[0]*100:.0f}% equity to {mc_glide_path[1]*100:.0f}% over "
+                f"{mc_years} yrs; portfolio mean/sigma blended from equity (5.5%/18%) and bonds (1.5%/6%)"
+            )
         st.caption(
-            f"1,000 simulations · annual returns drawn from N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) · "
-            f"random seed fixed for reproducibility. "
-            "Assumes returns are uncorrelated year-to-year and normally distributed — "
-            "real markets show mean reversion and fat tails, so treat as a planning aid not a forecast."
+            f"1,000 simulations · {assumption_text} · random seed fixed for reproducibility. "
+            "Real markets show mean reversion and fat tails — treat as a planning aid, not a forecast."
         )
 
 

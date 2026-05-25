@@ -11,6 +11,42 @@ from __future__ import annotations
 import numpy as np
 
 
+# ── Asset class assumptions ───────────────────────────────────────────────────
+# Long-run real-return assumptions used by the glide path.
+# Equity:  global equity, post-inflation. UK academic 100-yr real ≈ 5%, modern
+#          forward-looking estimates 4–6%.
+# Bonds :  developed-market sovereign + IG, real. Lower expected, lower vol.
+EQUITY_MEAN, EQUITY_SIGMA = 0.055, 0.18
+BOND_MEAN,   BOND_SIGMA   = 0.015, 0.06
+# Correlation between equity and bond returns: historically modestly positive
+# (~0.1-0.3 over long periods). Used only when glide-path is active.
+EQUITY_BOND_CORR = 0.10
+
+
+def _glide_allocation(years: int, start_equity_pct: float, end_equity_pct: float) -> np.ndarray:
+    """
+    Linear glide path of equity weight from start to end over `years` years.
+    Returns an array of length `years` giving the equity fraction in each year.
+    """
+    if years <= 0:
+        return np.array([])
+    if years == 1:
+        return np.array([start_equity_pct])
+    return np.linspace(start_equity_pct, end_equity_pct, years)
+
+
+def _portfolio_moments(equity_weight: float) -> tuple[float, float]:
+    """
+    Expected mean and std of a (equity_weight, 1-equity_weight) portfolio
+    using EQUITY_MEAN/SIGMA, BOND_MEAN/SIGMA, EQUITY_BOND_CORR.
+    """
+    w_e, w_b = equity_weight, 1 - equity_weight
+    mu = w_e * EQUITY_MEAN + w_b * BOND_MEAN
+    var = (w_e**2 * EQUITY_SIGMA**2 + w_b**2 * BOND_SIGMA**2
+           + 2 * w_e * w_b * EQUITY_SIGMA * BOND_SIGMA * EQUITY_BOND_CORR)
+    return mu, float(np.sqrt(var))
+
+
 def run_monte_carlo(
     start_nw: float,
     years: int,
@@ -19,6 +55,7 @@ def run_monte_carlo(
     n_sims: int = 1_000,
     annual_contribution: float = 0.0,
     seed: int | None = None,
+    glide_path: tuple[float, float] | None = None,
 ) -> np.ndarray:
     """
     Run `n_sims` independent paths of net worth over `years` years.
@@ -31,23 +68,33 @@ def run_monte_carlo(
     start_nw : starting net worth (£).
     years : number of years to project.
     mean_return : expected annual return as a fraction (0.05 = 5% real).
+        IGNORED if glide_path is supplied.
     std_return : annual standard deviation of returns (0.12 = 12pp).
-        For a 60/40 equity/bond portfolio, typical real-return assumptions
-        are mean ≈ 4–5%, sigma ≈ 9–11%. For 100% equity, sigma ≈ 16–18%.
+        IGNORED if glide_path is supplied.
     n_sims : number of independent simulation paths.
     annual_contribution : £ added each year (treated as end-of-year).
     seed : random seed for reproducibility (None = use default RNG).
+    glide_path : optional (start_equity_pct, end_equity_pct) tuple. When supplied,
+        each year uses a portfolio mean/sigma derived from a linear glide between
+        the two equity weights, using EQUITY_/BOND_ asset-class assumptions.
+        e.g. (1.0, 0.4) = 100% equity now, gliding to 60/40 over the horizon.
     """
     if start_nw <= 0:
-        # Can't compound a non-positive starting value — fall back to
-        # contribution-only growth with mean return on contributions.
         start_nw = max(start_nw, 1.0)
 
     rng = np.random.default_rng(seed)
-    # Annual return draws, shape (n_sims, years)
-    returns = rng.normal(loc=mean_return, scale=std_return, size=(n_sims, years))
 
-    # Compound forward, adding the annual contribution at end of each year
+    if glide_path is None:
+        # Single fixed-allocation portfolio
+        returns = rng.normal(loc=mean_return, scale=std_return, size=(n_sims, years))
+    else:
+        start_eq, end_eq = glide_path
+        weights = _glide_allocation(years, start_eq, end_eq)
+        returns = np.empty((n_sims, years), dtype=float)
+        for t, w in enumerate(weights):
+            mu_t, sigma_t = _portfolio_moments(w)
+            returns[:, t] = rng.normal(loc=mu_t, scale=sigma_t, size=n_sims)
+
     paths = np.zeros((n_sims, years + 1), dtype=float)
     paths[:, 0] = start_nw
     for t in range(years):
