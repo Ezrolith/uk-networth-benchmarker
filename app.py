@@ -38,6 +38,11 @@ from charts.whatif       import build_whatif_figure     # noqa: F401
 from charts.main_figure  import build_main_figure       # noqa: F401
 from charts.monte_carlo  import build_monte_carlo_chart  # noqa: F401
 from utils.monte_carlo   import run_monte_carlo, probability_of_reaching  # noqa: F401
+from utils.uk_tax        import (  # noqa: F401
+    tapered_pension_allowance, effective_pension_allowance,
+    isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
+    ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
+)
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -1249,11 +1254,9 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "**Allowances as of 2025/26.** Indicative — not tax advice."
         )
 
-        # 2025/26 allowances
-        ISA_ALLOWANCE  = 20_000
-        LISA_ALLOWANCE = 4_000      # counts against ISA allowance; max age 50
-        PENSION_AA     = 60_000     # standard annual allowance
-        TAPER_THRESHOLD_INCOME = 260_000  # taper kicks in over this (adjusted income)
+        # Allowance constants imported from utils/uk_tax.py (tested in test_uk_tax.py).
+        # Aliased here so the existing UI code reads naturally.
+        TAPER_THRESHOLD_INCOME = TAPER_THRESHOLD
 
         tw_col1, tw_col2, tw_col3 = st.columns(3)
         with tw_col1:
@@ -1275,6 +1278,31 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                      "salary sacrifice, and tax-relievable personal contributions.",
             )
 
+        # ── High-earner taper inputs ──────────────────────────────────────────
+        st.markdown("**Pension taper** (for high earners)")
+        tp_cols = st.columns([2, 1])
+        with tp_cols[0]:
+            tw_adjusted_income = st.number_input(
+                "Adjusted income (£/yr)", 0, 2_000_000, 0, 5_000,
+                format="%d", key="tw_adjusted_income",
+                help="UK 'adjusted income' is broadly taxable income + employer pension contributions. "
+                     f"For income over £{TAPER_THRESHOLD_INCOME:,}, the £{PENSION_AA:,} annual allowance "
+                     "reduces by £1 for every £2 over the threshold, floored at £10,000.",
+            )
+        # Compute tapered AA via the unit-tested helper
+        tapered_aa, taper_reduction = tapered_pension_allowance(tw_adjusted_income)
+        with tp_cols[1]:
+            if taper_reduction > 0:
+                st.metric(
+                    "Tapered AA",
+                    f"£{tapered_aa:,.0f}",
+                    delta=f"-£{taper_reduction:,.0f}",
+                    delta_color="inverse",
+                    help=f"Reduced from £{PENSION_AA:,} due to adjusted income above £{TAPER_THRESHOLD_INCOME:,}.",
+                )
+            else:
+                st.metric("Tapered AA", f"£{PENSION_AA:,}", delta="No taper applied")
+
         st.markdown("**Pension carryforward** (use unused allowance from the previous 3 years)")
         cf_cols = st.columns(3)
         with cf_cols[0]:
@@ -1287,12 +1315,14 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             cf_1 = st.number_input("Unused 1 year ago (£)", 0, 60_000, 0, 1_000,
                                    format="%d", key="cf_1")
         carryforward = cf_1 + cf_2 + cf_3
-        effective_pension_allowance = PENSION_AA + carryforward
+        # Use tapered_aa for this year, full PENSION_AA for carryforward calculation
+        # (carryforward years use that year's allowance — user can input what they had)
+        effective_pension_allowance = tapered_aa + carryforward
 
-        # Calculations
-        isa_remaining     = max(0, ISA_ALLOWANCE - tw_isa)
-        lisa_remaining    = max(0, LISA_ALLOWANCE - tw_lisa)
-        pension_remaining = max(0, effective_pension_allowance - tw_pension)
+        # Calculations — use the tested utility functions
+        isa_rem     = isa_remaining(tw_isa)
+        lisa_rem    = lisa_remaining(tw_lisa)
+        pension_rem = max(0.0, effective_pension_allowance - tw_pension)
 
         isa_pct     = tw_isa / ISA_ALLOWANCE * 100
         lisa_pct    = tw_lisa / LISA_ALLOWANCE * 100
@@ -1308,7 +1338,7 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 f"{isa_pct:.0f}%",
                 delta=f"£{tw_isa:,} / £{ISA_ALLOWANCE:,}",
                 delta_color="off",
-                help=f"£{isa_remaining:,} remaining before 5 April.",
+                help=f"£{isa_rem:,.0f} remaining before 5 April.",
             )
             st.progress(min(tw_isa / ISA_ALLOWANCE, 1.0))
         with u_col2:
@@ -1317,36 +1347,39 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 f"{lisa_pct:.0f}%",
                 delta=f"£{tw_lisa:,} / £{LISA_ALLOWANCE:,}",
                 delta_color="off",
-                help=f"£{lisa_remaining:,} remaining. Government tops up 25% (up to £1k/yr).",
+                help=f"£{lisa_rem:,.0f} remaining. Government tops up 25% (up to £1k/yr).",
             )
             st.progress(min(tw_lisa / LISA_ALLOWANCE, 1.0))
         with u_col3:
             st.metric(
                 "Pension",
                 f"{pension_pct:.0f}%",
-                delta=f"£{tw_pension:,} / £{effective_pension_allowance:,}",
+                delta=f"£{tw_pension:,} / £{effective_pension_allowance:,.0f}",
                 delta_color="off",
-                help=f"£{pension_remaining:,} remaining (includes £{carryforward:,} carryforward).",
+                help=f"£{pension_rem:,.0f} remaining (includes £{carryforward:,} carryforward).",
             )
             st.progress(min(tw_pension / max(effective_pension_allowance, 1), 1.0))
 
-        # Smart recommendation banner
+        # Smart recommendation banner — uses the tested pension_relief_estimate helper
         recs = []
-        if pension_remaining >= 5_000:
-            tax_relief_high = pension_remaining * 0.40  # higher rate
+        if pension_rem >= 5_000:
+            relief_higher = pension_relief_estimate(pension_rem, 0.40)
+            relief_basic  = pension_relief_estimate(pension_rem, 0.20)
             recs.append(
-                f"£{pension_remaining:,} pension headroom — adding it could save "
-                f"up to £{tax_relief_high:,.0f} in tax relief at 40% (or £{pension_remaining * 0.20:,.0f} at basic rate)."
+                f"£{pension_rem:,.0f} pension headroom — adding it could save "
+                f"up to £{relief_higher:,.0f} in tax relief at 40% "
+                f"(or £{relief_basic:,.0f} at basic rate)."
             )
-        if isa_remaining >= 1_000:
+        if isa_rem >= 1_000:
             recs.append(
-                f"£{isa_remaining:,} ISA headroom — sheltered from CGT and dividend tax. "
+                f"£{isa_rem:,.0f} ISA headroom — sheltered from CGT and dividend tax. "
                 f"Use it or lose it (no carryforward)."
             )
-        if tw_lisa < LISA_ALLOWANCE and tw_lisa > 0:
+        if 0 < tw_lisa < LISA_ALLOWANCE:
+            bonus_remaining = lisa_bonus(lisa_rem)
             recs.append(
-                f"£{lisa_remaining:,} LISA headroom — government adds 25% on top "
-                f"(up to £{lisa_remaining * 0.25:,.0f} this year)."
+                f"£{lisa_rem:,.0f} LISA headroom — government adds 25% on top "
+                f"(up to £{bonus_remaining:,.0f} this year)."
             )
 
         if recs:
@@ -1360,18 +1393,24 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
 
         # Summary table
         st.markdown("**Annual allowance reference (2025/26)**")
+        pension_aa_note = (
+            f"Tapered to £{tapered_aa:,.0f} at adjusted income £{tw_adjusted_income:,}"
+            if taper_reduction > 0
+            else f"Standard £{PENSION_AA:,} (no taper at £{tw_adjusted_income:,} adjusted income)"
+        )
         ref = pd.DataFrame({
-            "Wrapper": ["ISA (total)", "  └─ Lifetime ISA", "Pension AA", "Pension AA + carryforward"],
+            "Wrapper": ["ISA (total)", "  └─ Lifetime ISA", "Pension AA",
+                        "Pension AA + carryforward"],
             "2025/26 limit": [
                 f"£{ISA_ALLOWANCE:,}",
                 f"£{LISA_ALLOWANCE:,}",
-                f"£{PENSION_AA:,}",
-                f"£{effective_pension_allowance:,}",
+                f"£{tapered_aa:,.0f}",
+                f"£{effective_pension_allowance:,.0f}",
             ],
             "Notes": [
                 "Cash + S&S + IF + LISA combined",
                 "Max age 50; 25% government bonus",
-                "Tapered to £10k for adjusted income > £260k",
+                pension_aa_note,
                 f"Includes £{carryforward:,} from prior 3 yrs",
             ],
         })
