@@ -41,6 +41,39 @@ def test_parse_excel_date_year_extracts_year():
     assert df.iloc[1]["year"] == 2025
 
 
+def test_parse_iso_date_year_extracts_year():
+    """ISO date strings (yyyy-mm-dd) should also work — without raising a
+    dayfirst UserWarning."""
+    csv = "year,age,net_worth\n2024-01-15,32,52000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert df.iloc[0]["year"] == 2024
+
+
+def test_parse_tolerates_whitespace_in_column_names():
+    """CSV often has spaces after commas — 'year, age, net_worth' should work."""
+    csv = "year, age, net_worth\n2024,30,50000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert len(df) == 1
+    assert df.iloc[0]["age"] == 30
+
+
+def test_parse_tolerates_extra_columns():
+    """Extra columns beyond year/age/net_worth/note should be ignored, not crash."""
+    csv = "year,age,net_worth,category,source\n2024,30,50000,test,manual\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert len(df) == 1
+    # The extra columns should not appear in the result
+    assert "category" not in df.columns
+    assert "source" not in df.columns
+
+
+def test_parse_unparseable_year_raises_helpful_error():
+    """Year column with nonsense data should raise a clear error."""
+    csv = "year,age,net_worth\nbanana,30,50000\n"
+    with pytest.raises(ValueError, match="Could not parse"):
+        parse_personal_csv(io.StringIO(csv))
+
+
 def test_parse_accepts_decimal_age():
     csv = "year,age,net_worth\n2024,32.5,52000\n"
     df = parse_personal_csv(io.StringIO(csv))

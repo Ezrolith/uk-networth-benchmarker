@@ -41,12 +41,21 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     Parse an uploaded personal net worth CSV.
 
     Accepts:
-    - year: integer (2024) or any date string Excel might produce ("01/05/2026") — year is extracted
+    - year: integer (2024), Excel date ("01/05/2026"), or ISO date ("2024-01-15")
     - age: integer or decimal (32.4 is fine; gives more precise chart positioning)
     - net_worth: any numeric value including negatives
     - note: optional free-text label for a data point (shown in hover tooltip)
+
+    Tolerant of common CSV issues:
+    - Whitespace around column names (Excel often pads after the comma)
+    - Extra columns (only year/age/net_worth/note are kept)
+    - Mixed date formats — tries ISO first, then dayfirst (UK)
     """
     df = pd.read_csv(uploaded_file)
+    # Strip whitespace from column names so 'year, age, net_worth' works the same
+    # as 'year,age,net_worth'.
+    df.columns = [str(c).strip() for c in df.columns]
+
     required = {"year", "age", "net_worth"}
     missing = required - set(df.columns)
     if missing:
@@ -57,16 +66,23 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
         keep_cols.append("note")
     df = df[keep_cols].dropna(subset=["year", "age", "net_worth"])
 
-    # year: accept plain integers or date strings (e.g. "01/05/2026" from Excel)
+    # year: accept plain integers, ISO dates, or UK dd/mm/yyyy dates
     try:
         df["year"] = df["year"].astype(int)
     except (ValueError, TypeError):
+        # Try parsing as date. Try ISO format first to avoid the dayfirst warning
+        # when an ISO date is already supplied.
+        sample = str(df["year"].iloc[0])
+        is_iso  = len(sample) >= 10 and sample[4] == "-" and sample[7] == "-"
         try:
-            df["year"] = pd.to_datetime(df["year"], dayfirst=True).dt.year
+            if is_iso:
+                df["year"] = pd.to_datetime(df["year"]).dt.year
+            else:
+                df["year"] = pd.to_datetime(df["year"], dayfirst=True).dt.year
         except Exception:
             raise ValueError(
-                "Could not parse the 'year' column. Use a plain year (e.g. 2024) "
-                "or a date like 01/05/2026."
+                "Could not parse the 'year' column. Use a plain year (e.g. 2024), "
+                "an ISO date (2024-01-15), or a UK date (01/05/2026)."
             )
 
     # age: keep as float — decimal ages give more precise chart positioning
