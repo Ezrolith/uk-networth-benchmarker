@@ -7,9 +7,9 @@ Ranked by value vs effort. Completed items archived at the bottom.
 ## Highest priority remaining
 
 ### New features (high value, moderate effort)
-- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side.
-- [ ] **Pension AA taper for high earners** — currently the wrapper tracker shows the standard £60k; add an income input so we can compute the £10k tapered allowance for adjusted income over £260k.
-- [ ] **ISA bridge calculator** — model the "save in ISA until 55+, then access tax-free" strategy that bridges between FIRE-able age and pension access age.
+- [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side. The biggest remaining UX feature.
+- [ ] **ISA bridge calculator** — model the "save in ISA until 55+, then access tax-free" strategy that bridges between FIRE-able age and pension access age. Touches both the goal calculator and the drawdown section.
+- [ ] **CGT annual exemption tracker** — £3,000/yr (2025/26, reduced from £12,300 in 2022/23). Would need a "realised gains this year" input. Limited value without per-asset cost-basis tracking.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
@@ -144,6 +144,12 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 **New feature: UK tax wrapper tracker — v2.6:**
 - [x] In-app expander "UK tax wrapper utilisation (ISA · LISA · Pension)": inputs for current-year ISA + LISA + pension contributions, plus carryforward unused pension allowance from the previous 3 years. Outputs 3 progress bars with % utilisation, headroom amounts, and a smart-suggestion banner highlighting where the user has material capacity left and the tax relief it would unlock. 2025/26 allowances: ISA £20k, LISA £4k, Pension AA £60k.
+- [x] **Pension AA taper for high earners** — adjusted income input drives the £1-per-£2 taper over £260k, with £10k floor from £360k+. Tapered AA shown alongside the standard, propagated into the effective allowance + reference table.
+- [x] `utils/uk_tax.py` extracted with all UK 2025/26 rules: `tapered_pension_allowance`, `effective_pension_allowance`, `isa_remaining`, `lisa_remaining` (age-aware), `pension_relief_estimate`, `lisa_bonus`. 29 tests in `test_uk_tax.py` cover the taper threshold and floor, ISA/LISA remaining clamps, pension relief at basic/higher/additional rates, LISA bonus cap.
+
+**Polish — v2.6:**
+- [x] "Try with demo data" button on the empty-state banner. One-click load of a plausible 10-year sample history so first-time users can explore every feature without uploading their own data.
+- [x] CSV download for personal + partner data. Round-trips with upload schema (year, age, net_worth, note) so users can save → re-upload across devices. "Share your chart" expander renamed "Share / export your data" and split into URL + CSV columns.
 
 **New feature: Monte Carlo (accumulation + decumulation) — v2.6:**
 - [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.

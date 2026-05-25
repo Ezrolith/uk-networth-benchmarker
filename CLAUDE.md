@@ -61,6 +61,9 @@ utils/
                           decile table, build_percentile_trajectory
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
+  uk_tax.py               UK 2025/26 tax wrapper rules: pension AA taper, ISA/LISA
+                          remaining, pension relief estimate, LISA bonus.
+                          All constants exported (ISA_ALLOWANCE, PENSION_AA, etc.)
 scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
@@ -69,8 +72,11 @@ tests/
   test_data_loader.py     12 tests on CSV parsing + URL encode/decode
   test_charts_helpers.py  24 tests on formatting helpers
   test_chart_builders.py  43 smoke tests on chart builders (includes main_figure)
-  test_monte_carlo.py     15 tests on simulation, envelope, probabilities, chart
-                          (112 tests total, ~5s runtime)
+  test_monte_carlo.py     24 tests on simulation, glide path, envelope,
+                          probabilities, chart
+  test_uk_tax.py          29 tests on pension taper, ISA/LISA remaining,
+                          relief estimates, LISA bonus
+                          (150 tests total, ~6s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -177,13 +183,19 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
-**v2.6** (May 2026) — Session 7 finished:
+**v2.6** (May 2026) — Session 7 added:
 - Full charts/ package extraction (all 8 builders out of app.py)
-- pytest suite: 112 tests, ~5s runtime
+- pytest suite: 150 tests, ~6s runtime
 - GitHub Actions CI on Py 3.11 + 3.12
 - Real ONS Wave 8 data + Wave 8-aligned asset class shares
-- New: Monte Carlo projection with stochastic returns (closes the sequence-of-
-  returns risk gap from REVIEW_LOG)
+- Monte Carlo projection with stochastic returns + equity/bond glide path
+- Stochastic drawdown / pot survival probability (sequence-of-returns risk)
+- UK tax wrapper tracker: ISA + LISA + Pension AA with carryforward and
+  high-earner taper, backed by a tested `utils/uk_tax.py` module
+- 'Try with demo data' empty-state button
+- CSV download for personal + partner data (round-trips with upload)
+
+app.py: 3,105 → 2,706 lines. charts/: 0 → 8 builders. utils/: +monte_carlo +uk_tax.
 
 See NEXT_STEPS.md and REVIEW_LOG.md for the full session log.
 
