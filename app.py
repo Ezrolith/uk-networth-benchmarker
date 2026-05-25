@@ -573,8 +573,9 @@ if personal_plot_df is None or len(personal_plot_df) == 0:
             st.write("")  # spacer
             if st.button("Try with demo data", use_container_width=True,
                          help="Load a 10-year sample history so you can explore every feature."):
-                # Use a plausible 10-year arc: starting 25, NW £8k → growing to 35 / £180k
-                # roughly tracking the median for a moderate saver.
+                # Plausible 11-year arc: starting age 25 in 2016 with £8k, growing
+                # to age 35 / £210k by 2026 — roughly tracking the median for a
+                # moderate saver. Notes showcase the hover-annotation feature.
                 st.session_state["you_method"] = "Manual entry"
                 st.session_state["you_rows"] = [
                     {"year": 2016, "age": 25, "net_worth":   8_000, "note": "first real job"},
@@ -587,6 +588,7 @@ if personal_plot_df is None or len(personal_plot_df) == 0:
                     {"year": 2023, "age": 32, "net_worth": 138_000, "note": "promotion"},
                     {"year": 2024, "age": 33, "net_worth": 155_000, "note": ""},
                     {"year": 2025, "age": 34, "net_worth": 180_000, "note": ""},
+                    {"year": 2026, "age": 35, "net_worth": 210_000, "note": "married"},
                 ]
                 st.rerun()
 
