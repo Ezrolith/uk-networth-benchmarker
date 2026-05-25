@@ -1489,8 +1489,20 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
 
         # Calculations — use the tested utility functions
         isa_rem     = isa_remaining(tw_isa)
-        lisa_rem    = lisa_remaining(tw_lisa)
+        lisa_rem    = lisa_remaining(
+            tw_lisa,
+            age=int(latest_age) if latest_age is not None else None,
+        )
         pension_rem = max(0.0, effective_pension_allowance - tw_pension)
+
+        # If the user is over 50, LISA pay-in is closed entirely
+        lisa_closed = latest_age is not None and latest_age > 50
+        if lisa_closed and tw_lisa > 0:
+            st.warning(
+                f"You're over 50, so LISA contributions are no longer allowed. "
+                f"Existing LISA balances continue to grow, but new pay-ins stopped at 50.",
+                icon="⚠️",
+            )
 
         isa_pct     = tw_isa / ISA_ALLOWANCE * 100
         lisa_pct    = tw_lisa / LISA_ALLOWANCE * 100
