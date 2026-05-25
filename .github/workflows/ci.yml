@@ -33,23 +33,8 @@ jobs:
       - name: Install test dependencies
         run: pip install pytest
 
-      - name: Syntax check (py_compile)
-        run: |
-          python -m py_compile app.py
-          python -m py_compile utils/inference.py
-          python -m py_compile utils/data_loader.py
-          python -m py_compile utils/monte_carlo.py
-          python -m py_compile utils/uk_tax.py
-          python -m py_compile charts/__init__.py
-          python -m py_compile charts/_helpers.py
-          python -m py_compile charts/main_figure.py
-          python -m py_compile charts/asset_class.py
-          python -m py_compile charts/heatmap.py
-          python -m py_compile charts/distribution.py
-          python -m py_compile charts/gains.py
-          python -m py_compile charts/percentile_trajectory.py
-          python -m py_compile charts/whatif.py
-          python -m py_compile charts/monte_carlo.py
+      - name: Syntax check (py_compile every .py file)
+        run: python scripts/compile_check.py
 
       - name: Run tests
         run: pytest -v --tb=short

@@ -45,13 +45,7 @@ test-quick:
 	$(PYTHON) -m pytest tests/ -q --tb=line
 
 compile:
-	$(PYTHON) -m py_compile app.py
-	$(PYTHON) -m py_compile utils/inference.py
-	$(PYTHON) -m py_compile utils/data_loader.py
-	$(PYTHON) -m py_compile utils/monte_carlo.py
-	$(PYTHON) -m py_compile utils/uk_tax.py
-	$(PYTHON) -m py_compile charts/__init__.py
-	@echo "All source files compile cleanly."
+	$(PYTHON) scripts/compile_check.py
 
 run:
 	$(PYTHON) -m streamlit run app.py
