@@ -31,6 +31,28 @@ STATE_PENSION_AGE      = 67      # SPA for cohorts retiring 2028+; rises to 68 f
                                  # (proposed; could be brought forward). 66 for cohorts
                                  # who already qualified pre-2028.
 
+# ── Life expectancy at retirement age (ONS 2020-22 cohort, mixed-sex) ─────────
+# Approximate cohort life expectancy at each retirement age. Source: ONS
+# National Life Tables, 2020-22 (UK, mixed-sex average). Used by the
+# drawdown simulator to compare 'pot depletion age' against 'how long
+# you're likely to live'. Treat as a rough planning anchor — actual
+# longevity has a wide spread (many will live 10+ years beyond average).
+LIFE_EXPECTANCY_AT_AGE = {
+    55: 86, 60: 85, 65: 85, 67: 84, 70: 83, 75: 82, 80: 81,
+}
+
+
+def life_expectancy_at(retirement_age: int) -> int:
+    """
+    UK ONS cohort life expectancy at a given retirement age (mixed-sex).
+    Interpolates for ages not directly in the lookup table.
+    """
+    if retirement_age in LIFE_EXPECTANCY_AT_AGE:
+        return LIFE_EXPECTANCY_AT_AGE[retirement_age]
+    # Outside the table: rough linear extrapolation from age 65 (~85),
+    # losing ~0.2 years per year of late retirement
+    return int(85 - max(0, retirement_age - 65) * 0.2)
+
 # ── IHT (Inheritance Tax) thresholds 2025/26 ───────────────────────────────────
 # Both nil-rate bands are frozen at these values until April 2030.
 NIL_RATE_BAND          = 325_000  # Per person standard nil-rate band

@@ -16,10 +16,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from utils.uk_tax import (  # noqa: E402
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
-    iht_payable,
+    iht_payable, life_expectancy_at,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD, TAPER_FLOOR,
     NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, IHT_STANDARD_RATE, IHT_REDUCED_RATE,
     IHT_BANDS, STATE_PENSION_AGE, STATE_PENSION_2026_27,
+    LIFE_EXPECTANCY_AT_AGE,
 )
 
 
@@ -235,3 +236,36 @@ def test_state_pension_amount_realistic():
     # 2024/25 was £11,502. 2025/26 was £11,973. 2026/27 estimate ~£12,400.
     # If this assertion fails because the figure was refreshed, just update it.
     assert 11_500 <= STATE_PENSION_2026_27 <= 13_500
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Life expectancy at retirement age
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_life_expectancy_lookup_table_covers_common_ages():
+    """The table should have at least the standard retirement ages."""
+    for age in (55, 60, 65, 67, 70, 75, 80):
+        assert age in LIFE_EXPECTANCY_AT_AGE, f"age {age} missing from lookup"
+
+
+def test_life_expectancy_at_known_ages():
+    """Verify the function returns the exact lookup value for ages in the table."""
+    assert life_expectancy_at(65) == 85
+    assert life_expectancy_at(67) == 84
+    assert life_expectancy_at(60) == 85
+
+
+def test_life_expectancy_at_extrapolates_outside_table():
+    """For ages not in the table, the function should still return a reasonable value."""
+    # Age 62 is between 60 (LE 85) and 65 (LE 85) — should fall back to extrapolation
+    le = life_expectancy_at(62)
+    assert 80 < le <= 90, f"life_expectancy_at(62) = {le}, outside plausible range"
+
+
+def test_life_expectancy_monotone_non_increasing():
+    """Cohort life expectancy should weakly decrease (or stay the same) as
+    retirement age rises — older retirees are starting from a later baseline."""
+    ages = sorted(LIFE_EXPECTANCY_AT_AGE.keys())
+    values = [LIFE_EXPECTANCY_AT_AGE[a] for a in ages]
+    for a, b in zip(values, values[1:]):
+        assert a >= b, f"Life expectancy not monotone non-increasing: {values}"

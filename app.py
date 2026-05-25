@@ -60,7 +60,7 @@ from utils.uk_tax        import (  # noqa: F401
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
     iht_payable, IHT_BANDS, IHT_STANDARD_RATE,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
-    STATE_PENSION_AGE,
+    STATE_PENSION_AGE, life_expectancy_at,
 )
 
 # ── Page config ───────────────────────────────────────────────────────────────
@@ -1201,11 +1201,8 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 st.metric("Pot survives to", f"≥ age {_max_sim_age}",
                           delta="Sustainable", help="Pot still has funds at age 100.")
         with dd_m3:
-            # Compare to UK life expectancy (ONS 2020-22 cohort life expectancy at retirement age)
-            # Approx values for someone retiring at 65: M ~84, F ~86, mixed ~85.
-            # At 60: M ~85, F ~87. At 55: M ~86, F ~88.
-            _le_at_retire = {55: 86, 60: 85, 65: 85, 67: 84, 70: 83, 75: 82, 80: 81}.get(dd_start_age,
-                            int(85 - max(0, dd_start_age - 65) * 0.2))
+            # UK ONS cohort life expectancy at this retirement age (utils/uk_tax.py)
+            _le_at_retire = life_expectancy_at(dd_start_age)
             st.metric("Avg life expectancy", f"~{_le_at_retire}",
                       help="ONS cohort life expectancy at this retirement age (mixed-sex). "
                            "Many will live longer — plan for ~10 years beyond average.")
