@@ -943,6 +943,138 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "the Personal Allowance (~£12,570)."
         )
 
+# ── ISA bridge calculator (early retirement before pension access) ────────────
+# Many UK FIRE-planners face a gap: they can stop work at e.g. 50 but private
+# pension access is locked until 57 (rising to 58 in 2028). The "bridge" is
+# how much accessible (ISA / GIA) wealth they need to cover spending from FIRE
+# age until pension access age.
+
+if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+    with st.expander("ISA / accessible-wealth bridge (for early retirement)"):
+        st.caption(
+            "If you want to retire **before pension access age** (currently 57, rising to 58 in 2028, "
+            "and 10 years below state pension age thereafter), you need enough **accessible** wealth "
+            "(ISA, GIA, savings — not pension) to cover spending until the pension unlocks. "
+            "This calculator sizes that bridge fund."
+        )
+
+        ib_col1, ib_col2, ib_col3 = st.columns(3)
+        with ib_col1:
+            ib_fire_age = st.number_input(
+                "FIRE age (stop working)", 35, 65,
+                value=min(int(latest_age) + 15 if latest_age else 50, 60),
+                step=1, key="ib_fire_age",
+                help="Age you intend to stop drawing employment income.",
+            )
+        with ib_col2:
+            ib_pension_age = st.number_input(
+                "Pension access age", 55, 70, 57, 1, key="ib_pension_age",
+                help="Earliest you can access private pension. 55 historically; "
+                     "57 from April 2028; will rise with state pension age (10-yr gap).",
+            )
+        with ib_col3:
+            ib_annual_spend = st.number_input(
+                "Annual spend (£, real terms)", 5_000, 500_000,
+                int(fire_spending) if fire_spending else 30_000, 1_000,
+                format="%d", key="ib_spend",
+                help="What you'll spend each year during the bridge period, in today's money.",
+            )
+
+        bridge_years = max(0, ib_pension_age - ib_fire_age)
+
+        if bridge_years == 0:
+            st.success(
+                "No bridge needed — your FIRE age is at or after pension access age. "
+                "You can draw straight from pension wrappers.",
+                icon="✅",
+            )
+        else:
+            # Bridge calculation: use 4% SWR for the bridge period too.
+            # For short horizons (< 10 yrs) it's conservative; longer horizons
+            # may need higher SWR. The 25x multiplier comes from 1/0.04.
+            #
+            # Two approaches:
+            # 1. Simple: bridge_years × annual_spend (no growth, full liquidation)
+            # 2. SWR-based: spend × 25 × (bridge_years / 30)  [partial Trinity]
+            #
+            # For honesty, show both. The SWR method assumes the bridge fund
+            # also earns ~4% real return during the bridge years.
+            bridge_simple = bridge_years * ib_annual_spend
+            # At constant 4% real return, FV-of-annuity factor for `bridge_years`:
+            #   PV = spend × (1 - (1+r)^-n) / r, with r=0.04
+            r = 0.04
+            pv_factor = (1 - (1 + r) ** -bridge_years) / r if r > 0 else bridge_years
+            bridge_swr = ib_annual_spend * pv_factor
+
+            ib_m1, ib_m2, ib_m3 = st.columns(3)
+            with ib_m1:
+                st.metric(
+                    "Bridge years",
+                    f"{bridge_years}",
+                    help=f"From FIRE age {ib_fire_age} to pension access age {ib_pension_age}.",
+                )
+            with ib_m2:
+                st.metric(
+                    "ISA pot needed (conservative)",
+                    _fmt(bridge_simple),
+                    help="Years × spend. Assumes no growth on the bridge fund "
+                         "(it all just runs down).",
+                )
+            with ib_m3:
+                st.metric(
+                    "ISA pot needed (4% real)",
+                    _fmt(bridge_swr),
+                    delta=_fmt(bridge_swr - bridge_simple),
+                    delta_color="inverse",
+                    help="PV-of-annuity at 4% real return. The bridge fund earns "
+                         "while it's being drawn down, so a smaller pot is needed.",
+                )
+
+            # ETA to bridge target (using latest_nw + CAGR if available)
+            sorted_pdf_for_eta = personal_plot_df.sort_values("age")
+            if len(sorted_pdf_for_eta) >= 2:
+                _fs = float(sorted_pdf_for_eta.iloc[0]["net_worth"])
+                _asp = float(sorted_pdf_for_eta.iloc[-1]["age"]) - float(sorted_pdf_for_eta.iloc[0]["age"])
+                _cagr = _safe_cagr(_fs, latest_nw, _asp)
+                if _cagr and _cagr > 0:
+                    # Years to grow latest_nw → bridge_swr at current CAGR
+                    if latest_nw < bridge_swr:
+                        yrs_to_bridge = math.log(bridge_swr / latest_nw) / math.log(1 + _cagr)
+                        eta_age = latest_age + yrs_to_bridge
+                        gap_yrs = ib_fire_age - latest_age
+                        if eta_age <= ib_fire_age:
+                            st.success(
+                                f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
+                                f"by age {eta_age:.0f} — **{gap_yrs - yrs_to_bridge:.0f} years of buffer** "
+                                f"before FIRE age {ib_fire_age}.",
+                                icon="✅",
+                            )
+                        else:
+                            shortfall_yrs = eta_age - ib_fire_age
+                            st.warning(
+                                f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
+                                f"by age {eta_age:.0f} — **{shortfall_yrs:.1f} years past FIRE age {ib_fire_age}**. "
+                                "Consider extending the timeline, lowering spend, or increasing savings.",
+                                icon="⚠️",
+                            )
+                    else:
+                        st.success(
+                            f"Your current net worth of {_fmt(latest_nw)} already exceeds the bridge "
+                            f"target of {_fmt(bridge_swr)}. Provided enough of it is in accessible "
+                            "wrappers (ISA / GIA, not pension), you're set.",
+                            icon="✅",
+                        )
+
+            st.caption(
+                "**Assumes 4% real return on the bridge fund during drawdown.** Bridge years are "
+                "between FIRE age and pension access age; this calculator does NOT check that the "
+                "bridge fund is actually in accessible wrappers — you'll need to verify your "
+                "ISA + GIA balance specifically (not pension) covers this. State pension (from 66/67) "
+                "is not modelled here; if your pension access is before state pension age, you may "
+                "still need a smaller second bridge from pension access to state pension."
+            )
+
+
 # ── Drawdown / pot longevity simulator ───────────────────────────────────────
 # How long does your pot last in retirement under various withdrawal rates?
 
@@ -2173,6 +2305,33 @@ result — important for UX (sliders don't jitter the chart on rerun).
 **Caveats** — returns are assumed normally distributed and independent
 year-to-year. Real markets exhibit mean reversion, fat tails, and bursts of
 correlated bad years. Treat as a planning aid, not a forecast.
+
+### ISA / accessible-wealth bridge
+
+For UK early-retirement planners: private pension access is locked until age 57
+(rising to 58 in 2028, then tracking 10 years below the state pension age).
+Anyone retiring earlier needs **accessible wealth** (ISA, GIA, savings — not
+pension) to bridge the gap.
+
+The calculator computes the bridge fund needed two ways:
+
+1. **Conservative** = bridge_years × annual_spend
+   Assumes no growth on the bridge fund — it just gets drawn down to zero.
+
+2. **4% real** = annual_spend × ((1 − (1.04)^−n) / 0.04)
+   PV-of-annuity at 4% real return. The bridge fund earns while being drawn,
+   so a smaller pot suffices.
+
+Where `n` = bridge years (pension access age − FIRE age).
+
+If personal CAGR is available, the calculator also projects when you'd reach
+the bridge target at your current growth rate, and compares against your
+chosen FIRE age — green if you'd hit it with buffer, amber if you'd be late.
+
+**Caveats.** Does not verify that your bridge wealth is actually held in
+accessible wrappers — that's on you. Does not model state pension (kicks in
+at 66/67), so a second mini-bridge from pension-access to state-pension age
+may also be relevant.
 
 ### Retirement income forecast
 
