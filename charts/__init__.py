@@ -29,6 +29,7 @@ from .gains import build_gains_chart, build_velocity_chart, build_cumulative_cha
 from .percentile_trajectory import build_percentile_chart
 from .whatif import build_whatif_figure
 from .main_figure import build_main_figure
+from .monte_carlo import build_monte_carlo_chart
 
 __all__ = [
     "build_main_figure",
@@ -40,5 +41,6 @@ __all__ = [
     "build_cumulative_chart",
     "build_percentile_chart",
     "build_whatif_figure",
+    "build_monte_carlo_chart",
     "fmt", "fmt_delta", "clean_note", "safe_cagr", "hover_template", "best_gain",
 ]

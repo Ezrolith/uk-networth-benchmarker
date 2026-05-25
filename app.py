@@ -36,6 +36,8 @@ from charts.gains        import build_gains_chart, build_velocity_chart, build_c
 from charts.percentile_trajectory import build_percentile_chart  # noqa: F401
 from charts.whatif       import build_whatif_figure     # noqa: F401
 from charts.main_figure  import build_main_figure       # noqa: F401
+from charts.monte_carlo  import build_monte_carlo_chart  # noqa: F401
+from utils.monte_carlo   import run_monte_carlo, probability_of_reaching  # noqa: F401
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -1549,6 +1551,109 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
                               f"Projected net worth at age {wi_age} from pure investment growth "
                               "(no further contributions)."),
                     )
+
+# ── Monte Carlo projection ────────────────────────────────────────────────────
+
+if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and latest_nw > 0:
+    with st.expander("Monte Carlo projection (stochastic returns)"):
+        st.caption(
+            "Forward-project with **random returns** rather than a fixed CAGR. "
+            "Each simulation samples annual returns from a normal distribution; "
+            "the shaded bands show the range of likely outcomes. "
+            "This captures sequence-of-returns risk that the deterministic what-if can't show."
+        )
+        mc1, mc2, mc3, mc4 = st.columns(4)
+        with mc1:
+            mc_mean = st.number_input(
+                "Expected real return (%)", -5.0, 15.0, 5.0, 0.5, key="mc_mean",
+                help="Long-run real return assumption. 60/40 portfolio ≈ 4-5%, "
+                     "100% equity ≈ 5-7%.",
+            )
+        with mc2:
+            mc_sigma = st.number_input(
+                "Annual volatility (%)", 0.0, 30.0, 12.0, 1.0, key="mc_sigma",
+                help="Standard deviation of annual returns. 60/40 portfolio ≈ 9-11%, "
+                     "100% global equity ≈ 16-18%.",
+            )
+        with mc3:
+            mc_target_age = st.slider(
+                "Project to age",
+                min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
+                max_value=85,
+                value=min(int(latest_age) + 25 if latest_age else 65, 85),
+                key="mc_target_age",
+            )
+        with mc4:
+            mc_monthly = st.number_input(
+                "Monthly contributions (£)", 0, 50_000, 0, 100,
+                format="%d", key="mc_monthly",
+            )
+
+        mc_target_nw = st.number_input(
+            "Target net worth (£) — optional",
+            0, 10_000_000, int(goal_amount) if "goal_amount" in dir() and goal_amount else 500_000,
+            10_000, format="%d", key="mc_target",
+            help="Probability of finishing above this value will be shown below.",
+        )
+        mc_show_paths = st.slider(
+            "Show sample paths", 0, 100, 30, 5, key="mc_show_paths",
+            help="Number of individual simulation paths to overlay (0 = bands only).",
+        )
+
+        mc_years = max(1, mc_target_age - int(latest_age or 30))
+        mc_paths = run_monte_carlo(
+            start_nw=float(latest_nw),
+            years=mc_years,
+            mean_return=mc_mean / 100,
+            std_return=mc_sigma / 100,
+            n_sims=1_000,
+            annual_contribution=mc_monthly * 12,
+            seed=42,  # deterministic for reproducible UX
+        )
+
+        mc_fig = build_monte_carlo_chart(
+            mc_paths,
+            start_age=float(latest_age or 30),
+            target=mc_target_nw if mc_target_nw > 0 else None,
+            show_sample_paths=mc_show_paths,
+            median_colour=COLOURS["p50"],
+            target_colour=COLOURS["person"],
+            price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms
+                         else f"nominal ({DATA_YEAR} prices)"),
+        )
+        st.plotly_chart(mc_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+        # Outcome summary
+        final_values = mc_paths[:, -1]
+        p10, p50, p90 = (float(v) for v in
+                         (final_values.min() if len(final_values) < 1 else
+                          (np.percentile(final_values, 10),
+                           np.percentile(final_values, 50),
+                           np.percentile(final_values, 90))))
+        prob_target = probability_of_reaching(mc_paths, mc_target_nw) if mc_target_nw > 0 else None
+
+        col_p10, col_p50, col_p90, col_pt = st.columns(4)
+        with col_p10:
+            st.metric(f"Pessimistic (P10) at age {mc_target_age}", _fmt(p10))
+        with col_p50:
+            st.metric(f"Median (P50) at age {mc_target_age}", _fmt(p50))
+        with col_p90:
+            st.metric(f"Optimistic (P90) at age {mc_target_age}", _fmt(p90))
+        with col_pt:
+            if prob_target is not None:
+                st.metric(
+                    "Reach target",
+                    f"{prob_target*100:.0f}%",
+                    help=f"Fraction of simulations that finish at or above £{mc_target_nw:,}.",
+                )
+
+        st.caption(
+            f"1,000 simulations · annual returns drawn from N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) · "
+            f"random seed fixed for reproducibility. "
+            "Assumes returns are uncorrelated year-to-year and normally distributed — "
+            "real markets show mean reversion and fat tails, so treat as a planning aid not a forecast."
+        )
+
 
 # ── Asset class breakdown chart ───────────────────────────────────────────────
 
