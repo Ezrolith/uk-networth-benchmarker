@@ -72,6 +72,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Public URL used in the share-link feature. If deployment ever moves, update here.
+# Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
+PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
+
 st.markdown(
     """
     <style>
@@ -1796,7 +1800,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             st.markdown("**Shareable link**")
             try:
                 token = encode_personal_data(personal_plot_df)
-                share_url = f"https://uk-networth-benchmarker.streamlit.app/?d={token}"
+                share_url = f"{PUBLIC_APP_URL}/?d={token}"
                 st.text_input(
                     "Data is encoded in the URL — nothing is stored on any server:",
                     value=share_url, key="share_url_box",
