@@ -20,6 +20,7 @@ from utils.inference import interpolate_benchmarks, build_asset_class_series  # 
 
 from charts.asset_class import build_asset_class_chart  # noqa: E402
 from charts.heatmap import build_heatmap  # noqa: E402
+from charts.distribution import build_distribution_chart  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -120,3 +121,43 @@ def test_heatmap_uses_custom_colours(benchmark, personal_history):
 def test_heatmap_title_includes_price_label(benchmark):
     fig = build_heatmap(benchmark, price_label="2026 real terms")
     assert "2026 real terms" in fig.layout.title.text
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Distribution chart
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_distribution_chart_builds(benchmark):
+    fig = build_distribution_chart(40, benchmark)
+    assert fig is not None
+    # Should at least have the density curve trace
+    assert len(fig.data) >= 1
+    assert "Distribution" in [t.name for t in fig.data]
+
+
+def test_distribution_chart_with_user_marker(benchmark):
+    fig = build_distribution_chart(40, benchmark, user_nw=200_000)
+    assert fig is not None
+    # User marker is added as a vline annotation, not a trace — check shapes/annotations
+    annotations = [a.text for a in fig.layout.annotations]
+    assert any("You" in t for t in annotations)
+
+
+def test_distribution_chart_with_partner(benchmark):
+    fig = build_distribution_chart(40, benchmark, user_nw=200_000, partner_nw=180_000)
+    annotations = [a.text for a in fig.layout.annotations]
+    assert any("Partner" in t for t in annotations)
+
+
+def test_distribution_chart_returns_none_at_invalid_age(benchmark):
+    # Force a bad benchmark where age has zero values
+    bad = benchmark.copy()
+    bad.loc[bad["age"] == 40, "value"] = 0
+    fig = build_distribution_chart(40, bad)
+    assert fig is None
+
+
+def test_distribution_chart_clamps_age_over_85(benchmark):
+    fig = build_distribution_chart(95, benchmark)
+    assert fig is not None
+    assert "85" in fig.layout.title.text  # title shows the clamped age
