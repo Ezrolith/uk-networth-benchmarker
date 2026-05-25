@@ -28,7 +28,7 @@ STDLIB = {
 }
 
 # Project modules (imports of our own code shouldn't need a pip package)
-PROJECT_PACKAGES = {"app", "charts", "utils", "tests", "scripts"}
+PROJECT_PACKAGES = {"app", "charts", "utils", "tests", "scripts", "data"}
 
 # Map of import name -> requirements.txt entry name (when they differ)
 IMPORT_TO_REQUIREMENTS = {

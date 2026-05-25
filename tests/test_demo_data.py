@@ -22,26 +22,14 @@ from utils.inference import (
 )
 
 
-# Exact data that app.py sets when the demo button is clicked.
-# If this is updated in app.py, update it here too.
-DEMO_DATA = [
-    {"year": 2016, "age": 25, "net_worth":   8_000, "note": "first real job"},
-    {"year": 2017, "age": 26, "net_worth":  18_000, "note": ""},
-    {"year": 2018, "age": 27, "net_worth":  29_000, "note": ""},
-    {"year": 2019, "age": 28, "net_worth":  45_000, "note": "bought first flat"},
-    {"year": 2020, "age": 29, "net_worth":  62_000, "note": ""},
-    {"year": 2021, "age": 30, "net_worth":  88_000, "note": ""},
-    {"year": 2022, "age": 31, "net_worth": 112_000, "note": ""},
-    {"year": 2023, "age": 32, "net_worth": 138_000, "note": "promotion"},
-    {"year": 2024, "age": 33, "net_worth": 155_000, "note": ""},
-    {"year": 2025, "age": 34, "net_worth": 180_000, "note": ""},
-    {"year": 2026, "age": 35, "net_worth": 210_000, "note": "married"},
-]
+# Single source of truth — both app.py and this test import from here, so
+# tests automatically track any changes to the demo data without manual sync.
+from data.demo_data import DEMO_HISTORY
 
 
 @pytest.fixture
 def demo_df() -> pd.DataFrame:
-    return pd.DataFrame(DEMO_DATA)
+    return pd.DataFrame(DEMO_HISTORY)
 
 
 def test_demo_data_has_11_rows(demo_df):

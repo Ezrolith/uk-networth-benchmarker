@@ -596,24 +596,13 @@ if personal_plot_df is None or len(personal_plot_df) == 0:
         with empty_col2:
             st.write("")  # spacer
             if st.button("Try with demo data", use_container_width=True,
-                         help="Load a 10-year sample history so you can explore every feature."):
-                # Plausible 11-year arc: starting age 25 in 2016 with £8k, growing
-                # to age 35 / £210k by 2026 — roughly tracking the median for a
-                # moderate saver. Notes showcase the hover-annotation feature.
+                         help="Load an 11-year sample history so you can explore every feature."):
+                # Single source of truth in data/demo_data.py — imported here
+                # and also verified by tests/test_demo_data.py against the same
+                # constant (no risk of drift between app and test).
+                from data.demo_data import DEMO_HISTORY
                 st.session_state["you_method"] = "Manual entry"
-                st.session_state["you_rows"] = [
-                    {"year": 2016, "age": 25, "net_worth":   8_000, "note": "first real job"},
-                    {"year": 2017, "age": 26, "net_worth":  18_000, "note": ""},
-                    {"year": 2018, "age": 27, "net_worth":  29_000, "note": ""},
-                    {"year": 2019, "age": 28, "net_worth":  45_000, "note": "bought first flat"},
-                    {"year": 2020, "age": 29, "net_worth":  62_000, "note": ""},
-                    {"year": 2021, "age": 30, "net_worth":  88_000, "note": ""},
-                    {"year": 2022, "age": 31, "net_worth": 112_000, "note": ""},
-                    {"year": 2023, "age": 32, "net_worth": 138_000, "note": "promotion"},
-                    {"year": 2024, "age": 33, "net_worth": 155_000, "note": ""},
-                    {"year": 2025, "age": 34, "net_worth": 180_000, "note": ""},
-                    {"year": 2026, "age": 35, "net_worth": 210_000, "note": "married"},
-                ]
+                st.session_state["you_rows"] = list(DEMO_HISTORY)
                 st.rerun()
 
 # Warn if real-terms mode is on and some personal data falls outside the
