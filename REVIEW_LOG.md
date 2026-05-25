@@ -228,20 +228,48 @@ Ordered by impact × effort.
   1,000 simulations with random returns to compute the probability the pot
   survives to each age. Colour-coded verdict at ≥85% / ≥60% / <60% survival.
 
+### New feature: UK tax wrapper tracker
+- `utils/uk_tax.py` — tested module with `tapered_pension_allowance`,
+  `effective_pension_allowance`, `isa_remaining`, `lisa_remaining`,
+  `pension_relief_estimate`, `lisa_bonus`. All 2025/26 UK constants
+  exported.
+- In-app expander showing ISA/LISA/Pension AA utilisation with progress
+  bars + headroom. Smart-suggestion banner identifies where headroom ×
+  marginal tax relief is material. Reference table at the bottom shows
+  current limits with the user's tapered AA reflected.
+- **Pension AA taper for high earners** (£260k+ adjusted income): £1
+  reduction per £2 over threshold, floored at £10k from £360k onward.
+
+### New feature: ISA / accessible-wealth bridge
+- Sizes the bridge fund needed by early retirees to cover spending from
+  FIRE age until pension access age (currently 57, rising to 58 in 2028,
+  then 10-yr gap to state pension age).
+- Two pot sizings: conservative no-growth and 4% real return PV-of-annuity.
+- ETA projection: at current CAGR, when would the user reach the target?
+  Green if buffer before FIRE age, amber if shortfall.
+
 ### Polish
 - **'Try with demo data' button** on the empty-state banner — one click
-  loads a 10-year sample history so first-time users can explore every
-  feature without uploading their own data.
+  loads an 11-year sample history (2016-2026, ages 25-35) including note
+  annotations so first-time users can explore every feature.
+- **CSV download for personal + partner data** — round-trips with the
+  upload schema (year, age, net_worth, note); "Share your chart" expander
+  is now "Share / export your data" with both URL + CSV columns.
 - Methodology panel rewritten: documents the ONS Wave 8 source, distinguishes
-  published medians from derived quartiles, adds a Monte Carlo section
-  describing both modes and the seeded UX behaviour.
+  published medians from derived quartiles, adds sections on Monte Carlo
+  (both modes), UK tax wrappers, ISA bridge, and stochastic drawdown.
+- `tests/conftest.py` extracted with session-scoped fixtures — test runtime
+  dropped from 5.5s to 4.2s.
 
 ## Outcome
 
-- **121 tests passing** (~5s runtime).
-- **24 commits**, all pushed.
+- **150 tests passing** (~4s runtime).
+- **32 commits**, all pushed.
 - App version: v2.5 → v2.6.
 - Real WAS data now powers every quoted figure.
 - All chart builders are isolated and unit-tested.
 - Monte Carlo closes the sequence-of-returns risk gap that was the largest
   remaining analytical limitation.
+- Tax wrapper tracker + taper + ISA bridge fill out the UK-specific
+  planning surface.
+- CSV export closes the data round-trip (upload + edit + export).
