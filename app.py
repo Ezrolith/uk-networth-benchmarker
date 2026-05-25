@@ -650,8 +650,23 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                   help=f"In {price_note}. Delta vs previous data point.")
     with col3:
         if exact_pct:
-            st.metric("Est. percentile", f"~{exact_pct:.0f}th",
-                      help="Log-normal fit to P25/P50/P75. Indicative only.")
+            # The log-normal model clamps at [0.5, 99.5]. Flag when the user
+            # is at the edge of the model so they know to treat the figure
+            # as a floor/ceiling, not a precise estimate.
+            if exact_pct >= 99.0:
+                pct_label = "99th+"
+                pct_help  = ("You're at the top of the model's range. "
+                             "Treat as 'top ~1%' — the log-normal fit can't "
+                             "distinguish further at this end.")
+            elif exact_pct <= 1.0:
+                pct_label = "<1st"
+                pct_help  = ("You're at the bottom of the model's range. "
+                             "Treat as 'bottom ~1%' — the log-normal fit can't "
+                             "distinguish further at this end.")
+            else:
+                pct_label = f"~{exact_pct:.0f}th"
+                pct_help  = "Log-normal fit to P25/P50/P75. Indicative only."
+            st.metric("Est. percentile", pct_label, help=pct_help)
         else:
             short_band = {
                 "below the 25th percentile":                  "Below P25",
