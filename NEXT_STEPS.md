@@ -7,8 +7,9 @@ Ranked by value vs effort. Completed items archived at the bottom.
 ## Highest priority remaining
 
 ### New features (high value, moderate effort)
-- [ ] **Tax wrapper tracker** — ISA / LISA / Pension AA utilisation by year. Important for UK planning; needs new sidebar UI.
 - [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side.
+- [ ] **Pension AA taper for high earners** — currently the wrapper tracker shows the standard £60k; add an income input so we can compute the £10k tapered allowance for adjusted income over £260k.
+- [ ] **ISA bridge calculator** — model the "save in ISA until 55+, then access tax-free" strategy that bridges between FIRE-able age and pension access age.
 
 ### Chart / UX polish
 - [ ] **Mobile layout** — sidebar collapses awkwardly on small screens; consider an `st.tabs` or top-of-page expander pattern for mobile.
@@ -140,6 +141,9 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] `charts/whatif.py` — build_whatif_figure refactored to take project_to_age / monthly_savings / actual_colour / price_label / scenario_colours as keyword args.
 - [x] `charts/main_figure.py` — build_main_figure fully extracted; all dependencies (benchmark, personal_plot_df, partner_plot_df, colours, basis, wealth_component, age range, latest_*, etc.) passed explicitly. Migration complete.
 - [x] **Sidebar Goal calculator split** — was one bundled expander with four sub-tools; now three focused expanders: "Wealth goal & FIRE number", "Retirement income & pension pot", "Savings rate calculator". Savings calculator gives helpful guidance when no personal data or non-positive CAGR.
+
+**New feature: UK tax wrapper tracker — v2.6:**
+- [x] In-app expander "UK tax wrapper utilisation (ISA · LISA · Pension)": inputs for current-year ISA + LISA + pension contributions, plus carryforward unused pension allowance from the previous 3 years. Outputs 3 progress bars with % utilisation, headroom amounts, and a smart-suggestion banner highlighting where the user has material capacity left and the tax relief it would unlock. 2025/26 allowances: ISA £20k, LISA £4k, Pension AA £60k.
 
 **New feature: Monte Carlo (accumulation + decumulation) — v2.6:**
 - [x] `utils/monte_carlo.py` — run_monte_carlo with normal-distribution annual returns, percentile_envelope, probability_of_reaching, probability_of_ruin. Seeded for reproducible UX.
