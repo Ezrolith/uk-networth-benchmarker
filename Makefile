@@ -51,7 +51,7 @@ compile:
 	@echo "All source files compile cleanly."
 
 run:
-	streamlit run app.py
+	$(PYTHON) -m streamlit run app.py
 
 check: compile test-quick
 	@echo "All checks passed."
