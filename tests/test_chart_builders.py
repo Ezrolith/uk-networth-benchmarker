@@ -21,6 +21,7 @@ from utils.inference import interpolate_benchmarks, build_asset_class_series  # 
 from charts.asset_class import build_asset_class_chart  # noqa: E402
 from charts.heatmap import build_heatmap  # noqa: E402
 from charts.distribution import build_distribution_chart  # noqa: E402
+from charts.gains import build_gains_chart, build_velocity_chart, build_cumulative_chart  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -161,3 +162,68 @@ def test_distribution_chart_clamps_age_over_85(benchmark):
     fig = build_distribution_chart(95, benchmark)
     assert fig is not None
     assert "85" in fig.layout.title.text  # title shows the clamped age
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Gains / velocity / cumulative
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_gains_chart_builds(personal_history):
+    fig = build_gains_chart(personal_history)
+    assert fig is not None
+    assert len(fig.data) == 1  # single bar trace
+    bar = fig.data[0]
+    # Should have 3 bars (4 data points → 3 diffs)
+    assert len(bar.x) == 3
+
+
+def test_gains_chart_colours_negatives_red():
+    pdf = pd.DataFrame({
+        "year": [2020, 2021, 2022],
+        "age":  [30.0, 31.0, 32.0],
+        "net_worth": [50_000.0, 30_000.0, 80_000.0],   # one drop, one gain
+    })
+    fig = build_gains_chart(pdf, colour="#0000ff")
+    bar = fig.data[0]
+    # Bar 0: gain from 50k→30k = -20k (negative, should be red)
+    # Bar 1: gain from 30k→80k = +50k (positive, should be blue)
+    assert bar.marker.color[0] == "#ef4444"
+    assert bar.marker.color[1] == "#0000ff"
+
+
+def test_gains_chart_returns_none_for_single_point():
+    pdf = pd.DataFrame({"age": [30.0], "net_worth": [50_000.0]})
+    assert build_gains_chart(pdf) is None
+
+
+def test_velocity_chart_builds(personal_history):
+    fig = build_velocity_chart(personal_history)
+    assert fig is not None
+    # Y axis is % change
+    assert fig.layout.yaxis.ticksuffix == "%"
+
+
+def test_velocity_chart_returns_none_for_single_point():
+    pdf = pd.DataFrame({"age": [30.0], "net_worth": [50_000.0]})
+    assert build_velocity_chart(pdf) is None
+
+
+def test_cumulative_chart_builds(personal_history):
+    fig = build_cumulative_chart(personal_history)
+    assert fig is not None
+    assert len(fig.data) == 1
+    assert fig.data[0].fill == "tozeroy"
+
+
+def test_cumulative_chart_with_partner(personal_history):
+    partner = personal_history.copy()
+    partner["net_worth"] = partner["net_worth"] * 1.2
+    fig = build_cumulative_chart(personal_history, partner_pdf=partner)
+    assert len(fig.data) == 2
+    names = [t.name for t in fig.data]
+    assert "Partner" in names
+
+
+def test_cumulative_chart_price_label_in_title(personal_history):
+    fig = build_cumulative_chart(personal_history, price_label="2026 real")
+    assert "2026 real" in fig.layout.title.text

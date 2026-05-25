@@ -32,6 +32,7 @@ from charts._helpers import (
 from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces local builder)
 from charts.heatmap     import build_heatmap            # noqa: F401  (replaces local builder)
 from charts.distribution import build_distribution_chart  # noqa: F401
+from charts.gains        import build_gains_chart, build_velocity_chart, build_cumulative_chart  # noqa: F401
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -732,65 +733,7 @@ def build_percentile_chart(
     return fig
 
 
-# ── Wealth velocity chart ────────────────────────────────────────────────────
-
-def build_velocity_chart(pdf: pd.DataFrame, colour: str) -> go.Figure:
-    """Rolling % growth rate per period — shows acceleration/deceleration."""
-    s = pdf.sort_values("age").copy()
-    s["pct_change"] = s["net_worth"].pct_change() * 100
-    s = s.dropna(subset=["pct_change"])
-    if len(s) < 2:
-        return None
-
-    bar_colours = [colour if v >= 0 else "#ef4444" for v in s["pct_change"]]
-    fig = go.Figure(go.Bar(
-        x=s["age"], y=s["pct_change"],
-        marker_color=bar_colours,
-        hovertemplate="<b>Age %{x:.1f}</b><br>%{y:.1f}% growth<extra></extra>",
-    ))
-    fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
-    fig.update_layout(
-        title=dict(text="Wealth velocity (% growth per period)", font=dict(size=13, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
-        yaxis=dict(title="% change", ticksuffix="%", gridcolor="#e2e8f0"),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=200, margin=dict(l=60, r=20, t=40, b=40),
-        showlegend=False,
-    )
-    return fig
-
-
-# ── Annual gain bar chart ────────────────────────────────────────────────────
-
-def build_gains_chart(pdf: pd.DataFrame, colour: str, name: str) -> go.Figure:
-    s = pdf.sort_values("age").copy()
-    s["gain"] = s["net_worth"].diff()
-    s["pct_gain"] = s["net_worth"].pct_change() * 100
-    s = s.dropna(subset=["gain"])
-
-    bar_colours = [colour if g >= 0 else "#ef4444" for g in s["gain"]]
-
-    fig = go.Figure(go.Bar(
-        x=s["age"], y=s["gain"],
-        marker_color=bar_colours,
-        name=name,
-        hovertemplate=(
-            "<b>Age %{x:.1f}</b><br>"
-            "Gain: £%{y:,.0f}<br>"
-            "Change: %{customdata:.1f}%<extra></extra>"
-        ),
-        customdata=s["pct_gain"],
-    ))
-    fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
-    fig.update_layout(
-        title=dict(text=f"Net worth change per period — {name}", font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
-        yaxis=dict(title="Change (£)", tickprefix="£", tickformat=",.0f", gridcolor="#e2e8f0"),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=240, margin=dict(l=70, r=40, t=50, b=50),
-        showlegend=False,
-    )
-    return fig
+# build_velocity_chart and build_gains_chart moved to charts/gains.py.
 
 
 # ── What-if projection ────────────────────────────────────────────────────────
@@ -877,49 +820,7 @@ def build_whatif_figure(
     return fig
 
 
-# ── Cumulative wealth chart ───────────────────────────────────────────────────
-
-def build_cumulative_chart(
-    pdf: pd.DataFrame, colour: str, name: str,
-    partner_pdf: pd.DataFrame | None = None,
-) -> go.Figure:
-    """Area chart showing net worth level over age — pure cumulative view."""
-    fig = go.Figure()
-
-    def _hex_rgba(hex_col: str, alpha: float = 0.12) -> str:
-        h = hex_col.lstrip("#")
-        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-        return f"rgba({r},{g},{b},{alpha})"
-
-    def _add(df, col, nm, fill_mode):
-        s = df.sort_values("age")
-        fig.add_trace(go.Scatter(
-            x=s["age"], y=s["net_worth"],
-            mode="lines+markers",
-            line=dict(color=col, width=2.5),
-            marker=dict(color=col, size=6),
-            fill=fill_mode,
-            fillcolor=_hex_rgba(col) if col.startswith("#") else col,
-            name=nm,
-            hovertemplate=f"<b>{nm}</b><br>Age %{{x:.1f}}<br>£%{{y:,.0f}}<extra></extra>",
-        ))
-
-    _add(pdf, colour, name, "tozeroy")
-    if partner_pdf is not None and len(partner_pdf) >= 2:
-        _add(partner_pdf, COLOURS["partner"], "Partner", "tozeroy")
-
-    price_lbl = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
-    fig.update_layout(
-        title=dict(text=f"Net worth over time ({price_lbl})",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
-        yaxis=dict(title="Net worth (£)", tickprefix="£", tickformat=",.0f",
-                   gridcolor="#e2e8f0"),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=260, margin=dict(l=70, r=40, t=50, b=50),
-        hovermode="x unified",
-    )
-    return fig
+# build_cumulative_chart moved to charts/gains.py — imported at top of file.
 
 
 # ── Data quality score ────────────────────────────────────────────────────────
@@ -1873,29 +1774,34 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
 
 if personal_plot_df is not None and len(personal_plot_df) >= 2:
     with st.expander("Annual gains breakdown"):
-        st.plotly_chart(
-            build_gains_chart(personal_plot_df, COLOURS["person"], "Your net worth"),
-            use_container_width=True, config=PLOTLY_CONFIG,
-        )
+        gc_you = build_gains_chart(personal_plot_df, colour=COLOURS["person"], name="Your net worth")
+        if gc_you:
+            st.plotly_chart(gc_you, use_container_width=True, config=PLOTLY_CONFIG)
         if partner_plot_df is not None and len(partner_plot_df) >= 2:
-            st.plotly_chart(
-                build_gains_chart(partner_plot_df, COLOURS["partner"], "Partner"),
-                use_container_width=True, config=PLOTLY_CONFIG,
-            )
+            gc_p = build_gains_chart(partner_plot_df, colour=COLOURS["partner"], name="Partner")
+            if gc_p:
+                st.plotly_chart(gc_p, use_container_width=True, config=PLOTLY_CONFIG)
         st.caption("Red bars = net worth fell that period. Each bar spans the gap between consecutive data points.")
 
         # Velocity (% rate) chart
-        vel = build_velocity_chart(personal_plot_df, COLOURS["person"])
+        vel = build_velocity_chart(personal_plot_df, colour=COLOURS["person"])
         if vel:
             st.plotly_chart(vel, use_container_width=True, config=PLOTLY_CONFIG)
         if partner_plot_df is not None and len(partner_plot_df) >= 3:
-            vel_p = build_velocity_chart(partner_plot_df, COLOURS["partner"])
+            vel_p = build_velocity_chart(partner_plot_df, colour=COLOURS["partner"])
             if vel_p:
                 st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
 
         # Cumulative view
+        cum_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
         st.plotly_chart(
-            build_cumulative_chart(personal_plot_df, COLOURS["person"], "You", partner_plot_df),
+            build_cumulative_chart(
+                personal_plot_df,
+                colour=COLOURS["person"], name="You",
+                partner_pdf=partner_plot_df,
+                partner_colour=COLOURS["partner"],
+                price_label=cum_price,
+            ),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
 

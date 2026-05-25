@@ -10,8 +10,8 @@ Migration status (May 2026):
 - Asset class chart                                  → charts/asset_class.py ✓
 - Percentile landscape heatmap                       → charts/heatmap.py     ✓
 - Wealth distribution density curve                  → charts/distribution.py ✓
-- (next) Main figure, percentile trajectory, gains,  → still in app.py
-  velocity, cumulative, whatif
+- Gains, velocity, cumulative trio                    → charts/gains.py        ✓
+- (next) Main figure, percentile trajectory, what-if  → still in app.py
 """
 from ._helpers import (
     fmt, fmt_delta, clean_note, safe_cagr, hover_template, best_gain,
@@ -19,10 +19,14 @@ from ._helpers import (
 from .asset_class import build_asset_class_chart
 from .heatmap import build_heatmap
 from .distribution import build_distribution_chart
+from .gains import build_gains_chart, build_velocity_chart, build_cumulative_chart
 
 __all__ = [
     "build_asset_class_chart",
     "build_heatmap",
     "build_distribution_chart",
+    "build_gains_chart",
+    "build_velocity_chart",
+    "build_cumulative_chart",
     "fmt", "fmt_delta", "clean_note", "safe_cagr", "hover_template", "best_gain",
 ]
