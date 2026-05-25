@@ -33,6 +33,8 @@ from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces 
 from charts.heatmap     import build_heatmap            # noqa: F401  (replaces local builder)
 from charts.distribution import build_distribution_chart  # noqa: F401
 from charts.gains        import build_gains_chart, build_velocity_chart, build_cumulative_chart  # noqa: F401
+from charts.percentile_trajectory import build_percentile_chart  # noqa: F401
+from charts.whatif       import build_whatif_figure     # noqa: F401
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -652,172 +654,13 @@ def build_main_figure(
     return fig
 
 
-# ── Percentile trajectory chart ───────────────────────────────────────────────
-
-def build_percentile_chart(
-    traj_you: pd.DataFrame,
-    traj_partner: pd.DataFrame | None = None,
-    smooth: bool = False,
-) -> go.Figure:
-    fig = go.Figure()
-
-    for y_val, label in [(75, "P75"), (50, "Median"), (25, "P25")]:
-        fig.add_hline(y=y_val, line=dict(color="#93c5fd", width=1, dash="dot"),
-            annotation_text=label, annotation_position="right",
-            annotation=dict(font=dict(color="#64748b", size=10), bgcolor="rgba(0,0,0,0)"),
-        )
-
-    def _add_traj(traj: pd.DataFrame, colour: str, name: str, fill: bool = False):
-        if smooth and len(traj) >= 4:
-            traj = traj.copy()
-            traj["percentile"] = traj["percentile"].rolling(
-                max(3, len(traj)//4), center=True, min_periods=1
-            ).mean()
-        fig.add_trace(go.Scatter(
-            x=traj["age"], y=traj["percentile"],
-            mode="lines+markers",
-            line=dict(color=colour, width=2.5),
-            marker=dict(color=colour, size=7, line=dict(color="white", width=1.5)),
-            fill="tozeroy" if fill else None,
-            fillcolor="rgba(249,115,22,0.07)" if fill else None,
-            name=name,
-            hovertemplate=(
-                f"<b>{name}</b><br>"
-                "Age %{x:.1f}<br>~%{y:.0f}th percentile<br>"
-                "Net worth: £%{customdata:,.0f}<extra></extra>"
-            ),
-            customdata=traj["net_worth"],
-        ))
-
-    _add_traj(traj_you, COLOURS["person"], "You", fill=True)
-    if traj_partner is not None and len(traj_partner) >= 2:
-        _add_traj(traj_partner, COLOURS["partner"], "Partner")
-
-    # Delta annotation for "you"
-    if len(traj_you) >= 2:
-        start_pct = float(traj_you.iloc[0]["percentile"])
-        end_pct   = float(traj_you.iloc[-1]["percentile"])
-        delta_pct = end_pct - start_pct
-        sign = "+" if delta_pct >= 0 else ""
-        fig.add_annotation(
-            x=float(traj_you.iloc[-1]["age"]), y=end_pct,
-            text=f"{sign}{delta_pct:.0f} pts",
-            showarrow=True, arrowhead=2, arrowcolor=COLOURS["person"],
-            ax=30, ay=-25 if delta_pct >= 0 else 25,
-            font=dict(size=11, color=COLOURS["person"]),
-            bgcolor="white", bordercolor=COLOURS["person"], borderwidth=1, borderpad=3,
-        )
-
-    # Percentile band shading (background zones)
-    band_fills = [
-        (0,  25, "rgba(219,234,254,0.3)", "Below P25"),
-        (25, 50, "rgba(191,219,254,0.3)", "P25–P50"),
-        (50, 75, "rgba(147,197,253,0.3)", "P50–P75"),
-        (75, 100,"rgba(96,165,250,0.3)",  "Above P75"),
-    ]
-    for y0, y1, fill_col, band_name in band_fills:
-        fig.add_hrect(y0=y0, y1=y1, fillcolor=fill_col, line_width=0,
-                      annotation_text=band_name if y1 == 100 else "",
-                      annotation_position="right",
-                      annotation=dict(font=dict(size=9, color="#94a3b8")))
-
-    fig.update_layout(
-        title=dict(text="Estimated percentile over time", font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
-        yaxis=dict(title="Percentile", range=[0, 100], dtick=25,
-                   ticksuffix="th", gridcolor="#e2e8f0"),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=290, margin=dict(l=60, r=80, t=50, b=50),
-        hovermode="x unified",
-    )
-    return fig
+# build_percentile_chart moved to charts/percentile_trajectory.py.
 
 
 # build_velocity_chart and build_gains_chart moved to charts/gains.py.
 
 
-# ── What-if projection ────────────────────────────────────────────────────────
-
-def build_whatif_figure(
-    pdf: pd.DataFrame, benchmark: pd.DataFrame,
-    scenarios: list[tuple[float, str]],   # [(cagr, label), ...]
-    project_to_age: int,
-    colour: str,
-    monthly_savings: float = 0.0,
-) -> go.Figure:
-    """Forward-project net worth under one or more CAGR scenarios, optionally with monthly contributions."""
-    s = pdf.sort_values("age")
-    latest_age = float(s.iloc[-1]["age"])
-    latest_nw  = float(s.iloc[-1]["net_worth"])
-    proj_ages  = np.arange(latest_age, project_to_age + 1, 1.0)
-
-    fig = go.Figure()
-
-    p25 = benchmark[benchmark["percentile"] == "p25"].sort_values("age")
-    p50 = benchmark[benchmark["percentile"] == "p50"].sort_values("age")
-    p75 = benchmark[benchmark["percentile"] == "p75"].sort_values("age")
-
-    fig.add_trace(go.Scatter(
-        x=pd.concat([p25["age"], p75["age"].iloc[::-1]]),
-        y=pd.concat([p25["value"], p75["value"].iloc[::-1]]),
-        fill="toself", fillcolor="rgba(147,197,253,0.15)",
-        line=dict(width=0), name="P25–P75 range", hoverinfo="skip",
-    ))
-    for pct_data, dash, label in [(p25,"dash","P25"),(p50,"solid","Median"),(p75,"dash","P75")]:
-        fig.add_trace(go.Scatter(
-            x=pct_data["age"], y=pct_data["value"], mode="lines",
-            line=dict(color="#93c5fd" if label != "Median" else "#1d4ed8",
-                      width=2 if label != "Median" else 3, dash=dash),
-            name=label, hovertemplate=f"<b>{label}</b><br>Age %{{x}}<br>£%{{y:,.0f}}<extra></extra>",
-        ))
-
-    # Historical personal data
-    fig.add_trace(go.Scatter(
-        x=s["age"], y=s["net_worth"], mode="lines+markers",
-        line=dict(color=colour, width=2.5),
-        marker=dict(color=colour, size=7, line=dict(color="white", width=1.5)),
-        name="Actual", hovertemplate="<b>Actual</b><br>Age %{x:.1f}<br>£%{y:,.0f}<extra></extra>",
-    ))
-
-    # One trace per scenario
-    scenario_colours = ["#f97316", "#8b5cf6", "#06b6d4"]  # orange, violet, cyan
-    annual_saving = monthly_savings * 12
-    for i, (cagr, sc_label) in enumerate(scenarios):
-        proj_nw = []
-        for a in proj_ages:
-            t = a - latest_age
-            if abs(cagr) < 1e-10:
-                proj_nw.append(latest_nw + annual_saving * t)
-            else:
-                proj_nw.append(
-                    latest_nw * (1 + cagr) ** t
-                    + annual_saving * ((1 + cagr) ** t - 1) / cagr
-                )
-        fig.add_trace(go.Scatter(
-            x=proj_ages, y=proj_nw, mode="lines",
-            line=dict(color=scenario_colours[i % len(scenario_colours)], width=2,
-                      dash="dash" if i > 0 else "solid"),
-            name=sc_label,
-            hovertemplate=f"<b>{sc_label}</b><br>Age %{{x:.1f}}<br>£%{{y:,.0f}}<extra></extra>",
-        ))
-
-    sc_title = " vs ".join(f"{c*100:.1f}%" for c, _ in scenarios)
-    contrib_note = (f"+£{monthly_savings:,.0f}/mo contributions"
-                    if monthly_savings > 0 else "no further contributions")
-    price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"
-    fig.update_layout(
-        title=dict(text=f"What-if: {sc_title} CAGR from age {latest_age:.1f}  "
-                        f"<span style='font-size:11px;color:#64748b'>· {contrib_note}</span>",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", range=[15, project_to_age + 1], dtick=5,
-                   gridcolor="#e2e8f0", zeroline=False),
-        yaxis=dict(title=f"Net worth (£, {price_label})", tickprefix="£",
-                   tickformat=",.0f", gridcolor="#e2e8f0"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=400, margin=dict(l=70, r=40, t=60, b=60), hovermode="x unified",
-    )
-    return fig
+# build_whatif_figure moved to charts/whatif.py — imported at top of file.
 
 
 # build_cumulative_chart moved to charts/gains.py — imported at top of file.
@@ -1715,7 +1558,13 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
         traj_partner = build_percentile_trajectory(partner_plot_df, benchmark)
     if len(traj_you) >= 2:
         st.plotly_chart(
-            build_percentile_chart(traj_you, traj_partner, smooth=smooth_traj),
+            build_percentile_chart(
+                traj_you,
+                traj_partner=traj_partner,
+                smooth=smooth_traj,
+                person_colour=COLOURS["person"],
+                partner_colour=COLOURS["partner"],
+            ),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
         st.caption(
@@ -1883,8 +1732,13 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1:
             (wi_cagr3 / 100, f"Scenario 3 ({wi_cagr3:+.1f}%)"),
         ]
         st.plotly_chart(
-            build_whatif_figure(personal_plot_df, benchmark, scenarios, wi_age, COLOURS["person"],
-                                monthly_savings=wi_monthly),
+            build_whatif_figure(
+                personal_plot_df, benchmark, scenarios,
+                project_to_age=wi_age,
+                monthly_savings=wi_monthly,
+                actual_colour=COLOURS["person"],
+                price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"),
+            ),
             use_container_width=True, config=PLOTLY_CONFIG,
         )
 

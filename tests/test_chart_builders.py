@@ -22,6 +22,8 @@ from charts.asset_class import build_asset_class_chart  # noqa: E402
 from charts.heatmap import build_heatmap  # noqa: E402
 from charts.distribution import build_distribution_chart  # noqa: E402
 from charts.gains import build_gains_chart, build_velocity_chart, build_cumulative_chart  # noqa: E402
+from charts.percentile_trajectory import build_percentile_chart  # noqa: E402
+from charts.whatif import build_whatif_figure  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -227,3 +229,125 @@ def test_cumulative_chart_with_partner(personal_history):
 def test_cumulative_chart_price_label_in_title(personal_history):
     fig = build_cumulative_chart(personal_history, price_label="2026 real")
     assert "2026 real" in fig.layout.title.text
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Percentile trajectory
+# ──────────────────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def trajectory_df() -> pd.DataFrame:
+    return pd.DataFrame({
+        "age":        [30.0, 32.0, 34.0, 36.0],
+        "percentile": [15.0, 28.0, 45.0, 62.0],
+        "net_worth":  [25_000.0, 60_000.0, 110_000.0, 175_000.0],
+    })
+
+
+def test_percentile_chart_builds(trajectory_df):
+    fig = build_percentile_chart(trajectory_df)
+    assert fig is not None
+    # At least one trace ("You")
+    assert "You" in [t.name for t in fig.data]
+
+
+def test_percentile_chart_delta_annotation(trajectory_df):
+    fig = build_percentile_chart(trajectory_df)
+    # The "+47 pts" annotation (from 15 to 62)
+    annotations = [a.text for a in fig.layout.annotations if a.text]
+    assert any("47" in t and "pts" in t for t in annotations)
+
+
+def test_percentile_chart_with_partner(trajectory_df):
+    partner = trajectory_df.copy()
+    partner["percentile"] = partner["percentile"] + 10
+    fig = build_percentile_chart(trajectory_df, traj_partner=partner)
+    names = [t.name for t in fig.data]
+    assert "You" in names
+    assert "Partner" in names
+
+
+def test_percentile_chart_band_zones_present(trajectory_df):
+    fig = build_percentile_chart(trajectory_df)
+    # Band hrects are in layout.shapes
+    assert len(fig.layout.shapes) >= 4  # at least 4 band shading rectangles
+
+
+def test_percentile_chart_smoothing_applies():
+    # Make a noisy trajectory that smoothing should flatten
+    df = pd.DataFrame({
+        "age":        [30.0, 31, 32, 33, 34, 35, 36, 37],
+        "percentile": [20.0, 80, 25, 75, 30, 70, 35, 65],  # zigzag
+        "net_worth":  [10_000] * 8,
+    })
+    fig_raw    = build_percentile_chart(df, smooth=False)
+    fig_smooth = build_percentile_chart(df, smooth=True)
+    # The smoothed trace should have less extreme values than raw
+    raw_y    = fig_raw.data[0].y
+    smooth_y = fig_smooth.data[0].y
+    assert max(smooth_y) < max(raw_y) or min(smooth_y) > min(raw_y)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# What-if projection
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_whatif_builds_single_scenario(benchmark, personal_history):
+    fig = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.05, "5%")], project_to_age=65,
+    )
+    assert fig is not None
+    # Should have benchmark band + 3 percentile lines + actual + 1 scenario = 6 traces
+    assert len(fig.data) >= 6
+    names = [t.name for t in fig.data]
+    assert "Actual" in names
+    assert "5%" in names
+
+
+def test_whatif_multiple_scenarios(benchmark, personal_history):
+    fig = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.03, "3%"), (0.05, "5%"), (0.08, "8%")],
+        project_to_age=65,
+    )
+    names = [t.name for t in fig.data]
+    assert "3%" in names and "5%" in names and "8%" in names
+
+
+def test_whatif_projection_with_savings_grows_faster(benchmark, personal_history):
+    """At same CAGR, +£500/mo contributions must produce a higher endpoint."""
+    no_save = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.05, "5%")], project_to_age=65, monthly_savings=0.0,
+    )
+    with_save = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.05, "5%")], project_to_age=65, monthly_savings=500.0,
+    )
+    # Pull the scenario trace y-values (last trace in each)
+    no_save_end = no_save.data[-1].y[-1]
+    with_save_end = with_save.data[-1].y[-1]
+    assert with_save_end > no_save_end
+
+
+def test_whatif_zero_cagr_is_linear(benchmark, personal_history):
+    """At cagr=0 with savings, the projection should be linear (constant slope)."""
+    fig = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.0, "0%")], project_to_age=65, monthly_savings=1_000.0,
+    )
+    y = list(fig.data[-1].y)
+    # Differences should all be ~equal (£12,000/year)
+    diffs = [y[i+1] - y[i] for i in range(len(y) - 1)]
+    assert all(abs(d - diffs[0]) < 1 for d in diffs)
+
+
+def test_whatif_title_includes_cagr_and_contrib_note(benchmark, personal_history):
+    fig = build_whatif_figure(
+        personal_history, benchmark,
+        scenarios=[(0.05, "5%")], project_to_age=65, monthly_savings=500.0,
+    )
+    title = fig.layout.title.text
+    assert "5.0%" in title
+    assert "500" in title  # monthly contribution note
