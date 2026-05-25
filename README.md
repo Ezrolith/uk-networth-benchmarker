@@ -96,6 +96,25 @@ python scripts/update_asset_class_data.py
 3. Select repo + `app.py` as the entry point
 4. Deploy — no secrets or environment variables needed
 
+GitHub Actions CI runs on every push (Python 3.11 and 3.12): py_compile on
+every source file, then the full pytest suite. The CI gate also includes
+defensive tests against the most common deploy failure modes:
+
+- `tests/test_app_imports.py` parses `app.py` with `ast` and verifies every
+  imported name resolves on its target module. Catches the
+  "app.py references X but utils/uk_tax.py is stale" class of bug.
+- `tests/test_requirements.py` scans every `.py` file for third-party
+  imports and verifies each has a corresponding entry in `requirements.txt`.
+  Catches the "forgot to add the new dep" class of bug.
+
+## Tests
+
+```bash
+make test            # full suite, verbose (180 tests, ~5s)
+make test-quick      # terse output, line-format failures only
+make check           # py_compile + tests (matches CI)
+```
+
 ## File structure
 
 ```
