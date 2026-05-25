@@ -62,6 +62,7 @@ from utils.uk_tax        import (  # noqa: F401
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
     STATE_PENSION_AGE, life_expectancy_at,
 )
+from utils.data_quality  import compute_data_quality  # noqa: F401
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -473,35 +474,7 @@ def _pct_series(pct: str) -> pd.DataFrame:
 
 # ── Data quality score ────────────────────────────────────────────────────────
 
-def compute_data_quality(pdf: pd.DataFrame) -> dict:
-    """Rate the personal data on completeness and consistency (0-100 score)."""
-    n = len(pdf)
-    age_span = float(pdf["age"].max() - pdf["age"].min()) if n >= 2 else 0
-    avg_gap  = age_span / (n - 1) if n >= 2 else 999
-
-    score = 0
-    notes = []
-
-    if n >= 10:    score += 30; notes.append("✅ 10+ data points")
-    elif n >= 5:   score += 20; notes.append("🟡 5–9 data points (10+ recommended)")
-    elif n >= 2:   score += 10; notes.append("⚠️ Only 2–4 data points")
-    else:          notes.append("❌ Need at least 2 data points")
-
-    if "year" in pdf.columns:
-        max_year = int(pdf["year"].max())
-        if max_year >= 2024:   score += 25; notes.append("✅ Data up to 2024/25")
-        elif max_year >= 2022: score += 15; notes.append("🟡 Data to 2022–23 — add recent figures")
-        else:                  score += 5;  notes.append("⚠️ Data older than 2022")
-
-    if avg_gap <= 1.5:  score += 25; notes.append("✅ Annual or more frequent updates")
-    elif avg_gap <= 3:  score += 15; notes.append("🟡 Updates every 1–3 years")
-    else:               score += 5;  notes.append("⚠️ Infrequent updates (gaps > 3 yrs)")
-
-    if age_span >= 10:  score += 20; notes.append("✅ 10+ year history")
-    elif age_span >= 5: score += 12; notes.append("🟡 5–9 year history")
-    else:               score += 5;  notes.append("⚠️ Less than 5 years of history")
-
-    return {"score": min(score, 100), "notes": notes, "n": n, "span": age_span}
+# compute_data_quality moved to utils/data_quality.py — imported at top of file.
 
 
 # build_heatmap moved to charts/heatmap.py — imported at top of file.
