@@ -13,7 +13,11 @@ Migration status (May 2026):
 - Gains, velocity, cumulative trio                    → charts/gains.py                  ✓
 - Percentile trajectory                                → charts/percentile_trajectory.py  ✓
 - What-if projection                                   → charts/whatif.py                 ✓
-- (last) Main figure (large, complex)                  → still in app.py
+- Main benchmark + personal-overlay figure             → charts/main_figure.py            ✓
+
+All chart builders are now extracted. app.py retains only UI orchestration,
+data loaders, summary stats / data quality utilities, and the methodology /
+PDF generation code.
 """
 from ._helpers import (
     fmt, fmt_delta, clean_note, safe_cagr, hover_template, best_gain,
@@ -24,8 +28,10 @@ from .distribution import build_distribution_chart
 from .gains import build_gains_chart, build_velocity_chart, build_cumulative_chart
 from .percentile_trajectory import build_percentile_chart
 from .whatif import build_whatif_figure
+from .main_figure import build_main_figure
 
 __all__ = [
+    "build_main_figure",
     "build_asset_class_chart",
     "build_heatmap",
     "build_distribution_chart",

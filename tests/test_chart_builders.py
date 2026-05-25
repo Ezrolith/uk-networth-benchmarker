@@ -24,6 +24,7 @@ from charts.distribution import build_distribution_chart  # noqa: E402
 from charts.gains import build_gains_chart, build_velocity_chart, build_cumulative_chart  # noqa: E402
 from charts.percentile_trajectory import build_percentile_chart  # noqa: E402
 from charts.whatif import build_whatif_figure  # noqa: E402
+from charts.main_figure import build_main_figure  # noqa: E402
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -351,3 +352,116 @@ def test_whatif_title_includes_cagr_and_contrib_note(benchmark, personal_history
     title = fig.layout.title.text
     assert "5.0%" in title
     assert "500" in title  # monthly contribution note
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Main figure
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_main_figure_minimal_no_personal(benchmark):
+    """Builds with just a benchmark — no personal data, no settings."""
+    fig = build_main_figure(benchmark)
+    assert fig is not None
+    names = [t.name for t in fig.data]
+    # Benchmark trio + IQR band + ONS markers (defaults to Household)
+    assert "Median (P50)" in names
+    assert "25th percentile" in names
+    assert "75th percentile" in names
+    assert "P25–P75 range" in names
+
+
+def test_main_figure_with_personal(benchmark, personal_history):
+    fig = build_main_figure(benchmark, personal_plot_df=personal_history)
+    names = [t.name for t in fig.data]
+    assert "Your net worth" in names
+
+
+def test_main_figure_with_partner(benchmark, personal_history):
+    partner = personal_history.copy()
+    partner["net_worth"] = partner["net_worth"] * 1.1
+    fig = build_main_figure(
+        benchmark,
+        personal_plot_df=personal_history,
+        partner_plot_df=partner,
+    )
+    names = [t.name for t in fig.data]
+    assert "Your net worth" in names
+    assert "Partner" in names
+
+
+def test_main_figure_tails_toggle(benchmark):
+    fig_off = build_main_figure(benchmark, show_tails=False)
+    fig_on  = build_main_figure(benchmark, show_tails=True)
+    names_on = [t.name for t in fig_on.data]
+    # P10/P90 tails only added when show_tails=True
+    assert any("10th (modelled)" in n for n in names_on)
+    assert len(fig_on.data) > len(fig_off.data)
+
+
+def test_main_figure_milestone_lines(benchmark):
+    fig = build_main_figure(benchmark, show_milestones=True, log_scale=False)
+    # Milestone lines appear as shapes/annotations — verify £1m text present
+    annotations = [a.text for a in fig.layout.annotations]
+    assert any("£1m" in t for t in annotations)
+
+
+def test_main_figure_milestones_hidden_on_log_scale(benchmark):
+    fig = build_main_figure(benchmark, show_milestones=True, log_scale=True)
+    annotations = [a.text for a in fig.layout.annotations]
+    # On log scale, milestone lines suppress to avoid clutter
+    assert not any("£1m" in t for t in annotations)
+
+
+def test_main_figure_annotations_off_strips_crosshair(benchmark, personal_history):
+    fig = build_main_figure(
+        benchmark, personal_plot_df=personal_history,
+        latest_age=36.0, latest_nw=175_000,
+        show_annotations=False,
+    )
+    annotations = [a.text or "" for a in fig.layout.annotations]
+    # No "You (age" crosshair label when annotations are off
+    assert not any("You (age" in t for t in annotations)
+
+
+def test_main_figure_individual_basis_drops_ons_markers(benchmark, personal_history):
+    fig = build_main_figure(
+        benchmark, personal_plot_df=personal_history,
+        basis="Individual",
+    )
+    names = [t.name for t in fig.data]
+    # Individual basis: ONS markers removed, replaced by a derived-figures note
+    assert "ONS data point" not in names
+    assert any("derived estimates" in n for n in names)
+
+
+def test_main_figure_age_range_clamping(benchmark):
+    fig = build_main_figure(benchmark, age_min=30, age_max=60)
+    # x-axis range honours the request (with 0.5 padding on each side)
+    xrange = fig.layout.xaxis.range
+    assert xrange[0] == 29.5
+    assert xrange[1] == 60.5
+
+
+def test_main_figure_log_scale_changes_yaxis(benchmark):
+    fig_lin = build_main_figure(benchmark, log_scale=False)
+    fig_log = build_main_figure(benchmark, log_scale=True)
+    assert fig_lin.layout.yaxis.type == "linear"
+    assert fig_log.layout.yaxis.type == "log"
+
+
+def test_main_figure_wealth_component_in_title(benchmark):
+    fig = build_main_figure(benchmark, wealth_component="Property")
+    assert "Property wealth only" in fig.layout.title.text
+
+
+def test_main_figure_handles_negative_personal_data(benchmark):
+    """Adds a zero reference line when personal data contains negatives."""
+    pdf = pd.DataFrame({
+        "year": [2020, 2024],
+        "age":  [25.0, 30.0],
+        "net_worth": [-5_000.0, 25_000.0],
+    })
+    fig = build_main_figure(benchmark, personal_plot_df=pdf)
+    # Plotly Layout.shapes is a tuple of horizontal/vertical lines from add_hline/vline
+    shape_y0 = [s.y0 for s in fig.layout.shapes if s.type == "line"]
+    assert 0 in shape_y0  # the zero reference line
