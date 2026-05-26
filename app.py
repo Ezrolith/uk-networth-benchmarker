@@ -132,10 +132,18 @@ PLOTLY_CONFIG = {
 
 
 # ── Shareable URL bootstrap ───────────────────────────────────────────────────
+#
+# Two query params recognised:
+#   ?d=... → primary user's personal data
+#   ?p=... → optional partner data (when the sharer had both loaded)
+#
+# Both are zlib+base64 personal-data tokens (see utils/data_loader.py).
 
 _url_personal_df: pd.DataFrame | None = None
-_url_load_error: str | None = None
+_url_partner_df:  pd.DataFrame | None = None
+_url_load_error:  str | None = None
 _qp = st.query_params
+
 if "d" in _qp and "url_personal_loaded" not in st.session_state:
     try:
         _url_personal_df = decode_personal_data(_qp["d"])
@@ -143,8 +151,22 @@ if "d" in _qp and "url_personal_loaded" not in st.session_state:
         st.session_state.url_personal_loaded = True
     except Exception:
         _url_load_error = "Could not decode the shared link — it may be corrupted or expired."
-elif "url_personal_df" in st.session_state:
+
+if "p" in _qp and "url_partner_loaded" not in st.session_state:
+    try:
+        _url_partner_df = decode_personal_data(_qp["p"])
+        st.session_state.url_partner_df = _url_partner_df
+        st.session_state.url_partner_loaded = True
+    except Exception:
+        # Don't overwrite a more-important personal-data error
+        if _url_load_error is None:
+            _url_load_error = "Could not decode the partner data in the shared link."
+
+# Restore from session state on rerun
+if _url_personal_df is None and "url_personal_df" in st.session_state:
     _url_personal_df = st.session_state.url_personal_df
+if _url_partner_df is None and "url_partner_df" in st.session_state:
+    _url_partner_df = st.session_state.url_partner_df
 
 
 # ── Data loaders ──────────────────────────────────────────────────────────────
@@ -305,7 +327,7 @@ with st.sidebar:
     personal_df = _personal_data_section("Your net worth", "you", _url_personal_df)
 
     st.divider()
-    partner_df = _personal_data_section("Partner's net worth (optional)", "partner")
+    partner_df = _personal_data_section("Partner's net worth (optional)", "partner", _url_partner_df)
 
     st.divider()
 
@@ -1726,13 +1748,22 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             try:
                 token = encode_personal_data(personal_plot_df)
                 share_url = f"{PUBLIC_APP_URL}/?d={token}"
+                # If partner data is loaded, encode it under ?p= so the receiving
+                # browser picks it up as the partner pane.
+                if partner_plot_df is not None and len(partner_plot_df) > 0:
+                    p_token = encode_personal_data(partner_plot_df)
+                    share_url = f"{share_url}&p={p_token}"
                 st.text_input(
                     "Data is encoded in the URL — nothing is stored on any server:",
                     value=share_url, key="share_url_box",
                 )
-                st.caption(
-                    "Anyone with this link sees your figures. Share only with people you trust."
+                _share_note = (
+                    "Anyone with this link sees your figures"
+                    + (" plus your partner's" if partner_plot_df is not None
+                       and len(partner_plot_df) > 0 else "")
+                    + ". Share only with people you trust."
                 )
+                st.caption(_share_note)
             except Exception:
                 st.info("Share link unavailable — data may be too large to encode.")
 
