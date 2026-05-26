@@ -63,6 +63,7 @@ from utils.uk_tax        import (  # noqa: F401
     STATE_PENSION_AGE, life_expectancy_at,
 )
 from utils.data_quality  import compute_data_quality  # noqa: F401
+from utils.summary        import build_summary_stats   # noqa: F401
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -488,43 +489,7 @@ def _pct_series(pct: str) -> pd.DataFrame:
 
 # ── Summary statistics table ──────────────────────────────────────────────────
 
-def build_summary_stats(
-    pdf: pd.DataFrame, bm: pd.DataFrame, label: str = "You"
-) -> pd.DataFrame:
-    s = pdf.sort_values("age")
-    first, last = s.iloc[0], s.iloc[-1]
-    age_span = float(last["age"]) - float(first["age"])
-    nw_start = float(first["net_worth"])
-    nw_end   = float(last["net_worth"])
-
-    rows: list[dict] = [
-        {"Metric": f"{label} — age range",       "Value": f"{first['age']:.1f} → {last['age']:.1f}  ({age_span:.1f} yrs)"},
-        {"Metric": f"{label} — net worth range",  "Value": f"{_fmt(nw_start)} → {_fmt(nw_end)}"},
-        {"Metric": f"{label} — total change",     "Value": _fmt_delta(nw_end - nw_start)},
-    ]
-
-    cagr = _safe_cagr(nw_start, nw_end, age_span)
-    if cagr is not None:
-        rows.append({"Metric": f"{label} — CAGR", "Value": f"{cagr*100:+.2f}%"})
-
-    best = _best_gain(s)
-    if best:
-        bg_age, bg_amt, bg_pct = best
-        rows.append({"Metric": f"{label} — best single gain",
-                     "Value": f"{_fmt_delta(bg_amt)} ({bg_pct:+.0f}%) at age {bg_age:.1f}"})
-
-    worst_idx = s["net_worth"].diff().idxmin()
-    if worst_idx is not None and not pd.isna(worst_idx):
-        wl = float(s["net_worth"].diff()[worst_idx])
-        wa = float(s.loc[worst_idx, "age"])
-        rows.append({"Metric": f"{label} — worst single change",
-                     "Value": f"{_fmt_delta(wl)} at age {wa:.1f}"})
-
-    pct = estimate_exact_percentile(nw_end, round(float(last["age"])), bm)
-    if pct:
-        rows.append({"Metric": f"{label} — latest est. percentile", "Value": f"~{pct:.0f}th"})
-
-    return pd.DataFrame(rows)
+# build_summary_stats moved to utils/summary.py — imported at top of file.
 
 
 # ── Main content ──────────────────────────────────────────────────────────────
