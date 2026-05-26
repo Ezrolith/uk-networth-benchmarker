@@ -72,13 +72,11 @@ def test_heatmap_builds_with_personal_data(benchmark, personal_history):
     assert "Your net worth" in trace_names
 
 
-def test_heatmap_builds_with_partner(benchmark, personal_history):
-    partner = personal_history.copy()
-    partner["net_worth"] = partner["net_worth"] * 1.2
+def test_heatmap_builds_with_partner(benchmark, personal_history, partner_history):
     fig = build_heatmap(
         benchmark,
         personal_plot_df=personal_history,
-        partner_plot_df=partner,
+        partner_plot_df=partner_history,
     )
     trace_names = [t.name for t in fig.data]
     assert "Your net worth" in trace_names
@@ -192,10 +190,8 @@ def test_cumulative_chart_builds(personal_history):
     assert fig.data[0].fill == "tozeroy"
 
 
-def test_cumulative_chart_with_partner(personal_history):
-    partner = personal_history.copy()
-    partner["net_worth"] = partner["net_worth"] * 1.2
-    fig = build_cumulative_chart(personal_history, partner_pdf=partner)
+def test_cumulative_chart_with_partner(personal_history, partner_history):
+    fig = build_cumulative_chart(personal_history, partner_pdf=partner_history)
     assert len(fig.data) == 2
     names = [t.name for t in fig.data]
     assert "Partner" in names
@@ -350,13 +346,11 @@ def test_main_figure_with_personal(benchmark, personal_history):
     assert "Your net worth" in names
 
 
-def test_main_figure_with_partner(benchmark, personal_history):
-    partner = personal_history.copy()
-    partner["net_worth"] = partner["net_worth"] * 1.1
+def test_main_figure_with_partner(benchmark, personal_history, partner_history):
     fig = build_main_figure(
         benchmark,
         personal_plot_df=personal_history,
-        partner_plot_df=partner,
+        partner_plot_df=partner_history,
     )
     names = [t.name for t in fig.data]
     assert "Your net worth" in names

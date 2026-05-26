@@ -49,3 +49,15 @@ def personal_history() -> pd.DataFrame:
         "age":  [30.0, 32.0, 34.0, 36.0],
         "net_worth": [25_000.0, 60_000.0, 110_000.0, 175_000.0],
     })
+
+
+@pytest.fixture
+def partner_history(personal_history: pd.DataFrame) -> pd.DataFrame:
+    """A partner history derived from personal_history (same shape, 20% higher).
+
+    Convenience for tests that exercise partner overlays — avoids each test
+    repeating `personal_history.copy(); df['net_worth'] *= 1.2`.
+    """
+    partner = personal_history.copy()
+    partner["net_worth"] = partner["net_worth"] * 1.2
+    return partner
