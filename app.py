@@ -46,6 +46,7 @@ from charts._helpers import (
     clean_note as _clean_note, safe_cagr as _safe_cagr,
     hover_template as _hover, best_gain as _best_gain,
     CAGR_MIN_START,
+    TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR, NEUTRAL_GREY,
 )
 from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces local builder)
 from charts.heatmap     import build_heatmap            # noqa: F401  (replaces local builder)
@@ -1264,13 +1265,13 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             name="Pot balance",
             hovertemplate="Age %{x}<br>£%{y:,.0f}<extra></extra>",
         ))
-        _dd_fig.add_hline(y=0, line=dict(color="#94a3b8", width=1))
+        _dd_fig.add_hline(y=0, line=dict(color=NEUTRAL_GREY, width=1))
         # Life expectancy marker
         _dd_fig.add_vline(x=_le_at_retire,
-            line=dict(color="#64748b", width=1, dash="dash"),
+            line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
             annotation_text=f"Avg life exp ~{_le_at_retire}",
             annotation_position="top right",
-            annotation=dict(font=dict(size=10, color="#64748b")),
+            annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)),
         )
         if _dd_runout_age:
             _dd_fig.add_vline(x=_dd_runout_age,
@@ -1281,10 +1282,10 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             )
         _dd_fig.update_layout(
             title=dict(text="Pot balance over retirement (real terms)",
-                       font=dict(size=14, color="#1e293b"), x=0),
-            xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+                       font=dict(size=14, color=TITLE_COLOUR), x=0),
+            xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
             yaxis=dict(title="Pot value (£, today's money)", tickprefix="£", tickformat=",.0f",
-                       gridcolor="#e2e8f0"),
+                       gridcolor=GRID_COLOUR),
             plot_bgcolor="white", paper_bgcolor="white",
             height=300, margin=dict(l=70, r=40, t=50, b=50), hovermode="x unified",
         )
@@ -1415,20 +1416,20 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 name="Survival probability",
                 hovertemplate="Age %{x}<br>%{y:.0f}% chance pot survives<extra></extra>",
             ))
-            sd_fig.add_hline(y=50, line=dict(color="#94a3b8", width=1, dash="dot"),
+            sd_fig.add_hline(y=50, line=dict(color=NEUTRAL_GREY, width=1, dash="dot"),
                              annotation_text="50%", annotation_position="right",
-                             annotation=dict(font=dict(size=10, color="#94a3b8")))
+                             annotation=dict(font=dict(size=10, color=NEUTRAL_GREY)))
             sd_fig.add_vline(x=_le_at_retire,
-                             line=dict(color="#64748b", width=1, dash="dash"),
+                             line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
                              annotation_text=f"Avg life exp ~{_le_at_retire}",
                              annotation_position="top left",
-                             annotation=dict(font=dict(size=10, color="#64748b")))
+                             annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)))
             sd_fig.update_layout(
                 title=dict(text="Probability the pot survives to each age",
-                           font=dict(size=13, color="#1e293b"), x=0),
-                xaxis=dict(title="Age", gridcolor="#e2e8f0"),
+                           font=dict(size=13, color=TITLE_COLOUR), x=0),
+                xaxis=dict(title="Age", gridcolor=GRID_COLOUR),
                 yaxis=dict(title="Survival probability (%)", ticksuffix="%",
-                           range=[0, 105], gridcolor="#e2e8f0"),
+                           range=[0, 105], gridcolor=GRID_COLOUR),
                 plot_bgcolor="white", paper_bgcolor="white",
                 height=260, margin=dict(l=60, r=40, t=50, b=50),
                 showlegend=False, hovermode="x unified",
@@ -2633,7 +2634,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 for pct, lbl in [(25, "P25"), (50, "Median"), (75, "P75")]:
                     ax.axhline(pct, color="#93c5fd", lw=0.8, ls=":")
                     ax.text(float(traj["age"].iloc[0]), pct + 0.8, lbl,
-                            fontsize=7.5, color="#64748b")
+                            fontsize=7.5, color=AXIS_LABEL_COLOUR)
                 ax.fill_between(traj["age"], traj["percentile"], alpha=0.12, color=_PC)
                 ax.plot(traj["age"], traj["percentile"], _PC, lw=2, marker="o", ms=5)
                 ax.set_ylim(0, 100); ax.set_xlabel("Age")
