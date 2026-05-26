@@ -10,6 +10,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from utils.inference import derive_tail_percentiles
+from ._helpers import TITLE_COLOUR, GRID_COLOUR
 
 
 _DEFAULT_BAND_COLOURS = ["#eff6ff", "#bfdbfe", "#93c5fd", "#3b82f6", "#1d4ed8"]
@@ -90,11 +91,11 @@ def build_heatmap(
     fig.update_layout(
         title=dict(
             text=f"Wealth percentile landscape by age ({price_label})",
-            font=dict(size=14, color="#1e293b"), x=0,
+            font=dict(size=14, color=TITLE_COLOUR), x=0,
         ),
-        xaxis=dict(title="Age", range=[15, 86], dtick=5, gridcolor="#e2e8f0"),
+        xaxis=dict(title="Age", range=[15, 86], dtick=5, gridcolor=GRID_COLOUR),
         yaxis=dict(title="Net worth (£)", tickprefix="£", tickformat=",.0f",
-                   gridcolor="#e2e8f0"),
+                   gridcolor=GRID_COLOUR),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
                     font=dict(size=11)),
         plot_bgcolor="white", paper_bgcolor="white",

@@ -5,6 +5,8 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
+from ._helpers import TITLE_COLOUR, GRID_COLOUR
+
 
 _DEFAULT_BAND_FILLS = [
     (0,   25,  "rgba(219,234,254,0.30)", "Below P25"),
@@ -99,10 +101,10 @@ def build_percentile_chart(
 
     fig.update_layout(
         title=dict(text="Estimated percentile over time",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
+                   font=dict(size=14, color=TITLE_COLOUR), x=0),
+        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, dtick=5, zeroline=False),
         yaxis=dict(title="Percentile", range=[0, 100], dtick=25,
-                   ticksuffix="th", gridcolor="#e2e8f0"),
+                   ticksuffix="th", gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=290, margin=dict(l=60, r=80, t=50, b=50),
         hovermode="x unified",

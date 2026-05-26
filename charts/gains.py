@@ -8,9 +8,11 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
-
-NEGATIVE_COLOUR = "#ef4444"  # bars/segments that represent losses
-ZERO_LINE_COLOUR = "#94a3b8"
+from ._helpers import (
+    TITLE_COLOUR, GRID_COLOUR,
+    NEGATIVE_COLOUR,           # red used on loss bars
+    NEUTRAL_GREY as ZERO_LINE_COLOUR,  # grey used on zero line — alias for readability
+)
 
 
 def _hex_to_rgba(hex_colour: str, alpha: float = 0.12) -> str:
@@ -54,10 +56,10 @@ def build_gains_chart(
     fig.add_hline(y=0, line=dict(color=ZERO_LINE_COLOUR, width=1))
     fig.update_layout(
         title=dict(text=f"Net worth change per period — {name}",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+                   font=dict(size=14, color=TITLE_COLOUR), x=0),
+        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
         yaxis=dict(title="Change (£)", tickprefix="£", tickformat=",.0f",
-                   gridcolor="#e2e8f0"),
+                   gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=240, margin=dict(l=70, r=40, t=50, b=50),
         showlegend=False,
@@ -89,9 +91,9 @@ def build_velocity_chart(
     fig.add_hline(y=0, line=dict(color=ZERO_LINE_COLOUR, width=1))
     fig.update_layout(
         title=dict(text="Wealth velocity (% growth per period)",
-                   font=dict(size=13, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
-        yaxis=dict(title="% change", ticksuffix="%", gridcolor="#e2e8f0"),
+                   font=dict(size=13, color=TITLE_COLOUR), x=0),
+        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
+        yaxis=dict(title="% change", ticksuffix="%", gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=200, margin=dict(l=60, r=20, t=40, b=40),
         showlegend=False,
@@ -132,10 +134,10 @@ def build_cumulative_chart(
 
     fig.update_layout(
         title=dict(text=f"Net worth over time ({price_label})",
-                   font=dict(size=14, color="#1e293b"), x=0),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", zeroline=False),
+                   font=dict(size=14, color=TITLE_COLOUR), x=0),
+        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
         yaxis=dict(title="Net worth (£)", tickprefix="£", tickformat=",.0f",
-                   gridcolor="#e2e8f0"),
+                   gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=260, margin=dict(l=70, r=40, t=50, b=50),
         hovermode="x unified",

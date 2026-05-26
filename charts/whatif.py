@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
+from ._helpers import TITLE_COLOUR, GRID_COLOUR
+
 
 DEFAULT_SCENARIO_COLOURS = ["#f97316", "#8b5cf6", "#06b6d4"]  # orange, violet, cyan
 
@@ -112,12 +114,12 @@ def build_whatif_figure(
         title=dict(
             text=(f"What-if: {sc_title} CAGR from age {latest_age:.1f}  "
                   f"<span style='font-size:11px;color:#64748b'>· {contrib_note}</span>"),
-            font=dict(size=14, color="#1e293b"), x=0,
+            font=dict(size=14, color=TITLE_COLOUR), x=0,
         ),
         xaxis=dict(title="Age", range=[15, project_to_age + 1], dtick=5,
-                   gridcolor="#e2e8f0", zeroline=False),
+                   gridcolor=GRID_COLOUR, zeroline=False),
         yaxis=dict(title=f"Net worth (£, {price_label})", tickprefix="£",
-                   tickformat=",.0f", gridcolor="#e2e8f0"),
+                   tickformat=",.0f", gridcolor=GRID_COLOUR),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
         plot_bgcolor="white", paper_bgcolor="white",
         height=400, margin=dict(l=70, r=40, t=60, b=60),

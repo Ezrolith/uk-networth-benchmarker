@@ -18,7 +18,10 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from utils.inference import derive_tail_percentiles
-from charts._helpers import fmt, fmt_delta, clean_note, hover_template, best_gain
+from ._helpers import (
+    fmt, fmt_delta, clean_note, hover_template, best_gain,
+    TITLE_COLOUR, GRID_COLOUR,
+)
 
 
 _DEFAULT_COLOURS = {
@@ -232,7 +235,7 @@ def build_main_figure(
 
     # ── Age band boundary lines ───────────────────────────────────────────────
     for x_val in [24, 34, 44, 54, 64, 74]:
-        fig.add_vline(x=x_val + 0.5, line=dict(color="#e2e8f0", width=1, dash="dot"))
+        fig.add_vline(x=x_val + 0.5, line=dict(color=GRID_COLOUR, width=1, dash="dot"))
 
     # ── Right-edge percentile labels ──────────────────────────────────────────
     if not log_scale and show_annotations:
@@ -266,7 +269,7 @@ def build_main_figure(
         tickprefix="£",
         **({} if log_scale else {"tickformat": ",.0f",
                                  "zeroline": True, "zerolinecolor": "#cbd5e1"}),
-        gridcolor="#e2e8f0", showgrid=True,
+        gridcolor=GRID_COLOUR, showgrid=True,
     )
 
     component_suffix = (f" · {wealth_component} wealth only"
@@ -275,10 +278,10 @@ def build_main_figure(
         title=dict(
             text=(f"UK net worth distribution — {basis.lower()} basis, "
                   f"{price_label}{component_suffix}"),
-            font=dict(size=17, color="#1e293b"), x=0,
+            font=dict(size=17, color=TITLE_COLOUR), x=0,
         ),
         xaxis=dict(title="Age", range=[age_min - 0.5, age_max + 0.5],
-                   dtick=5, gridcolor="#e2e8f0", showgrid=True, zeroline=False),
+                   dtick=5, gridcolor=GRID_COLOUR, showgrid=True, zeroline=False),
         yaxis=yaxis_cfg,
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1,
                     font=dict(size=12)),

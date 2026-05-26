@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from charts._helpers import fmt
+from ._helpers import fmt, TITLE_COLOUR, GRID_COLOUR
 
 
 def build_distribution_chart(
@@ -92,12 +92,12 @@ def build_distribution_chart(
     fig.update_layout(
         title=dict(
             text=f"Wealth distribution at age {age_clamped} ({price_label})",
-            font=dict(size=14, color="#1e293b"), x=0,
+            font=dict(size=14, color=TITLE_COLOUR), x=0,
         ),
         xaxis=dict(title=f"Net worth (£, {price_label})", tickprefix="£",
-                   tickformat=",.0f", gridcolor="#e2e8f0"),
+                   tickformat=",.0f", gridcolor=GRID_COLOUR),
         yaxis=dict(title="Probability density", showticklabels=False,
-                   gridcolor="#e2e8f0"),
+                   gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=300, margin=dict(l=60, r=60, t=50, b=50),
         showlegend=False,

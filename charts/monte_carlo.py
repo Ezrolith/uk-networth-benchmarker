@@ -7,6 +7,7 @@ import numpy as np
 import plotly.graph_objects as go
 
 from utils.monte_carlo import percentile_envelope
+from ._helpers import TITLE_COLOUR, GRID_COLOUR
 
 
 def build_monte_carlo_chart(
@@ -99,11 +100,11 @@ def build_monte_carlo_chart(
     fig.update_layout(
         title=dict(
             text=f"Monte Carlo projection ({n_sims:,} simulations, {years} years)",
-            font=dict(size=14, color="#1e293b"), x=0,
+            font=dict(size=14, color=TITLE_COLOUR), x=0,
         ),
-        xaxis=dict(title="Age", gridcolor="#e2e8f0", dtick=5, zeroline=False),
+        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, dtick=5, zeroline=False),
         yaxis=dict(title=f"Net worth (£, {price_label})", tickprefix="£",
-                   tickformat=",.0f", gridcolor="#e2e8f0"),
+                   tickformat=",.0f", gridcolor=GRID_COLOUR),
         legend=dict(orientation="h", yanchor="bottom", y=1.01, xanchor="right", x=1),
         plot_bgcolor="white", paper_bgcolor="white",
         height=400, margin=dict(l=70, r=80, t=60, b=60),
