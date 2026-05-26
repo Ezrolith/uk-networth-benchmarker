@@ -1650,7 +1650,29 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "Married + RNRB — £1m (2× NRB + 2× RNRB)":               IHT_BANDS["married_with_rnrb"],
         }[iht_threshold]
 
-        gross_estate  = latest_nw
+        # If a married threshold is selected AND partner data is loaded, offer to
+        # use the combined household estate. The married thresholds (£650k or £1m)
+        # are the COMBINED exemption, so applying them to just one spouse's wealth
+        # would understate the available headroom.
+        _is_married_threshold = "Married" in iht_threshold
+        _has_partner = partner_plot_df is not None and len(partner_plot_df) > 0
+        gross_estate = latest_nw
+        if _is_married_threshold and _has_partner:
+            _partner_latest_nw = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"])
+            _use_combined = st.checkbox(
+                f"Use combined household estate ({_fmt(latest_nw)} + {_fmt(_partner_latest_nw)} = "
+                f"{_fmt(latest_nw + _partner_latest_nw)})",
+                value=True, key="iht_use_combined",
+                help=(
+                    "The £650k/£1m married thresholds apply to the COMBINED estate at the "
+                    "second death (the first spouse passes everything to the second tax-free, "
+                    "and unused NRB transfers). So the right comparison is your joint estate, "
+                    "not just yours."
+                ),
+            )
+            if _use_combined:
+                gross_estate = latest_nw + _partner_latest_nw
+
         exempt_amount = _iht_band + iht_deductions
         # Use the tested utility — same math, but now centralised + tested
         taxable_estate, iht_due, after_iht = iht_payable(
