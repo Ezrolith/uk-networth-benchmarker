@@ -1,6 +1,6 @@
 # Test suite
 
-196 tests across 11 files, ~6s runtime. Run with `make test` or `pytest -v`.
+218 tests across 13 files, ~7s runtime. Run with `make test` or `pytest -v`.
 
 ## What each file covers
 
@@ -11,7 +11,9 @@
 | `test_inference.py` (18) | PCHIP interpolation, log-normal percentile fit, CPI math, individual + gender conversion, tail derivation, decile table, component filter |
 | `test_data_loader.py` (17) | CSV parsing tolerance (whitespace, ISO dates, extra columns, Excel date artefacts), URL encode/decode round-trip, validation warnings |
 | `test_monte_carlo.py` (24) | Simulation determinism with seeds, mean ≈ FV at low vol, zero-vol determinism, contributions grow faster, glide-path endpoints + monotone, portfolio_moments equity/bond mix, probability functions |
-| `test_uk_tax.py` (39) | Pension AA + taper + carryforward, ISA/LISA (age-aware), pension relief at multiple rates, LISA bonus cap, IHT with 4 scenarios up to £1m |
+| `test_uk_tax.py` (43) | Pension AA + taper + carryforward, ISA/LISA (age-aware), pension relief at multiple rates, LISA bonus cap, IHT with 4 scenarios, state pension constants, life expectancy lookup |
+| `test_data_quality.py` (9) | Data quality scoring: perfect/minimum/empty cases, recency/density/span criteria, score cap at 100, indicator emoji on every note |
+| `test_summary.py` (9) | Summary stats table: empty input, three core rows always present, label prefix, CAGR included/omitted, best/worst single change, latest percentile, exact column shape |
 | `test_charts_helpers.py` (24) | fmt edge cases incl. negatives, fmt_delta, clean_note (NaN handling), safe_cagr filters, best_gain on unsorted input |
 
 ### Chart builders (smoke + behaviour)
