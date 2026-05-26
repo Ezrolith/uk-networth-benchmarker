@@ -6,6 +6,51 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [Unreleased — Session 8 continuation]
+
+Post-deploy-fix continuation of Session 7. ~50+ commits of bug fixes,
+defensive additions, and real UX wins. Notable items:
+
+### Bug fixes
+- `run_monte_carlo`: depleted paths now clamp at zero (was compounding into
+  the negative — broke decumulation analysis)
+- `build_summary_stats`: pandas FutureWarning + pending crash on single-row
+  input (idxmin on all-NaN diff)
+- CSV parser: helpful errors for empty file and headers-only file
+- Manual entry: drop NaN rows before downstream processing
+- `data_quality` recency bands now relative to today (was hardcoded 2024)
+- Manual entry default year now `date.today().year`, not 2024
+
+### New features
+- **PDF Monte Carlo page** — band chart, outcome stats, probability of target
+- **Monte Carlo 'Reroll' button** — step through alternative random draws
+- **Shareable URL includes partner data** under `?p=`
+- **IHT combined household estate toggle** when married threshold + partner
+- **LISA 40-50 gap modelled** with `has_existing_lisa` flag + UI checkbox
+- **Text report enriched** with partner snapshot, goals, data quality
+
+### Refactor / polish
+- Style constants centralised in `charts/_helpers.py`; all 9 chart files migrated
+- `STATE_PENSION_AGE`, `LIFE_EXPECTANCY_AT_AGE` extracted to `utils/uk_tax.py`
+- `compute_data_quality` → `utils/data_quality.py` + 9 tests
+- `build_summary_stats` → `utils/summary.py` + 9 tests
+- `apply_component_filter` validates input with clear `ValueError`
+- Manual entry partner age defaults to user's age when known
+- `data/__init__.py` re-exports `DEMO_HISTORY`
+- conftest gains `partner_history` fixture, 3 inline copies removed
+
+### Tooling
+- `scripts/compile_check.py` + tests; CI calls it
+- `scripts/bump_version.py` + 5 tests; `make version` / `make pre-release` targets
+- `tests/test_app_imports.py` — 6 tests verifying every imported name resolves
+- `tests/test_requirements.py` — 4 tests pinning third-party deps to requirements.txt
+- `tests/test_data_files.py` — 11 tests on bundled CSV integrity
+- `.gitattributes` LF policy, `pyproject.toml` pytest config
+
+Total: 0 → 238 tests, ~7s runtime, all green.
+
+---
+
 ## [2.6] — May 2026 (Session 7)
 
 Quality + UK-specific planning depth + safety nets.
