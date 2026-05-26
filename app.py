@@ -2318,13 +2318,18 @@ Derived from the same log-normal model: `value = exp(mu + z×sigma)` where z = P
 Tracks your contributions this tax year against:
 - **ISA total allowance** £20,000 (2025/26) — cash, S&S, Innovative Finance and LISA combined.
 - **Lifetime ISA** £4,000 — counts inside the ISA total; 25% government bonus added on top.
+  LISA contribution eligibility by age is modelled: under-18s and over-50s blocked,
+  and between 40-50 a checkbox asks whether you already have a LISA open (you can't
+  open a new one after 39).
 - **Pension Annual Allowance** £60,000 — plus carryforward from unused allowance in the
-  previous 3 tax years. Tapered to £10k for adjusted income over £260k (not modelled).
+  previous 3 tax years. The high-earner taper IS modelled: for adjusted income above
+  £260,000, the AA reduces by £1 for every £2 over the threshold, floored at £10,000
+  (reached at £360,000 adjusted income).
 
 Progress bars and headroom show how much you have left to contribute before 5 April.
 Smart suggestions appear when headroom × marginal tax relief is material (>£1k pension,
 >£0 ISA/LISA). Indicative only — pension recycling rules, salary sacrifice mechanics,
-LISA age limits, and many other details are not modelled.
+and many other details are not modelled.
 
 ### Monte Carlo projection (stochastic returns)
 
