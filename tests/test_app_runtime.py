@@ -222,6 +222,30 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
     return int(m.group(1)) if m else 0
 
 
+def test_app_runs_with_single_data_point():
+    """
+    A user who's only just started entering their net worth (one row) should
+    see the app render without crashing. Earlier this session this scenario
+    triggered a pandas FutureWarning + eventual crash in build_summary_stats
+    when diff().idxmin() was called on a single-element all-NaN series.
+
+    The unit test in test_summary.py covers the summary stats path; this
+    AppTest layer guards every OTHER code path that touches personal_plot_df
+    (metrics row, milestone tracker, gain charts, retirement projections,
+    etc.) for the same 1-row scenario.
+    """
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = [
+        {"year": 2026, "age": 30.0, "net_worth": 50_000.0, "note": "first entry"}
+    ]
+    at.run()
+    assert len(at.exception) == 0, (
+        "Single-row data crashed the app: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+
 def test_monte_carlo_reroll_button_changes_seed():
     """
     The Monte Carlo 'Reroll' button (added in Session 8) increments the
