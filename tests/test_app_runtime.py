@@ -450,3 +450,38 @@ def test_pdf_generation_with_demo_data_succeeds_and_includes_monte_carlo():
         f"PDF has {page_count} pages, decoded {len(text)} chars of text. "
         "Either _mpl_monte_carlo() returned None or the page block silently failed."
     )
+
+
+def test_app_handles_monthly_snapshot_data_end_to_end():
+    """
+    Users with frequent snapshots (e.g. exporting from a banking app every
+    month) end up with >1 row per calendar year. Several recent fixes pushed
+    annual aggregation into the chart builders and summary helpers; this
+    integration test makes sure the full app still loads cleanly when the
+    actual personal data has that monthly density.
+
+    Regression guard: catches any future change that introduces a code path
+    that explodes on dense per-year input (e.g. a builder that doesn't
+    sort_values + groupby and instead assumes one row per year).
+    """
+    rows = []
+    # 24 monthly rows spanning 2024 and 2025
+    for month in range(1, 13):
+        rows.append({
+            "year": 2024, "age": 30 + month / 12,
+            "net_worth": 50_000 + month * 1_500, "note": "",
+        })
+    for month in range(1, 13):
+        rows.append({
+            "year": 2025, "age": 31 + month / 12,
+            "net_worth": 70_000 + month * 2_000, "note": "",
+        })
+
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = rows
+    at.run()
+    assert len(at.exception) == 0, (
+        "App crashed on monthly snapshot data: "
+        f"{[e.message for e in at.exception]}"
+    )
