@@ -171,6 +171,48 @@ def test_gains_chart_returns_none_for_single_point():
     assert build_gains_chart(pdf) is None
 
 
+def test_gains_chart_aggregates_monthly_data_to_annual():
+    """
+    With multiple rows per calendar year (e.g. monthly snapshots), the chart
+    should aggregate to annual using the last row of each year. This matches
+    the PDF report's behaviour and keeps the chart readable with dense data.
+    """
+    # 24 monthly rows spanning 2 years -> should produce 1 bar (the diff
+    # between the last 2024 row and the last 2025 row; first year has no
+    # previous to diff against).
+    rows = []
+    for month in range(1, 13):
+        rows.append({"year": 2024, "age": 30 + month / 12, "net_worth": 50_000 + month * 1000})
+    for month in range(1, 13):
+        rows.append({"year": 2025, "age": 31 + month / 12, "net_worth": 70_000 + month * 1500})
+    pdf = pd.DataFrame(rows)
+
+    fig = build_gains_chart(pdf)
+    assert fig is not None
+    # Should have exactly 1 bar (one year-on-year diff)
+    bar = fig.data[0]
+    assert len(bar.x) == 1
+    # Title should mention aggregation
+    assert "aggregated" in fig.layout.title.text
+    # X-axis should be 'Year' not 'Age'
+    assert fig.layout.xaxis.title.text == "Year"
+
+
+def test_gains_chart_no_aggregation_when_one_row_per_year():
+    """When there's already one row per year, the chart should use age axis
+    (no aggregation needed)."""
+    pdf = pd.DataFrame({
+        "year": [2020, 2021, 2022, 2023],
+        "age":  [30.0, 31.0, 32.0, 33.0],
+        "net_worth": [25_000, 50_000, 80_000, 120_000],
+    })
+    fig = build_gains_chart(pdf)
+    # 3 bars (4 points, 3 diffs)
+    assert len(fig.data[0].x) == 3
+    # No 'aggregated' suffix in title
+    assert "aggregated" not in fig.layout.title.text
+
+
 def test_velocity_chart_builds(personal_history):
     fig = build_velocity_chart(personal_history)
     assert fig is not None
