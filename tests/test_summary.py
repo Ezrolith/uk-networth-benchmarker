@@ -3,21 +3,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from utils.data_loader import load_was_data
-from utils.inference import interpolate_benchmarks
 from utils.summary import build_summary_stats
 
-
-@pytest.fixture(scope="module")
-def benchmark() -> pd.DataFrame:
-    raw = load_was_data()
-    return interpolate_benchmarks(raw[raw["with_pension"] == True], np.arange(16, 86))
+# The `benchmark` fixture is provided by conftest.py — session-scoped so it's
+# computed once for the whole test run rather than rebuilt per module.
 
 
 @pytest.fixture
