@@ -773,21 +773,24 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
     # Monthly savings micro-calculator
     with st.expander("Quick calculator: monthly savings impact"):
         st.caption("How much would saving an extra amount per month add to your net worth?")
-        mc_cols = st.columns(3)
-        with mc_cols[0]:
-            extra_monthly = st.number_input("Extra monthly saving (£)", 0, 10_000, 200, 50, key="mc_monthly")
-        with mc_cols[1]:
-            mc_return  = st.number_input("Annual return (%)", 0.0, 15.0, 5.0, 0.5, key="mc_return")
-        with mc_cols[2]:
-            mc_years   = st.number_input("Years", 1, 50, 10, 1, key="mc_years")
+        # NB: 'qc_' prefix (Quick Calculator), NOT 'mc_' — Monte Carlo elsewhere
+        # uses mc_* keys, and an accidental collision on 'mc_monthly' previously
+        # crashed the app with StreamlitDuplicateElementKey.
+        qc_cols = st.columns(3)
+        with qc_cols[0]:
+            extra_monthly = st.number_input("Extra monthly saving (£)", 0, 10_000, 200, 50, key="qc_monthly")
+        with qc_cols[1]:
+            qc_return  = st.number_input("Annual return (%)", 0.0, 15.0, 5.0, 0.5, key="qc_return")
+        with qc_cols[2]:
+            qc_years   = st.number_input("Years", 1, 50, 10, 1, key="qc_years")
         if extra_monthly > 0:
             # FV of annuity: PMT * [(1+r)^n - 1] / r  where r = monthly rate
-            r = (mc_return / 100) / 12
-            n = mc_years * 12
+            r = (qc_return / 100) / 12
+            n = qc_years * 12
             fv = extra_monthly * ((1 + r) ** n - 1) / r if r > 0 else extra_monthly * n
             total_paid = extra_monthly * n
             st.metric(
-                f"Future value in {mc_years} yrs",
+                f"Future value in {qc_years} yrs",
                 _fmt(fv),
                 delta=f"+{_fmt(fv - total_paid)} from returns",
                 help=f"£{total_paid:,.0f} contributed; £{fv - total_paid:,.0f} from compound returns."
