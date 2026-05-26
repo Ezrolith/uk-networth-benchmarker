@@ -238,12 +238,22 @@ def _personal_data_section(
         st.caption("One row per year. Net worth in £.")
         ss_key = f"{key_prefix}_rows"
         if ss_key not in st.session_state:
-            # Default to current year + age 30. (We can't reliably mirror the
-            # primary user's age here for partner data because latest_age isn't
-            # populated until after the sidebar runs.)
+            # Default to current year. For age: if this is the partner pane and
+            # the user has already entered their own data this session, pre-fill
+            # the partner's age to match the user's latest age (couples typically
+            # have similar ages). Otherwise default to 30.
             from datetime import date
+            _default_age = 30
+            if key_prefix == "partner" and "you_rows" in st.session_state:
+                _you_rows = st.session_state["you_rows"]
+                if _you_rows:
+                    try:
+                        _default_age = int(_you_rows[-1].get("age", 30))
+                    except (TypeError, ValueError):
+                        pass
             st.session_state[ss_key] = [
-                {"year": date.today().year, "age": 30, "net_worth": 0, "note": ""}
+                {"year": date.today().year, "age": _default_age,
+                 "net_worth": 0, "note": ""}
             ]
         edited = st.data_editor(
             pd.DataFrame(st.session_state[ss_key]),
