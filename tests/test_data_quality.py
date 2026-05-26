@@ -26,16 +26,18 @@ def _df(n_points: int, age_span: float, max_year: int) -> pd.DataFrame:
     })
 
 
-def test_perfect_score_10pts_10yr_2024():
-    """10 points spanning 10 years, recent — should score 100."""
-    df = _df(n_points=10, age_span=10, max_year=2024)
+def test_perfect_score_10pts_10yr_recent():
+    """10 points spanning 10 years, ending last year — should score 100."""
+    from datetime import date
+    df = _df(n_points=10, age_span=10, max_year=date.today().year - 1)
     result = compute_data_quality(df)
     assert result["score"] == 100
 
 
 def test_minimum_data_low_score():
-    """1 point — should be below 30."""
-    df = _df(n_points=1, age_span=0, max_year=2024)
+    """1 point — should be below 50 even if recent."""
+    from datetime import date
+    df = _df(n_points=1, age_span=0, max_year=date.today().year - 1)
     result = compute_data_quality(df)
     assert result["score"] < 50
     assert any("at least 2" in n for n in result["notes"])
