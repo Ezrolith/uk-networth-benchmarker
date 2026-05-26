@@ -3118,26 +3118,39 @@ if personal_plot_df is not None and latest_nw is not None:
                     pass
 
         # ── Page 8: Monte Carlo (if MC was run) ────────────────────────────────
+        # mc_png is set if _mpl_monte_carlo() succeeded; that function only
+        # needs `mc_paths` in scope. The text below is defensive — every other
+        # mc_* variable can be missing and we still render the page using
+        # sensible fallbacks (defined here, not via NameError catches).
         if mc_png:
+            # Pull every MC variable up-front with safe defaults. Using
+            # locals().get() / globals().get() avoids NameError on any
+            # individual missing name.
+            _g = globals()
+            _mc_glide_path  = _g.get("mc_glide_path", None)
+            _mc_mean        = _g.get("mc_mean", 5.0)
+            _mc_sigma       = _g.get("mc_sigma", 12.0)
+            _mc_monthly     = _g.get("mc_monthly", 0)
+            _mc_target_age  = _g.get("mc_target_age",
+                                     int(latest_age) + len(mc_paths[0]) - 1
+                                     if mc_paths is not None and len(mc_paths[0]) else 65)
+            _mc_target_nw   = _g.get("mc_target_nw", 0)
+
             try:
                 pdf.add_page(); H1("Monte Carlo projection")
-                # Use whichever assumption description matches the MC mode
-                try:
-                    if mc_glide_path is None:
-                        _mc_desc = (f"fixed N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) "
-                                    f"each year")
-                    else:
-                        _mc_desc = (f"equity/bond glide path from {mc_glide_path[0]*100:.0f}% "
-                                    f"to {mc_glide_path[1]*100:.0f}% equity")
-                except NameError:
-                    _mc_desc = "stochastic returns"
-                _mc_contrib = (f" Includes £{mc_monthly:,}/month ongoing contributions."
-                               if mc_monthly > 0 else
+                if _mc_glide_path is None:
+                    _mc_desc = (f"fixed N(mu={_mc_mean:.1f}%, sigma={_mc_sigma:.1f}%) "
+                                f"each year")
+                else:
+                    _mc_desc = (f"equity/bond glide path from {_mc_glide_path[0]*100:.0f}% "
+                                f"to {_mc_glide_path[1]*100:.0f}% equity")
+                _mc_contrib = (f" Includes £{_mc_monthly:,}/month ongoing contributions."
+                               if _mc_monthly > 0 else
                                " No further contributions.")
                 SM(
-                    f"1,000 simulations from age {int(latest_age)} to age {mc_target_age}, "
+                    f"1,000 simulations from age {int(latest_age)} to age {_mc_target_age}, "
                     f"using {_mc_desc}.{_mc_contrib} "
-                    f"The bands show the range of likely outcomes — real markets show mean "
+                    f"The bands show the range of likely outcomes - real markets show mean "
                     f"reversion and fat tails, so treat as a planning aid, not a forecast."
                 )
                 pdf.ln(3); CHART(mc_png)
@@ -3145,13 +3158,13 @@ if personal_plot_df is not None and latest_nw is not None:
                 # Outcome summary table
                 pdf.ln(4)
                 pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
-                pdf.cell(0, 6, f"Outcomes at age {mc_target_age}:", ln=True)
+                pdf.cell(0, 6, f"Outcomes at age {_mc_target_age}:", ln=True)
                 pdf.ln(1)
                 _mc_final = mc_paths[:, -1]
                 _mc_p10 = float(np.percentile(_mc_final, 10))
                 _mc_p50 = float(np.percentile(_mc_final, 50))
                 _mc_p90 = float(np.percentile(_mc_final, 90))
-                TH(("Outcome", 90), (f"Net worth at age {mc_target_age}", 90))
+                TH(("Outcome", 90), (f"Net worth at age {_mc_target_age}", 90))
                 TR(0, ("Pessimistic (10th percentile)",        90, False),
                        (_fmt(_mc_p10),                          90, False))
                 TR(1, ("Median outcome (50th percentile)",     90, False),
@@ -3160,22 +3173,23 @@ if personal_plot_df is not None and latest_nw is not None:
                        (_fmt(_mc_p90),                          90, False))
 
                 # Probability of hitting target, if set
-                if mc_target_nw and mc_target_nw > 0:
+                if _mc_target_nw and _mc_target_nw > 0:
                     pdf.ln(4)
                     pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
-                    _pt = probability_of_reaching(mc_paths, mc_target_nw)
+                    _pt = probability_of_reaching(mc_paths, _mc_target_nw)
                     _ratio = "succeed" if _pt >= 0.5 else "fall short"
                     pdf.multi_cell(
                         0, 5.5,
-                        f"Probability of reaching {_fmt(mc_target_nw)} target: "
+                        f"Probability of reaching {_fmt(_mc_target_nw)} target: "
                         f"{_pt*100:.0f}%. In {1000:,} simulations, "
                         f"{int(_pt*1000):,} reach the target and "
                         f"{int((1-_pt)*1000):,} {_ratio}."
                     )
-            except Exception:
-                # If anything in the MC page rendering breaks, skip silently
-                # rather than crash the whole PDF.
-                pass
+            except Exception as _mc_err:
+                # Page partially rendered - add a footnote so the failure is
+                # visible to the user instead of silently disappearing.
+                pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
+                pdf.multi_cell(0, 4.5, f"(Monte Carlo details incomplete: {type(_mc_err).__name__})")
 
         # ── Page 9: Goals (if set) ─────────────────────────────────────────────
         try:
