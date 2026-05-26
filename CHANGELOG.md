@@ -43,7 +43,7 @@ Quality + UK-specific planning depth + safety nets.
 - `app.py`: 3,105 → ~2,750 lines (-12%).
 
 ### Added — quality + safety nets
-- pytest suite from 0 → **185 tests** (~6s runtime).
+- pytest suite from 0 → **218 tests** across 13 files (~7s runtime).
 - GitHub Actions CI on every push (Python 3.11 + 3.12).
 - `tests/test_app_imports.py` — parses `app.py` with `ast` and verifies
   every imported name resolves. Catches the deploy incident class of bug.
@@ -51,6 +51,10 @@ Quality + UK-specific planning depth + safety nets.
   corresponding entry in `requirements.txt`. Uses `sys.stdlib_module_names`
   so the stdlib allowlist auto-tracks Python version differences.
 - `tests/test_compile_check.py` — meta-tests the CI compile gate itself.
+- `tests/test_data_files.py` — bundled CSVs exist, schemas intact, IQR
+  ordering preserved (P25 < P50 < P75 per band), component shares sum to 100.
+- `tests/test_data_quality.py` — 9 tests on the data quality scorer.
+- `tests/test_summary.py` — 9 tests on the summary stats table builder.
 - `scripts/compile_check.py` — single source of truth for whole-tree
   syntax checking; called by both CI and `make compile`.
 - `Makefile` with `install`, `test`, `compile`, `run`, `check`, `data`,
