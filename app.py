@@ -2551,6 +2551,49 @@ if personal_plot_df is not None and latest_nw is not None:
             except Exception:
                 return None
 
+        def _mpl_monte_carlo():
+            """
+            Static PNG of the Monte Carlo projection — P10/P25/P50/P75/P90 bands
+            across time, plus optional target line. Returns None if mc_paths
+            isn't in scope (no personal data) or rendering fails.
+            """
+            try:
+                _paths = mc_paths  # NameError if MC section didn't run
+                _start = float(latest_age or 30)
+                _ages = list(range(int(_start), int(_start) + _paths.shape[1]))
+
+                p10 = np.percentile(_paths, 10, axis=0)
+                p25 = np.percentile(_paths, 25, axis=0)
+                p50 = np.percentile(_paths, 50, axis=0)
+                p75 = np.percentile(_paths, 75, axis=0)
+                p90 = np.percentile(_paths, 90, axis=0)
+
+                fig, ax = _plt.subplots(figsize=(11, 4))
+                # Outer band 10-90
+                ax.fill_between(_ages, p10, p90, color="#dbeafe", alpha=0.7,
+                                label="10th-90th percentile")
+                # Inner band 25-75
+                ax.fill_between(_ages, p25, p75, color="#93c5fd", alpha=0.7,
+                                label="25th-75th percentile")
+                # Median line
+                ax.plot(_ages, p50, color="#1d4ed8", lw=2.5, label="Median outcome")
+
+                # Target line if set
+                if mc_target_nw and mc_target_nw > 0:
+                    ax.axhline(mc_target_nw, color=_PC, lw=1.5, ls="--",
+                               label=f"Target {_fmt(mc_target_nw)}")
+
+                ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
+                ax.set_xlabel("Age")
+                ax.set_ylabel(f"Net worth ({_price_lbl})")
+                ax.legend(fontsize=8, loc="upper left")
+                ax.grid(True, alpha=0.25)
+                ax.set_title("Monte Carlo projection - 1,000 simulations", fontsize=11)
+                fig.tight_layout()
+                return _save(fig)
+            except Exception:
+                return None
+
         main_png  = _mpl_benchmark()
         traj_png  = None
         if len(_s_rpt) >= 2:
@@ -2559,6 +2602,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 traj_png = _mpl_trajectory(_ty)
         gains_png  = _mpl_gains() if len(_s_rpt) >= 2 else None
         whatif_png = _mpl_whatif()
+        mc_png     = _mpl_monte_carlo()
 
         # ── PDF helpers & layout ───────────────────────────────────────────────
         def _ordinal(n: int) -> str:
@@ -2921,7 +2965,67 @@ if personal_plot_df is not None and latest_nw is not None:
                 except Exception:
                     pass
 
-        # ── Page 8: Goals (if set) ─────────────────────────────────────────────
+        # ── Page 8: Monte Carlo (if MC was run) ────────────────────────────────
+        if mc_png:
+            try:
+                pdf.add_page(); H1("Monte Carlo projection")
+                # Use whichever assumption description matches the MC mode
+                try:
+                    if mc_glide_path is None:
+                        _mc_desc = (f"fixed N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) "
+                                    f"each year")
+                    else:
+                        _mc_desc = (f"equity/bond glide path from {mc_glide_path[0]*100:.0f}% "
+                                    f"to {mc_glide_path[1]*100:.0f}% equity")
+                except NameError:
+                    _mc_desc = "stochastic returns"
+                _mc_contrib = (f" Includes £{mc_monthly:,}/month ongoing contributions."
+                               if mc_monthly > 0 else
+                               " No further contributions.")
+                SM(
+                    f"1,000 simulations from age {int(latest_age)} to age {mc_target_age}, "
+                    f"using {_mc_desc}.{_mc_contrib} "
+                    f"The bands show the range of likely outcomes — real markets show mean "
+                    f"reversion and fat tails, so treat as a planning aid, not a forecast."
+                )
+                pdf.ln(3); CHART(mc_png)
+
+                # Outcome summary table
+                pdf.ln(4)
+                pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
+                pdf.cell(0, 6, f"Outcomes at age {mc_target_age}:", ln=True)
+                pdf.ln(1)
+                _mc_final = mc_paths[:, -1]
+                _mc_p10 = float(np.percentile(_mc_final, 10))
+                _mc_p50 = float(np.percentile(_mc_final, 50))
+                _mc_p90 = float(np.percentile(_mc_final, 90))
+                TH(("Outcome", 90), (f"Net worth at age {mc_target_age}", 90))
+                TR(0, ("Pessimistic (10th percentile)",        90, False),
+                       (_fmt(_mc_p10),                          90, False))
+                TR(1, ("Median outcome (50th percentile)",     90, False),
+                       (_fmt(_mc_p50),                          90, True))
+                TR(2, ("Optimistic (90th percentile)",         90, False),
+                       (_fmt(_mc_p90),                          90, False))
+
+                # Probability of hitting target, if set
+                if mc_target_nw and mc_target_nw > 0:
+                    pdf.ln(4)
+                    pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
+                    _pt = probability_of_reaching(mc_paths, mc_target_nw)
+                    _ratio = "succeed" if _pt >= 0.5 else "fall short"
+                    pdf.multi_cell(
+                        0, 5.5,
+                        f"Probability of reaching {_fmt(mc_target_nw)} target: "
+                        f"{_pt*100:.0f}%. In {1000:,} simulations, "
+                        f"{int(_pt*1000):,} reach the target and "
+                        f"{int((1-_pt)*1000):,} {_ratio}."
+                    )
+            except Exception:
+                # If anything in the MC page rendering breaks, skip silently
+                # rather than crash the whole PDF.
+                pass
+
+        # ── Page 9: Goals (if set) ─────────────────────────────────────────────
         try:
             if goal_amount > 0 or fire_number > 0:
                 pdf.add_page(); H1("Goals & financial independence")
