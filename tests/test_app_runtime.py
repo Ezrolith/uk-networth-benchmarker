@@ -222,6 +222,37 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
     return int(m.group(1)) if m else 0
 
 
+def test_monte_carlo_reroll_button_changes_seed():
+    """
+    The Monte Carlo 'Reroll' button (added in Session 8) increments the
+    seed by 1 each click, then triggers a rerun so the chart uses the new
+    random draw. Verify clicking it actually changes session_state.
+    """
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    from data.demo_data import DEMO_HISTORY
+    at.session_state["you_rows"] = list(DEMO_HISTORY)
+    at.run()
+    assert len(at.exception) == 0
+
+    # Find the reroll button (label has the dice emoji)
+    reroll_buttons = [b for b in at.button if "Reroll" in b.label]
+    assert len(reroll_buttons) == 1, (
+        f"Expected exactly one 'Reroll' button, found {len(reroll_buttons)}"
+    )
+
+    # Initial seed should be 42 (or unset, which the app treats as 42)
+    initial_seed = at.session_state["mc_seed"] if "mc_seed" in at.session_state else 42
+
+    reroll_buttons[0].click().run()
+    assert len(at.exception) == 0
+    assert "mc_seed" in at.session_state
+    new_seed = at.session_state["mc_seed"]
+    assert new_seed == initial_seed + 1, (
+        f"Reroll didn't advance seed: was {initial_seed}, now {new_seed}"
+    )
+
+
 def test_app_runs_with_partner_data_loaded():
     """
     Both the user's data and the partner's data loaded. Exercises:
