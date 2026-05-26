@@ -159,4 +159,17 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
                 "Check that age and year values are consistent."
             )
 
+    # Implausible-age sanity check. The benchmark covers ages 16-85; anything
+    # outside [16, 100] is almost certainly a data entry error rather than a
+    # real person. We don't reject the row (the user might have a legitimate
+    # reason) but we flag it so they can spot typos in the manual editor.
+    out_of_age = df[(df["age"] < 16) | (df["age"] > 100)]
+    if len(out_of_age) > 0:
+        bad_ages = sorted(set(round(float(a), 1) for a in out_of_age["age"]))
+        df.attrs["implausible_age_warning"] = (
+            f"{len(out_of_age)} row(s) have age outside 16-100 (values: {bad_ages}). "
+            "Check for typos. The benchmark only covers 16-85, so values beyond "
+            "that clamp to the nearest end of the range."
+        )
+
     return df

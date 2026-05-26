@@ -231,7 +231,8 @@ def _personal_data_section(
                 # repaired the years, just letting the user know.
                 if "excel_serial_converted" in result_df.attrs:
                     st.info(result_df.attrs["excel_serial_converted"], icon="🔧")
-                for attr in ("excel_year_warning", "birth_year_warning"):
+                for attr in ("excel_year_warning", "birth_year_warning",
+                             "implausible_age_warning"):
                     if attr in result_df.attrs:
                         st.warning(result_df.attrs[attr], icon="⚠️")
             except ValueError as exc:

@@ -150,6 +150,29 @@ def test_parse_excel_serial_partial_only_converts_serials():
     assert df.iloc[2]["year"] == 2024
 
 
+def test_implausible_age_warning_under_16():
+    """A row with age below 16 (e.g. typo) should trigger the implausible-age warning."""
+    csv = "year,age,net_worth\n2024,5,1000\n2025,30,50000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "implausible_age_warning" in df.attrs
+    assert "5" in df.attrs["implausible_age_warning"]
+
+
+def test_implausible_age_warning_over_100():
+    """A row with age above 100 (e.g. typo) should trigger the implausible-age warning."""
+    csv = "year,age,net_worth\n2024,30,50000\n2025,150,500000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "implausible_age_warning" in df.attrs
+    assert "150" in df.attrs["implausible_age_warning"]
+
+
+def test_no_implausible_age_warning_for_valid_range():
+    """16-100 inclusive should not trigger the warning."""
+    csv = "year,age,net_worth\n2024,16,5000\n2025,100,500000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "implausible_age_warning" not in df.attrs
+
+
 def test_excel_year_artifact_warning():
     """Years before 1940 are flagged as likely Excel date-format artefacts."""
     csv = "year,age,net_worth\n1905,32,5000\n2024,32,5000\n"
