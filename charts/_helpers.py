@@ -93,7 +93,13 @@ def best_gain(pdf: pd.DataFrame) -> tuple[float, float, float] | None:
     if len(pdf) < 2:
         return None
     s = pdf.sort_values("age")
-    if "year" in s.columns and len(s) > s["year"].nunique():
+    # Only aggregate when data spans 2+ years. With a single year of monthly
+    # snapshots there's no year-over-year diff to compute — falling through to
+    # raw rows lets us still return the biggest single-period gain rather than
+    # silently returning None.
+    if ("year" in s.columns
+            and s["year"].nunique() > 1
+            and len(s) > s["year"].nunique()):
         s = s.groupby("year", as_index=False).last().sort_values("year")
         if len(s) < 2:
             return None

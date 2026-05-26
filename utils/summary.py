@@ -69,7 +69,11 @@ def build_summary_stats(
     # bars.
     if len(s) >= 2:
         ws = s
-        if "year" in ws.columns and len(ws) > ws["year"].nunique():
+        # Only aggregate if data spans 2+ years. Single-year monthly data
+        # would collapse to 1 row and silently skip the worst-change metric.
+        if ("year" in ws.columns
+                and ws["year"].nunique() > 1
+                and len(ws) > ws["year"].nunique()):
             ws = ws.groupby("year", as_index=False).last().sort_values("year")
         if len(ws) >= 2:
             diffs = ws["net_worth"].diff()

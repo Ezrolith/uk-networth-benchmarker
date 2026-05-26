@@ -157,6 +157,23 @@ def test_best_gain_no_aggregation_when_one_row_per_year():
     assert gain == pytest.approx(55_000)
 
 
+def test_best_gain_does_not_aggregate_single_year_monthly_data():
+    """A user with 12 monthly snapshots in a single year has no year-over-year
+    gain to compute. Aggregation must NOT fire — otherwise it would collapse
+    to one row and return None, making the "Best year" annotation disappear.
+    Instead, best_gain should report the biggest monthly delta."""
+    rows = [{"year": 2024, "age": 30 + m / 12, "net_worth": 50_000 + m * 1_000}
+            for m in range(1, 13)]
+    # One artificially-bigger month so we can verify the right delta is found
+    rows[6]["net_worth"] = 60_000  # Jul jumps to 60k (was 57k) → +3k delta
+    pdf = pd.DataFrame(rows)
+    result = best_gain(pdf)
+    assert result is not None
+    _, gain, _ = result
+    # Biggest monthly delta is the July jump (60_000 - 56_000 = 4_000)
+    assert gain == pytest.approx(4_000)
+
+
 # ── hover_template ─────────────────────────────────────────────────────────────
 
 def test_hover_template_basic():
