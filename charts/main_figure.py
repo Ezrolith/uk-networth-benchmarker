@@ -20,7 +20,7 @@ import plotly.graph_objects as go
 from utils.inference import derive_tail_percentiles
 from ._helpers import (
     fmt, fmt_delta, clean_note, hover_template, best_gain,
-    TITLE_COLOUR, GRID_COLOUR,
+    TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR,
 )
 
 
@@ -248,7 +248,7 @@ def build_main_figure(
                     x=age_max, y=float(edge_row["value"].iloc[0]),
                     text=label, showarrow=False,
                     xanchor="left", xshift=5,
-                    font=dict(size=10, color="#64748b"),
+                    font=dict(size=10, color=AXIS_LABEL_COLOUR),
                 )
 
     # ── Birth year cohort label ───────────────────────────────────────────────

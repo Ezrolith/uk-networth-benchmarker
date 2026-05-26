@@ -5,7 +5,7 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
-from ._helpers import TITLE_COLOUR, GRID_COLOUR
+from ._helpers import TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR
 
 
 _DEFAULT_BAND_FILLS = [
@@ -45,7 +45,7 @@ def build_percentile_chart(
             y=y_val,
             line=dict(color=reference_colour, width=1, dash="dot"),
             annotation_text=label, annotation_position="right",
-            annotation=dict(font=dict(color="#64748b", size=10),
+            annotation=dict(font=dict(color=AXIS_LABEL_COLOUR, size=10),
                             bgcolor="rgba(0,0,0,0)"),
         )
 
