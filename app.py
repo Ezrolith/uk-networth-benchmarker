@@ -1406,6 +1406,18 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                 help="LISA: max £4,000/yr, counts against ISA allowance. Only available "
                      "if you're 18-50 and opened before age 40. Government 25% bonus.",
             )
+            # The 40-50 gap: you can only contribute if you already have a LISA.
+            # Default to True (permissive) when age is below 40 or above 50 since
+            # the answer is determined by age alone in those bands.
+            _show_has_lisa = (latest_age is not None and 40 <= latest_age <= 50)
+            tw_has_lisa = st.checkbox(
+                "I already have an open LISA",
+                value=True,
+                key="tw_has_lisa",
+                help="LISA contributions between age 40 and 50 are only allowed if you "
+                     "opened a LISA before age 40. Untick if you don't already have one.",
+                disabled=not _show_has_lisa,
+            ) if _show_has_lisa else True
         with tw_col3:
             tw_pension = st.number_input(
                 "Pension contributions this year (£)", 0, 200_000, 0, 1_000,
@@ -1460,15 +1472,26 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         lisa_rem    = lisa_remaining(
             tw_lisa,
             age=int(latest_age) if latest_age is not None else None,
+            has_existing_lisa=tw_has_lisa,
         )
         pension_rem = max(0.0, effective_pension_allowance - tw_pension)
 
-        # If the user is over 50, LISA pay-in is closed entirely
-        lisa_closed = latest_age is not None and latest_age > 50
-        if lisa_closed and tw_lisa > 0:
+        # LISA contribution rules at the user's age
+        lisa_closed_over_50 = latest_age is not None and latest_age > 50
+        lisa_blocked_no_existing = (
+            latest_age is not None and 40 <= latest_age <= 50 and not tw_has_lisa
+        )
+        if lisa_closed_over_50 and tw_lisa > 0:
             st.warning(
                 f"You're over 50, so LISA contributions are no longer allowed. "
                 f"Existing LISA balances continue to grow, but new pay-ins stopped at 50.",
+                icon="⚠️",
+            )
+        elif lisa_blocked_no_existing and tw_lisa > 0:
+            st.warning(
+                f"At age {int(latest_age)}, you can only contribute to a LISA if you "
+                f"already had one open (you can't open a new one after 39). The £"
+                f"{tw_lisa:,} you entered won't be eligible for the 25% bonus.",
                 icon="⚠️",
             )
 
