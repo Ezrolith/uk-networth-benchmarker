@@ -21,6 +21,10 @@ PDF generation code.
 """
 from ._helpers import (
     fmt, fmt_delta, clean_note, safe_cagr, hover_template, best_gain,
+    TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR, ZERO_LINE_COLOUR,
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
+    DEFAULT_BENCHMARK_MEDIAN_COLOUR, DEFAULT_BENCHMARK_BAND_COLOUR,
+    NEGATIVE_COLOUR, NEUTRAL_GREY,
 )
 from .asset_class import build_asset_class_chart
 from .heatmap import build_heatmap
@@ -32,6 +36,7 @@ from .main_figure import build_main_figure
 from .monte_carlo import build_monte_carlo_chart
 
 __all__ = [
+    # Chart builders
     "build_main_figure",
     "build_asset_class_chart",
     "build_heatmap",
@@ -42,5 +47,11 @@ __all__ = [
     "build_percentile_chart",
     "build_whatif_figure",
     "build_monte_carlo_chart",
+    # Formatting helpers
     "fmt", "fmt_delta", "clean_note", "safe_cagr", "hover_template", "best_gain",
+    # Shared style constants
+    "TITLE_COLOUR", "GRID_COLOUR", "AXIS_LABEL_COLOUR", "ZERO_LINE_COLOUR",
+    "DEFAULT_PERSON_COLOUR", "DEFAULT_PARTNER_COLOUR",
+    "DEFAULT_BENCHMARK_MEDIAN_COLOUR", "DEFAULT_BENCHMARK_BAND_COLOUR",
+    "NEGATIVE_COLOUR", "NEUTRAL_GREY",
 ]

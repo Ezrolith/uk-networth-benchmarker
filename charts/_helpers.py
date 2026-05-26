@@ -7,6 +7,27 @@ can be unit-tested in isolation and re-used in PDF generation.
 from __future__ import annotations
 import pandas as pd
 
+# ── Shared style constants ─────────────────────────────────────────────────────
+# Colours that appear in every chart's layout — kept here so a single edit
+# changes the whole package. Individual chart builders can still override.
+#
+# Names follow Tailwind palette conventions.
+TITLE_COLOUR    = "#1e293b"   # slate-800
+GRID_COLOUR     = "#e2e8f0"   # slate-200
+AXIS_LABEL_COLOUR = "#64748b" # slate-500
+ZERO_LINE_COLOUR  = "#cbd5e1" # slate-300
+
+# Default colour roles (these match the app's COLOURS["person"]/COLOURS["partner"]
+# in standard mode; the cb_safe palette overrides at call sites).
+DEFAULT_PERSON_COLOUR  = "#f97316"   # orange-500
+DEFAULT_PARTNER_COLOUR = "#10b981"   # emerald-500
+DEFAULT_BENCHMARK_MEDIAN_COLOUR = "#1d4ed8"   # blue-700
+DEFAULT_BENCHMARK_BAND_COLOUR   = "#93c5fd"   # blue-300
+
+# Status colours
+NEGATIVE_COLOUR = "#ef4444"   # red-500 — bars/segments representing losses
+NEUTRAL_GREY    = "#94a3b8"   # slate-400 — zero lines, neutral text
+
 # CAGR is only meaningful if the starting balance is non-trivial.
 # Tiny starts (e.g. £100 → £8k) compute as 100%+ CAGR but tell us nothing useful.
 _CAGR_MIN_START = 5_000
