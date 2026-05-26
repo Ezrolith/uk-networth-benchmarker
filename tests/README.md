@@ -1,6 +1,6 @@
 # Test suite
 
-218 tests across 13 files, ~7s runtime. Run with `make test` or `pytest -v`.
+223 tests across 14 files, ~7s runtime. Run with `make test` or `pytest -v`.
 
 ## What each file covers
 
@@ -35,6 +35,7 @@
 | `test_app_imports.py` (6) | Parses `app.py` with `ast` and verifies every imported name resolves on its target module. Catches the "app.py references X but utils/uk_tax.py is stale" class of bug that hit on 2026-05-25 |
 | `test_requirements.py` (4) | Verifies every third-party import has a `requirements.txt` entry; uses `sys.stdlib_module_names` so the stdlib allowlist auto-tracks Python version |
 | `test_compile_check.py` (3) | Meta-test the `scripts/compile_check.py` gate itself — confirms it detects a deliberately-broken file and skips cache directories |
+| `test_bump_version.py` (5) | Meta-test the `scripts/bump_version.py` release tooling — no-args mode, --dry doesn't modify files, invalid formats rejected, same-version is a no-op, three-part semver accepted |
 | `test_data_files.py` (11) | Bundled CSVs exist, have the expected schemas, IQR ordering (P25 < P50 < P75) is intact, asset class shares sum to 100 |
 
 ## Shared infrastructure
