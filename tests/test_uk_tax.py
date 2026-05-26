@@ -125,6 +125,39 @@ def test_lisa_remaining_no_age_argument():
     assert lisa_remaining(0) == LISA_ALLOWANCE
 
 
+def test_lisa_remaining_under_18_blocked():
+    """LISAs can't be opened before age 18."""
+    assert lisa_remaining(0, age=17) == 0.0
+    assert lisa_remaining(0, age=10) == 0.0
+
+
+def test_lisa_remaining_18_eligible():
+    """18 is the lower bound — first year you can open and contribute."""
+    assert lisa_remaining(0, age=18) == LISA_ALLOWANCE
+
+
+def test_lisa_remaining_age_42_no_existing_lisa_blocked():
+    """Between 40 and 50, you need an existing LISA to contribute."""
+    assert lisa_remaining(0, age=42, has_existing_lisa=False) == 0.0
+
+
+def test_lisa_remaining_age_42_with_existing_lisa_allowed():
+    """Between 40 and 50, an existing LISA holder can still pay in."""
+    assert lisa_remaining(0, age=42, has_existing_lisa=True) == LISA_ALLOWANCE
+
+
+def test_lisa_remaining_age_42_unknown_existing_lisa_permissive():
+    """If has_existing_lisa is None, assume the most permissive interpretation
+    (don't block — let the UI prompt the user separately)."""
+    assert lisa_remaining(0, age=42, has_existing_lisa=None) == LISA_ALLOWANCE
+
+
+def test_lisa_remaining_over_50_blocked_regardless_of_existing():
+    """Over 50, no more contributions even if you already have a LISA."""
+    assert lisa_remaining(0, age=51, has_existing_lisa=True) == 0.0
+    assert lisa_remaining(0, age=60, has_existing_lisa=True) == 0.0
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Tax relief + LISA bonus
 # ──────────────────────────────────────────────────────────────────────────────

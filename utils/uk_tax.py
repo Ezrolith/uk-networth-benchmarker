@@ -125,13 +125,40 @@ def isa_remaining(contributed_this_year: float) -> float:
     return max(0.0, ISA_ALLOWANCE - contributed_this_year)
 
 
-def lisa_remaining(contributed_this_year: float, age: int | None = None) -> float:
+def lisa_remaining(
+    contributed_this_year: float,
+    age: int | None = None,
+    has_existing_lisa: bool | None = None,
+) -> float:
     """
-    LISA: £4,000/yr, but unavailable for anyone over 50 (can keep paying in
-    until 50 if opened before 40). Returns 0 if age > 50.
+    Remaining LISA pay-in headroom for the current tax year.
+
+    LISA rules (2025/26):
+    - You can only OPEN a LISA between age 18 and 39 inclusive.
+    - Once opened, you can contribute up to £4,000/yr until age 50.
+    - From age 50 onwards, no new contributions (existing balance keeps growing).
+    - If you reach age 40 without ever opening a LISA, you can no longer open one
+      and therefore can no longer contribute.
+
+    Parameters
+    ----------
+    contributed_this_year : £ already paid in this tax year.
+    age : current age in years. None = assume eligible (legacy/permissive).
+    has_existing_lisa : True if the user already has an open LISA. Used only
+        when age is in [40, 50] — otherwise the age alone determines eligibility.
+        None = assume yes (legacy/permissive default, matches prior behaviour).
+
+    Returns 0 when contributions are not allowed at all; otherwise the £
+    remaining of the £4,000 annual allowance.
     """
-    if age is not None and age > 50:
-        return 0.0
+    if age is not None:
+        if age < 18:
+            return 0.0
+        if age > 50:
+            return 0.0
+        # Between 40 and 50: only eligible if a LISA was already opened
+        if age >= 40 and has_existing_lisa is False:
+            return 0.0
     return max(0.0, LISA_ALLOWANCE - contributed_this_year)
 
 
