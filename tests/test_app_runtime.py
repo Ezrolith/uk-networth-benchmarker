@@ -222,6 +222,62 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
     return int(m.group(1)) if m else 0
 
 
+def test_app_decodes_shareable_url_personal_data():
+    """
+    When the app is opened with a `?d=<token>` query param (a shared link),
+    the bootstrap should decode it via utils.data_loader.decode_personal_data
+    and pre-populate the personal-data pane. Catches regressions in the
+    bootstrap block at the top of app.py.
+    """
+    from utils.data_loader import encode_personal_data
+    from data.demo_data import DEMO_HISTORY
+    import pandas as pd
+
+    demo_df = pd.DataFrame(DEMO_HISTORY)[["year", "age", "net_worth"]]
+    token = encode_personal_data(demo_df)
+
+    at = _make_app_test()
+    at.query_params["d"] = token
+    at.run()
+    assert len(at.exception) == 0, (
+        f"Loading from shared URL crashed: "
+        f"{[e.message for e in at.exception]}"
+    )
+    # The bootstrap stashes the decoded df in session state
+    assert "url_personal_df" in at.session_state
+    assert "url_personal_loaded" in at.session_state
+
+
+def test_app_decodes_shareable_url_with_partner_data():
+    """The ?p= param (partner data) should also pre-populate."""
+    from utils.data_loader import encode_personal_data
+    from data.demo_data import DEMO_HISTORY
+    import pandas as pd
+
+    you_df = pd.DataFrame(DEMO_HISTORY)[["year", "age", "net_worth"]]
+    partner_df = you_df.copy()
+    partner_df["net_worth"] = partner_df["net_worth"] * 1.2
+    you_token = encode_personal_data(you_df)
+    partner_token = encode_personal_data(partner_df)
+
+    at = _make_app_test()
+    at.query_params["d"] = you_token
+    at.query_params["p"] = partner_token
+    at.run()
+    assert len(at.exception) == 0
+    assert "url_partner_df" in at.session_state
+    assert "url_partner_loaded" in at.session_state
+
+
+def test_app_handles_corrupted_share_url_gracefully():
+    """A malformed ?d= token should produce a friendly error, not crash."""
+    at = _make_app_test()
+    at.query_params["d"] = "this-is-not-a-valid-token-!!!"
+    at.run()
+    # App should still render; just shows an error banner
+    assert len(at.exception) == 0
+
+
 def test_app_runs_with_single_data_point():
     """
     A user who's only just started entering their net worth (one row) should
