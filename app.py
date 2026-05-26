@@ -3389,8 +3389,8 @@ if personal_plot_df is not None and latest_nw is not None:
 
     with rpt_col1:
         if st.button("Generate PDF report", type="secondary", use_container_width=True,
-                     help="Renders all active charts and assembles a multi-page PDF (~20 seconds)."):
-            with st.spinner("Rendering charts and building PDF — this takes about 20 seconds..."):
+                     help="Renders all active charts and assembles a multi-page PDF (~5 seconds)."):
+            with st.spinner("Rendering charts and building PDF..."):
                 try:
                     st.session_state["_pdf_bytes"] = _generate_pdf()
                     st.session_state["_pdf_date"]  = _today
