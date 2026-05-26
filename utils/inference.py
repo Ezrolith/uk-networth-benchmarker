@@ -442,9 +442,18 @@ def apply_component_filter(
     component must be one of 'Property', 'Pension', 'Financial', 'Physical', or 'Total'.
     Returns bm unchanged if component == 'Total'.
     Shares are normalised so they sum to 1 at each age (same as build_asset_class_series).
+
+    Raises ValueError if component is not one of the recognised values — failing
+    fast rather than producing a confusing KeyError downstream.
     """
     if component == "Total":
         return bm
+
+    if component not in _COMPONENT_COL:
+        valid = sorted(["Total"] + list(_COMPONENT_COL.keys()))
+        raise ValueError(
+            f"Unknown component {component!r}. Expected one of: {', '.join(valid)}"
+        )
 
     col = _COMPONENT_COL[component]
     midpoints = asset_df["band_midpoint"].values.astype(float)

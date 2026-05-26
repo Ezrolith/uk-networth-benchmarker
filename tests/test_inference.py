@@ -234,3 +234,21 @@ def test_component_filter_total_is_passthrough(benchmark):
     out = apply_component_filter(benchmark, "Total", asset_df)
     pd.testing.assert_series_equal(out["value"].reset_index(drop=True),
                                     benchmark["value"].reset_index(drop=True))
+
+
+def test_component_filter_rejects_unknown_component(benchmark):
+    """Unknown component names should fail with a clear ValueError, not KeyError."""
+    asset_df = pd.read_csv(Path(__file__).resolve().parents[1] / "data" / "was_asset_class.csv")
+    with pytest.raises(ValueError, match="Unknown component"):
+        apply_component_filter(benchmark, "Crypto", asset_df)
+
+
+def test_component_filter_error_lists_valid_options(benchmark):
+    """The error message should list every valid component name to help the caller."""
+    asset_df = pd.read_csv(Path(__file__).resolve().parents[1] / "data" / "was_asset_class.csv")
+    try:
+        apply_component_filter(benchmark, "BadName", asset_df)
+    except ValueError as exc:
+        msg = str(exc)
+        for valid in ("Total", "Property", "Pension", "Financial", "Physical"):
+            assert valid in msg, f"valid component {valid!r} not listed in error"
