@@ -208,6 +208,16 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
+**v2.7** (May 2026) — Session 8 added the PDF Monte Carlo page, MC
+'Reroll' button, IHT combined household estate toggle, LISA 40-50 gap
+modelling, shareable URL with partner data, enriched text report, manual
+entry NaN handling, dynamic recency scoring, and a substantial defensive
+layer (24 new tests across test_app_imports, test_requirements,
+test_data_files, test_compile_check, test_bump_version). All chart files
+migrated to shared style constants. Bug fix: `run_monte_carlo` clamps
+depleted paths at zero. 238 tests, all green. See CHANGELOG.md for the
+full v2.7 entry.
+
 **v2.6** (May 2026) — Session 7 added:
 - Full charts/ package extraction (all 8 builders out of app.py)
 - pytest suite: 170 tests, ~5s runtime, with shared fixtures in conftest.py

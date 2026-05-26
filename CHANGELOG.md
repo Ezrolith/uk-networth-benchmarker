@@ -6,9 +6,9 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
-## [Unreleased — Session 8 continuation]
+## [2.7] — May 2026 (Session 8)
 
-Post-deploy-fix continuation of Session 7. ~50+ commits of bug fixes,
+Post-deploy-fix continuation of Session 7. ~60 commits of bug fixes,
 defensive additions, and real UX wins. Notable items:
 
 ### Bug fixes
