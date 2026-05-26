@@ -349,7 +349,13 @@ with st.sidebar:
         pa_phys = st.number_input("Physical %",    0, 100, 10, key="pa_phys")
         pa_total = pa_prop + pa_pen + pa_fin + pa_phys
         if pa_total != 100:
-            st.warning(f"Percentages sum to {pa_total}% — should be 100%.")
+            # Be specific about which way it's off and by how much
+            diff = pa_total - 100
+            direction = "over" if diff > 0 else "under"
+            st.warning(
+                f"Percentages sum to **{pa_total}%** ({direction} by {abs(diff)}). "
+                f"Adjust any value(s) to make them total 100% so the split is included in the chart."
+            )
         personal_asset_split = {
             "Property": pa_prop / 100,
             "Pension":  pa_pen  / 100,
