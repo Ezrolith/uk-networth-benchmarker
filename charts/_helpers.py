@@ -79,10 +79,24 @@ def hover_template(label: str) -> str:
 
 
 def best_gain(pdf: pd.DataFrame) -> tuple[float, float, float] | None:
-    """Return (age_at_gain, gain_amount, pct_gain) for the biggest single YoY jump."""
+    """
+    Return (age_at_gain, gain_amount, pct_gain) for the biggest single YoY jump.
+
+    Matches the gains/velocity chart aggregation: when the input has multiple
+    rows per calendar year (monthly/quarterly snapshots), data is collapsed
+    to one row per year (the last observation of each year) before computing
+    diffs. Without this the "Best year" annotation on the main chart and the
+    Summary-stats "best single gain" row would silently report the largest
+    *monthly* delta, contradicting the year-over-year framing of the chart
+    and this function's own docstring.
+    """
     if len(pdf) < 2:
         return None
     s = pdf.sort_values("age")
+    if "year" in s.columns and len(s) > s["year"].nunique():
+        s = s.groupby("year", as_index=False).last().sort_values("year")
+        if len(s) < 2:
+            return None
     gains = s["net_worth"].diff()
     pct_gains = s["net_worth"].pct_change()
     idx = gains.idxmax()

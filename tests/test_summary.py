@@ -133,3 +133,29 @@ def test_returns_dataframe_with_exact_columns(benchmark, history):
     """Every output should have exactly ['Metric', 'Value'] columns."""
     result = build_summary_stats(history, benchmark)
     assert list(result.columns) == ["Metric", "Value"]
+
+
+def test_worst_single_change_aggregates_monthly_to_annual(benchmark):
+    """
+    With monthly snapshots, the "worst single change" row should report the
+    biggest annual drop, not the biggest single-month dip — matching the
+    gains chart, velocity chart and best_gain() helper.
+    """
+    rows = []
+    # 2024: 50k → 80k (annual: +30k)
+    for month in range(1, 13):
+        rows.append({"year": 2024, "age": 30 + month/12,
+                     "net_worth": 50_000 + month * 2_500})
+    # 2025: 80k → 30k (annual: -50k — the worst)
+    # with two big monthly drops along the way
+    targets = [70, 65, 60, 50, 35, 20, 25, 30, 35, 32, 31, 30]
+    for i, nw_k in enumerate(targets, start=1):
+        rows.append({"year": 2025, "age": 31 + i/12, "net_worth": nw_k * 1_000})
+    pdf = pd.DataFrame(rows)
+    result = build_summary_stats(pdf, benchmark)
+    worst_row = result[result["Metric"].str.contains("worst single change")]
+    assert len(worst_row) == 1
+    val = worst_row.iloc[0]["Value"]
+    # Annual drop is -£50k; biggest monthly drop is around -£15k.
+    # Output uses the compact fmt ("£50k"), so check the figure is present.
+    assert "50k" in val
