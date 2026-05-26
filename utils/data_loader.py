@@ -64,7 +64,13 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     - Extra columns (only year/age/net_worth/note are kept)
     - Mixed date formats — tries ISO first, then dayfirst (UK)
     """
-    df = pd.read_csv(uploaded_file)
+    try:
+        df = pd.read_csv(uploaded_file)
+    except pd.errors.EmptyDataError:
+        raise ValueError(
+            "The uploaded file is empty. Add at least a header row and one data "
+            "row (year, age, net_worth), then try again."
+        )
     # Strip whitespace from column names so 'year, age, net_worth' works the same
     # as 'year,age,net_worth'.
     df.columns = [str(c).strip() for c in df.columns]
@@ -73,6 +79,13 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"CSV is missing required columns: {', '.join(sorted(missing))}")
+
+    # Headers-only file: clearer message than letting it propagate as an empty df
+    if len(df) == 0:
+        raise ValueError(
+            "The CSV has column headers but no data rows. Add at least one row "
+            "with year, age, and net_worth values."
+        )
     keep_cols = ["year", "age", "net_worth"]
     if "note" in df.columns:
         df["note"] = df["note"].fillna("").astype(str)

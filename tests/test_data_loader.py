@@ -94,6 +94,21 @@ def test_parse_missing_required_column_raises():
         parse_personal_csv(io.StringIO(csv))
 
 
+def test_parse_empty_file_raises_helpful_error():
+    """A completely empty file should produce a clear message, not crash with
+    pandas' EmptyDataError."""
+    with pytest.raises(ValueError, match="empty"):
+        parse_personal_csv(io.StringIO(""))
+
+
+def test_parse_headers_only_raises_helpful_error():
+    """A file with only the header row should also fail with a clear message
+    (rather than silently producing an empty DataFrame)."""
+    csv = "year,age,net_worth\n"
+    with pytest.raises(ValueError, match="no data rows"):
+        parse_personal_csv(io.StringIO(csv))
+
+
 def test_birth_year_warning_when_inconsistent():
     """Implied birth year varying by >3 yrs should trigger a warning attribute."""
     csv = "year,age,net_worth\n2015,25,5000\n2020,35,50000\n2025,41,183000\n"
