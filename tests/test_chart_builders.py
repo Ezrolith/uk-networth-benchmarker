@@ -225,6 +225,38 @@ def test_velocity_chart_returns_none_for_single_point():
     assert build_velocity_chart(pdf) is None
 
 
+def test_velocity_chart_aggregates_monthly_data_to_annual():
+    """Monthly snapshots (>1 row per year) should be aggregated to annual,
+    same as the gains chart, so the trio chart UX stays consistent."""
+    rows = []
+    for month in range(1, 13):
+        rows.append({"year": 2024, "age": 30 + month / 12, "net_worth": 50_000 + month * 1000})
+    for month in range(1, 13):
+        rows.append({"year": 2025, "age": 31 + month / 12, "net_worth": 70_000 + month * 1500})
+    pdf = pd.DataFrame(rows)
+    fig = build_velocity_chart(pdf)
+    assert fig is not None
+    # 2 years aggregated → 1 pct_change bar
+    assert len(fig.data[0].x) == 1
+    # Title shows the annual qualifier
+    assert "annual" in fig.layout.title.text
+    # X axis switches to Year
+    assert fig.layout.xaxis.title.text == "Year"
+
+
+def test_velocity_chart_no_aggregation_when_one_row_per_year():
+    """When there's already one row per year, keep the age axis."""
+    pdf = pd.DataFrame({
+        "year": [2020, 2021, 2022, 2023],
+        "age":  [30.0, 31.0, 32.0, 33.0],
+        "net_worth": [25_000, 50_000, 80_000, 120_000],
+    })
+    fig = build_velocity_chart(pdf)
+    assert len(fig.data[0].x) == 3
+    assert "annual" not in fig.layout.title.text
+    assert fig.layout.xaxis.title.text == "Age"
+
+
 def test_cumulative_chart_builds(personal_history):
     fig = build_cumulative_chart(personal_history)
     assert fig is not None

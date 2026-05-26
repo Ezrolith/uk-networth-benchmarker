@@ -94,24 +94,41 @@ def build_velocity_chart(
     """
     % growth rate per period — shows acceleration/deceleration.
     Returns None if fewer than 2 valid periods.
+
+    Matches `build_gains_chart`: when the input has multiple rows per
+    calendar year (monthly/quarterly snapshots), data is aggregated to
+    annual via the last row of each year so the two charts stay
+    visually consistent.
     """
     s = pdf.sort_values("age").copy()
+
+    # Annual aggregation if monthly/quarterly data is present
+    use_year_axis = False
+    if "year" in s.columns and len(s) > s["year"].nunique():
+        s = s.groupby("year", as_index=False).last().sort_values("year")
+        use_year_axis = True
+
     s["pct_change"] = s["net_worth"].pct_change() * 100
     s = s.dropna(subset=["pct_change"])
     if len(s) < 1:
         return None
 
     bar_colours = [colour if v >= 0 else NEGATIVE_COLOUR for v in s["pct_change"]]
+    x_values = s["year"].astype(int) if use_year_axis else s["age"]
+    x_label  = "Year" if use_year_axis else "Age"
+    x_hover  = "%{x}" if use_year_axis else "%{x:.1f}"
+
     fig = go.Figure(go.Bar(
-        x=s["age"], y=s["pct_change"],
+        x=x_values, y=s["pct_change"],
         marker_color=bar_colours,
-        hovertemplate="<b>Age %{x:.1f}</b><br>%{y:.1f}% growth<extra></extra>",
+        hovertemplate=f"<b>{x_label} {x_hover}</b><br>%{{y:.1f}}% growth<extra></extra>",
     ))
     fig.add_hline(y=0, line=dict(color=ZERO_LINE_COLOUR, width=1))
+    title_suffix = " (annual)" if use_year_axis else ""
     fig.update_layout(
-        title=dict(text="Wealth velocity (% growth per period)",
+        title=dict(text=f"Wealth velocity (% growth per period){title_suffix}",
                    font=dict(size=13, color=TITLE_COLOUR), x=0),
-        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
+        xaxis=dict(title=x_label, gridcolor=GRID_COLOUR, zeroline=False),
         yaxis=dict(title="% change", ticksuffix="%", gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=200, margin=dict(l=60, r=20, t=40, b=40),
