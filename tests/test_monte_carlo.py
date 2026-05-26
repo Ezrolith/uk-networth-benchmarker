@@ -91,6 +91,74 @@ def test_run_monte_carlo_handles_zero_start():
     assert (paths[:, 0] == 1.0).all()
 
 
+def test_clamp_at_zero_prevents_negative_balances():
+    """
+    Decumulation with heavy withdrawals: paths should reach zero and stay there,
+    not go negative and keep compounding. This catches the original correctness
+    bug where a depleted pot would generate phantom 'recoveries' from negative
+    returns on negative balances.
+    """
+    # Start with £100k, withdraw £50k/yr — should deplete fast
+    paths = run_monte_carlo(
+        start_nw=100_000, years=10, n_sims=50,
+        mean_return=0.05, std_return=0.0,        # deterministic 5% real
+        annual_contribution=-50_000, seed=1,
+    )
+    # No path should ever go below zero
+    assert (paths >= 0).all(), "clamp_at_zero failed: negative balance found"
+    # At least some paths should reach zero (they deplete with these inputs)
+    assert (paths[:, -1] == 0).any(), "no paths depleted despite heavy withdrawal"
+
+
+def test_clamp_at_zero_stays_at_zero_after_depletion():
+    """
+    Once a path hits zero, it should remain zero for all subsequent years
+    (no phantom recoveries from positive returns on a £0 pot).
+    """
+    paths = run_monte_carlo(
+        start_nw=10_000, years=20, n_sims=100,
+        mean_return=0.05, std_return=0.0,
+        annual_contribution=-20_000,      # depletes in <1 year
+        seed=1,
+    )
+    # Find paths that have hit zero by year 5
+    hit_zero_by_5 = paths[:, 5] == 0
+    # All those paths should stay at zero in years 6-20
+    later_balances = paths[hit_zero_by_5, 6:]
+    assert (later_balances == 0).all(), "paths recovered from zero — clamp failed"
+
+
+def test_clamp_at_zero_can_be_disabled():
+    """clamp_at_zero=False allows the old unbounded behaviour for diagnostics."""
+    paths = run_monte_carlo(
+        start_nw=10_000, years=10, n_sims=50,
+        mean_return=0.05, std_return=0.0,
+        annual_contribution=-10_000,
+        seed=1, clamp_at_zero=False,
+    )
+    # With clamp off, late-period balances should go negative
+    assert (paths[:, -1] < 0).any(), "clamp_at_zero=False should allow negatives"
+
+
+def test_clamp_at_zero_is_safe_for_accumulation():
+    """Pure accumulation (positive contributions, no withdrawals) should be
+    identical whether clamp is on or off — clamp is a no-op when balances
+    are always positive."""
+    p_clamp = run_monte_carlo(
+        start_nw=100_000, years=10, n_sims=100,
+        mean_return=0.05, std_return=0.12,
+        annual_contribution=12_000, seed=1, clamp_at_zero=True,
+    )
+    p_no_clamp = run_monte_carlo(
+        start_nw=100_000, years=10, n_sims=100,
+        mean_return=0.05, std_return=0.12,
+        annual_contribution=12_000, seed=1, clamp_at_zero=False,
+    )
+    # All paths should be positive in both modes, and identical
+    assert (p_clamp >= 0).all()
+    assert (p_clamp == p_no_clamp).all()
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Envelope and probabilities
 # ──────────────────────────────────────────────────────────────────────────────

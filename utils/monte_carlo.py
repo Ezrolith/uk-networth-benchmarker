@@ -56,6 +56,7 @@ def run_monte_carlo(
     annual_contribution: float = 0.0,
     seed: int | None = None,
     glide_path: tuple[float, float] | None = None,
+    clamp_at_zero: bool = True,
 ) -> np.ndarray:
     """
     Run `n_sims` independent paths of net worth over `years` years.
@@ -72,12 +73,17 @@ def run_monte_carlo(
     std_return : annual standard deviation of returns (0.12 = 12pp).
         IGNORED if glide_path is supplied.
     n_sims : number of independent simulation paths.
-    annual_contribution : £ added each year (treated as end-of-year).
+    annual_contribution : £ added each year (treated as end-of-year). Pass a
+        NEGATIVE value to model withdrawals (decumulation).
     seed : random seed for reproducibility (None = use default RNG).
     glide_path : optional (start_equity_pct, end_equity_pct) tuple. When supplied,
         each year uses a portfolio mean/sigma derived from a linear glide between
         the two equity weights, using EQUITY_/BOND_ asset-class assumptions.
         e.g. (1.0, 0.4) = 100% equity now, gliding to 60/40 over the horizon.
+    clamp_at_zero : if True (default), paths that fall to or below zero stay at
+        zero — modelling pot depletion correctly. Set False if you actually want
+        negative balances to compound (rarely correct; useful only for diagnostic
+        unbounded simulations).
     """
     if start_nw <= 0:
         start_nw = max(start_nw, 1.0)
@@ -98,7 +104,12 @@ def run_monte_carlo(
     paths = np.zeros((n_sims, years + 1), dtype=float)
     paths[:, 0] = start_nw
     for t in range(years):
-        paths[:, t + 1] = paths[:, t] * (1 + returns[:, t]) + annual_contribution
+        # Apply return to current balance, then end-of-year contribution.
+        # Clamp at zero so a depleted pot doesn't keep compounding into the negative.
+        new_balance = paths[:, t] * (1 + returns[:, t]) + annual_contribution
+        if clamp_at_zero:
+            np.maximum(new_balance, 0.0, out=new_balance)
+        paths[:, t + 1] = new_balance
 
     return paths
 
