@@ -122,6 +122,34 @@ def test_no_warning_for_consistent_data():
     assert "birth_year_warning" not in df.attrs
 
 
+def test_parse_excel_serial_dates_as_year_converted():
+    """
+    Excel sometimes exports a date column as raw integer serial numbers
+    (days since 1899-12-30). E.g., 46174 → 2026-06-01. The parser must
+    detect these (any year > 10,000) and convert them to real years.
+    Without this, the years would be interpreted literally as 'year 46174'
+    and break every downstream calculation.
+    """
+    csv = "year,age,net_worth\n42987,32.4,5000\n46174,41.1,183871\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    # 42987 is 2017-09-09; 46174 is 2026-06-01
+    assert df.iloc[0]["year"] == 2017
+    assert df.iloc[1]["year"] == 2026
+    # User-facing info about the conversion
+    assert "excel_serial_converted" in df.attrs
+
+
+def test_parse_excel_serial_partial_only_converts_serials():
+    """A mixed CSV (some real years, some Excel serials) should convert only
+    the serials and leave real years alone."""
+    csv = "year,age,net_worth\n2020,30,10000\n42987,32,15000\n2024,34,30000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    # Sorted by age, so order matches
+    assert df.iloc[0]["year"] == 2020
+    assert df.iloc[1]["year"] == 2017  # converted from 42987
+    assert df.iloc[2]["year"] == 2024
+
+
 def test_excel_year_artifact_warning():
     """Years before 1940 are flagged as likely Excel date-format artefacts."""
     csv = "year,age,net_worth\n1905,32,5000\n2024,32,5000\n"

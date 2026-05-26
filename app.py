@@ -45,6 +45,7 @@ from charts._helpers import (
     fmt as _fmt, fmt_delta as _fmt_delta,
     clean_note as _clean_note, safe_cagr as _safe_cagr,
     hover_template as _hover, best_gain as _best_gain,
+    CAGR_MIN_START,
 )
 from charts.asset_class import build_asset_class_chart  # noqa: F401  (replaces local builder)
 from charts.heatmap     import build_heatmap            # noqa: F401  (replaces local builder)
@@ -225,6 +226,10 @@ def _personal_data_section(
             try:
                 result_df = parse_personal_csv(uploaded)
                 st.success(f"{len(result_df)} data point(s) loaded.")
+                # excel_serial_converted is INFO not WARNING — we already
+                # repaired the years, just letting the user know.
+                if "excel_serial_converted" in result_df.attrs:
+                    st.info(result_df.attrs["excel_serial_converted"], icon="🔧")
                 for attr in ("excel_year_warning", "birth_year_warning"):
                     if attr in result_df.attrs:
                         st.warning(result_df.attrs[attr], icon="⚠️")
@@ -718,8 +723,8 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             else:
                 st.metric("Total change", _fmt_delta(latest_nw - first_nw),
                           help=("CAGR not shown: starting net worth below "
-                                f"£{_CAGR_MIN_START:,} would inflate the rate."
-                                if first_nw < _CAGR_MIN_START and first_nw > 0
+                                f"£{CAGR_MIN_START:,} would inflate the rate."
+                                if first_nw < CAGR_MIN_START and first_nw > 0
                                 else None))
         with col_b:
             if age_span > 0:

@@ -21,6 +21,7 @@ PDF generation code.
 """
 from ._helpers import (
     fmt, fmt_delta, clean_note, safe_cagr, hover_template, best_gain,
+    CAGR_MIN_START,
     TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR, ZERO_LINE_COLOUR,
     DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
     DEFAULT_BENCHMARK_MEDIAN_COLOUR, DEFAULT_BENCHMARK_BAND_COLOUR,

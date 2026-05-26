@@ -30,7 +30,7 @@ NEUTRAL_GREY    = "#94a3b8"   # slate-400 — zero lines, neutral text
 
 # CAGR is only meaningful if the starting balance is non-trivial.
 # Tiny starts (e.g. £100 → £8k) compute as 100%+ CAGR but tell us nothing useful.
-_CAGR_MIN_START = 5_000
+CAGR_MIN_START = 5_000
 
 
 def fmt(v: float) -> str:
@@ -68,7 +68,7 @@ def safe_cagr(start_nw: float, end_nw: float, years: float) -> float | None:
         return None
     if start_nw is None or end_nw is None:
         return None
-    if start_nw < _CAGR_MIN_START or end_nw <= 0:
+    if start_nw < CAGR_MIN_START or end_nw <= 0:
         return None
     return (end_nw / start_nw) ** (1 / years) - 1
 

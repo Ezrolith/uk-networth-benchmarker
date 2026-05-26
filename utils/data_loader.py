@@ -111,6 +111,25 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
                 "an ISO date (2024-01-15), or a UK date (01/05/2026)."
             )
 
+    # Detect Excel serial-date numbers that survived the .astype(int) path.
+    # Excel stores dates internally as integer days since 1899-12-30 (accounting
+    # for the 1900-leap-year bug). When a 'year' column actually contains dates
+    # that Excel exported as raw numbers (no date format), they appear as values
+    # like 42987 (= 2017-09-09) or 46174 (= 2026-06-01). Any 'year' > 10000 is
+    # almost certainly an Excel serial — no real-world year column hits 10000+.
+    if (df["year"] > 10_000).any():
+        _serial_mask = df["year"] > 10_000
+        _serials = df.loc[_serial_mask, "year"]
+        _real_years = (pd.Timestamp("1899-12-30")
+                       + pd.to_timedelta(_serials, unit="D")).dt.year
+        df.loc[_serial_mask, "year"] = _real_years.astype(int)
+        df.attrs["excel_serial_converted"] = (
+            f"Converted {int(_serial_mask.sum())} Excel serial-date number(s) "
+            f"in the 'year' column to real years (e.g. {int(_serials.iloc[0])} → "
+            f"{int(_real_years.iloc[0])}). To avoid this in future, format the "
+            f"column as plain years in Excel before exporting."
+        )
+
     # age: keep as float — decimal ages give more precise chart positioning
     df["age"] = df["age"].astype(float)
     df["net_worth"] = df["net_worth"].astype(float)
