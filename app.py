@@ -199,6 +199,15 @@ def _personal_data_section(
 ) -> pd.DataFrame | None:
     """Reusable personal/partner data entry widget. Returns a DataFrame or None."""
     st.subheader(label)
+
+    # The demo-data button can't directly assign st.session_state["you_method"]
+    # because that key is owned by the radio widget below — Streamlit raises
+    # StreamlitAPIException for post-creation writes. Workaround: the button
+    # sets a "_pending_demo" flag instead, and we honour it HERE (before the
+    # radio renders) by pre-seeding the radio's initial value via session_state.
+    if key_prefix == "you" and st.session_state.pop("_pending_demo_load", False):
+        st.session_state["you_method"] = "Manual entry"
+
     method = st.radio(
         f"{label} entry",
         ["None", "Upload CSV", "Manual entry"],
@@ -591,8 +600,16 @@ if personal_plot_df is None or len(personal_plot_df) == 0:
                 # Single source of truth in data/demo_data.py — imported here
                 # and also verified by tests/test_demo_data.py against the same
                 # constant (no risk of drift between app and test).
+                #
+                # IMPORTANT: we can't write to st.session_state['you_method']
+                # here because the radio widget owning that key has already
+                # rendered (Streamlit raises StreamlitAPIException). Instead
+                # we set a one-shot flag that _personal_data_section consumes
+                # on the next run BEFORE the radio is created. you_rows is
+                # safe to write directly — it's owned by the data_editor
+                # which hasn't rendered yet (we're not in Manual entry mode).
                 from data.demo_data import DEMO_HISTORY
-                st.session_state["you_method"] = "Manual entry"
+                st.session_state["_pending_demo_load"] = True
                 st.session_state["you_rows"] = list(DEMO_HISTORY)
                 st.rerun()
 
