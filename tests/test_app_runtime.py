@@ -222,6 +222,41 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
     return int(m.group(1)) if m else 0
 
 
+def test_app_handles_excel_serial_year_csv_data_end_to_end():
+    """
+    Reproduce the exact CSV pattern a user uploaded that crashed in
+    production (Excel serial-date 'year' values like 42987, 46174). The
+    parser should auto-convert them; the app should then render without
+    exception with the converted years.
+    """
+    import io
+    from utils.data_loader import parse_personal_csv
+
+    excel_serial_csv = (
+        "year,age,net_worth\n"
+        "42987,32.4,-216.4\n"     # 2017-09-09, negative balance
+        "43413,33.57,5236.98\n"   # 2018
+        "45748,40.04,129980.06\n" # 2025
+        "46174,41.13,191151.99\n" # 2026
+    )
+    parsed = parse_personal_csv(io.StringIO(excel_serial_csv))
+    # Sanity: years actually converted
+    assert parsed["year"].max() < 3000
+
+    # Feed those parsed rows into the app via session_state, just like the
+    # upload flow does (via the radio = 'Upload CSV' branch which returns
+    # the parsed DataFrame). Easiest path is Manual entry + you_rows since
+    # we don't have to simulate the file upload widget.
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = parsed.to_dict("records")
+    at.run()
+    assert len(at.exception) == 0, (
+        "App crashed on the parsed Excel-serial CSV: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+
 def test_pdf_generation_with_demo_data_succeeds_and_includes_monte_carlo():
     """
     Most expensive test in the suite (~10-20s): generates a multi-page PDF
