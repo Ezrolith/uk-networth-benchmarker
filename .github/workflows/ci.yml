@@ -13,8 +13,14 @@ jobs:
     timeout-minutes: 8
 
     strategy:
+      # Streamlit Cloud currently runs Python 3.14 — test on a representative
+      # range so a version-specific regression (e.g. a syntax / stdlib change
+      # in 3.13's improved-error-messages behaviour) is caught here, not in
+      # production. Add 3.14 to the matrix once GH Actions' setup-python
+      # ships a stable 3.14 image (currently 3.14 is RC).
+      fail-fast: false
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
