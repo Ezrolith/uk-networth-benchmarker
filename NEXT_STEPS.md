@@ -118,6 +118,64 @@ Ranked by value vs effort. Completed items archived at the bottom.
 - [x] Duplicate encode/decode helpers removed from data_loader.py
 - [x] Wealth type filter (Property / Pension / Financial / Physical) scales benchmark by WAS component shares
 
+### Session 8 (May 2026) — PDF MC, deploy fixes, polish round (continuation of 7)
+*Real bug fixes, defensive layers, real UX wins. ~50+ commits.*
+
+PDF + Monte Carlo:
+- [x] Monte Carlo PDF page — band chart, outcome stats, probability of target
+- [x] Monte Carlo 'Reroll' button — increment seed to see alternative draws
+- [x] Asset class refresh: shares rescaled to Wave 8 aggregates (40/35/14/10)
+
+Correctness fixes:
+- [x] `run_monte_carlo(clamp_at_zero=True)` — depleted paths stop at zero
+      rather than compounding into the negative
+- [x] LISA `has_existing_lisa` parameter + 40-50 UI gap modelling
+- [x] `apply_component_filter` raises ValueError (not KeyError) on bad input
+- [x] CSV parser: helpful errors for empty file and headers-only file
+- [x] Manual entry: NaN rows dropped before downstream processing
+- [x] data_quality recency bands dynamic (relative to today) not hardcoded 2024
+- [x] IHT combined household estate toggle when married threshold + partner
+
+UX polish:
+- [x] Shareable URL now encodes partner data under ?p= when both loaded
+- [x] Text report enriched: partner snapshot, goals progress, data quality
+- [x] Methodology panel updated — pension taper IS modelled, LISA age IS modelled
+- [x] Personal asset split warning more specific (over/under + by how much)
+- [x] Estimate percentile shows '99th+' / '<1st' at model edges
+- [x] data/demo_data.py is single source of truth for the demo button + tests
+
+Charts:
+- [x] Centralised TITLE_COLOUR / GRID_COLOUR / etc. in charts/_helpers.py
+- [x] All 9 chart files migrated to use the shared constants
+- [x] Function-signature default colours migrated too (DEFAULT_PERSON_COLOUR, etc.)
+
+Refactor:
+- [x] STATE_PENSION_AGE extracted to utils/uk_tax.py
+- [x] LIFE_EXPECTANCY_AT_AGE + life_expectancy_at() in utils/uk_tax.py
+- [x] compute_data_quality extracted to utils/data_quality.py + 9 tests
+- [x] build_summary_stats extracted to utils/summary.py + 9 tests
+- [x] PUBLIC_APP_URL + APP_VERSION co-located near top of app.py
+- [x] tests/test_summary.py uses conftest's session-scoped benchmark fixture
+
+Deploy safety:
+- [x] tests/test_app_imports.py — parse app.py AST, verify every imported name resolves
+- [x] tests/test_requirements.py — every third-party import has requirements.txt entry
+- [x] tests/test_data_files.py — bundled CSVs exist + correct schemas + IQR ordering
+- [x] tests/test_compile_check.py — meta-test the CI compile gate
+- [x] tests/test_bump_version.py — test the release tooling
+- [x] scripts/compile_check.py — single source for whole-tree py_compile
+- [x] scripts/bump_version.py — single-command version bump
+- [x] CI updated to use compile_check.py
+- [x] .gitattributes — LF policy, pyproject.toml with pytest config
+
+Documentation:
+- [x] CHANGELOG.md created
+- [x] tests/README.md created
+- [x] scripts/README.md updated to cover compile_check + bump_version
+- [x] CLAUDE.md fully refreshed
+- [x] Makefile gained version + pre-release targets
+- [x] README gets CI status badge
+
 ### Session 7 (May 2026) — quality & data foundations + charts/ refactor
 
 **Quality:**
