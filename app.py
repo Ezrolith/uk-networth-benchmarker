@@ -2177,6 +2177,21 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and
             help="Number of individual simulation paths to overlay (0 = bands only).",
         )
 
+        # Reroll button: lets the user see how the bands shift under a different
+        # random draw. Seed defaults to 42 (deterministic UX so the chart doesn't
+        # jitter on slider change), but the user can advance it to peek at
+        # alternative draws — useful for understanding how much the chart shape
+        # depends on the specific random sample.
+        mc_seed_col1, mc_seed_col2 = st.columns([1, 4])
+        with mc_seed_col1:
+            if st.button("🎲 Reroll", key="mc_reroll",
+                         help="Generate a different random draw with the same assumptions."):
+                st.session_state["mc_seed"] = st.session_state.get("mc_seed", 42) + 1
+        with mc_seed_col2:
+            _mc_seed = st.session_state.get("mc_seed", 42)
+            if _mc_seed != 42:
+                st.caption(f"Seed: {_mc_seed} (rerolled). Reset by refreshing the page.")
+
         mc_years = max(1, mc_target_age - int(latest_age or 30))
         mc_paths = run_monte_carlo(
             start_nw=float(latest_nw),
@@ -2185,7 +2200,7 @@ if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and
             std_return=mc_sigma / 100 if mc_glide_path is None else 0.12,
             n_sims=1_000,
             annual_contribution=mc_monthly * 12,
-            seed=42,  # deterministic for reproducible UX
+            seed=st.session_state.get("mc_seed", 42),
             glide_path=mc_glide_path,
         )
 
