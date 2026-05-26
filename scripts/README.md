@@ -1,7 +1,40 @@
-# Data refresh scripts
+# Scripts
+
+A mix of data-refresh scripts (ONS-sourced) and developer-workflow scripts
+(compile, release). Run all from the project root.
+
+## Developer-workflow scripts
+
+### `compile_check.py`
+
+Whole-tree `py_compile` sanity check. Called by both `make compile` and
+GitHub Actions CI. Walks every `.py` file under the project root (skipping
+`__pycache__`, `.pytest_cache`, `.git`, `venv`) and reports any syntax errors.
+
+```bash
+python scripts/compile_check.py
+```
+
+Exits 0 on success, 1 with a list of failing files otherwise. Auto-picks up
+new modules without anyone updating a list.
+
+### `bump_version.py`
+
+Single-command release version bump. Updates `APP_VERSION` in `app.py` and
+`version` in `pyproject.toml` in one go, then prints a reminder of the
+follow-up steps (CHANGELOG, CLAUDE.md, commit, tag).
+
+```bash
+python scripts/bump_version.py             # show current version
+python scripts/bump_version.py 2.7 --dry   # show planned changes
+python scripts/bump_version.py 2.7         # apply
+```
+
+Or via `make`: `make version`, then `python scripts/bump_version.py X.Y`.
+
+## Data refresh scripts
 
 Reproducible scripts that rebuild the project's two data files from ONS sources.
-Run from the project root.
 
 ## `update_was_data.py`
 
