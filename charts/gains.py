@@ -42,9 +42,13 @@ def build_gains_chart(
     """
     s = pdf.sort_values("age").copy()
 
-    # Annual aggregation if monthly/quarterly data is present
+    # Annual aggregation if monthly/quarterly data spans 2+ years.
+    # Single-year monthly data has no annual aggregation to do — collapsing
+    # 12 rows to 1 would zero the gain bars; keep the raw monthly bars instead.
     use_year_axis = False
-    if "year" in s.columns and len(s) > s["year"].nunique():
+    if ("year" in s.columns
+            and s["year"].nunique() > 1
+            and len(s) > s["year"].nunique()):
         s = s.groupby("year", as_index=False).last().sort_values("year")
         use_year_axis = True
 
@@ -102,9 +106,13 @@ def build_velocity_chart(
     """
     s = pdf.sort_values("age").copy()
 
-    # Annual aggregation if monthly/quarterly data is present
+    # Annual aggregation if monthly/quarterly data spans 2+ years.
+    # Single-year monthly data has no annual % growth to compute; fall through
+    # to raw rows rather than collapsing to one row and returning None.
     use_year_axis = False
-    if "year" in s.columns and len(s) > s["year"].nunique():
+    if ("year" in s.columns
+            and s["year"].nunique() > 1
+            and len(s) > s["year"].nunique()):
         s = s.groupby("year", as_index=False).last().sort_values("year")
         use_year_axis = True
 

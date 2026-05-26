@@ -2066,7 +2066,14 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
         # the per-row attribution would otherwise be ~23 micro-periods at ~1
         # month each — unreadable and the assumed-return slider value would
         # be effectively pro-rated to a sliver per row.
-        if "year" in s_attr.columns and len(s_attr) > s_attr["year"].nunique():
+        #
+        # Guard: only aggregate when data spans 2+ years. For a user with one
+        # year of monthly data there's no annual aggregation to do — collapsing
+        # 12 rows to 1 would silently skip the whole table (len < 2 guard
+        # below). Better to render the raw monthly rows than nothing.
+        if ("year" in s_attr.columns
+                and s_attr["year"].nunique() > 1
+                and len(s_attr) > s_attr["year"].nunique()):
             s_attr = (s_attr.groupby("year", as_index=False).last()
                             .sort_values("year").reset_index(drop=True))
         if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
