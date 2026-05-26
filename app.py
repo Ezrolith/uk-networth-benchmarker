@@ -252,13 +252,22 @@ def _personal_data_section(
             key=f"{key_prefix}_editor",
         )
         if len(edited) > 0 and edited["net_worth"].abs().sum() > 0:
-            result_df = edited.copy()
-            result_df["year"]      = result_df["year"].astype(int)
-            result_df["age"]       = result_df["age"].astype(float)
-            result_df["net_worth"] = result_df["net_worth"].astype(float)
-            result_df["note"]      = result_df["note"].fillna("").astype(str) if "note" in result_df.columns else ""
-            result_df = result_df.sort_values("age").reset_index(drop=True)
-            st.session_state[ss_key] = result_df.to_dict("records")
+            # Drop rows where any required field is missing — happens if the user
+            # adds a blank row mid-edit. Without this filter, downstream charts get
+            # NaN values that silently propagate (e.g. CAGR turns nan, percentile
+            # estimate returns None for that point).
+            cleaned = edited.dropna(subset=["year", "age", "net_worth"]).copy()
+            if len(cleaned) > 0:
+                cleaned["year"]      = cleaned["year"].astype(int)
+                cleaned["age"]       = cleaned["age"].astype(float)
+                cleaned["net_worth"] = cleaned["net_worth"].astype(float)
+                cleaned["note"]      = (cleaned["note"].fillna("").astype(str)
+                                        if "note" in cleaned.columns else "")
+                cleaned = cleaned.sort_values("age").reset_index(drop=True)
+                st.session_state[ss_key] = cleaned.to_dict("records")
+                result_df = cleaned
+            # If every row was incomplete, leave result_df at its default (None or
+            # the URL-restored df) so we don't surface a half-baked dataset.
 
     return result_df
 
