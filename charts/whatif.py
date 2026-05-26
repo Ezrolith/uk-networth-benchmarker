@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from ._helpers import TITLE_COLOUR, GRID_COLOUR
+from ._helpers import (
+    TITLE_COLOUR, GRID_COLOUR,
+    DEFAULT_PERSON_COLOUR,
+    DEFAULT_BENCHMARK_BAND_COLOUR, DEFAULT_BENCHMARK_MEDIAN_COLOUR,
+)
 
 
 DEFAULT_SCENARIO_COLOURS = ["#f97316", "#8b5cf6", "#06b6d4"]  # orange, violet, cyan
@@ -20,7 +24,7 @@ def build_whatif_figure(
     *,
     project_to_age: int,
     monthly_savings: float = 0.0,
-    actual_colour: str = "#f97316",
+    actual_colour: str = DEFAULT_PERSON_COLOUR,
     price_label: str = "nominal 2021 prices",
     scenario_colours: list[str] | None = None,
 ) -> go.Figure:
@@ -64,7 +68,7 @@ def build_whatif_figure(
         fig.add_trace(go.Scatter(
             x=pct_data["age"], y=pct_data["value"], mode="lines",
             line=dict(
-                color="#93c5fd" if label != "Median" else "#1d4ed8",
+                color=DEFAULT_BENCHMARK_BAND_COLOUR if label != "Median" else DEFAULT_BENCHMARK_MEDIAN_COLOUR,
                 width=2 if label != "Median" else 3,
                 dash=dash,
             ),

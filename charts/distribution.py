@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 
-from ._helpers import fmt, TITLE_COLOUR, GRID_COLOUR
+from ._helpers import (
+    fmt, TITLE_COLOUR, GRID_COLOUR,
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
+    DEFAULT_BENCHMARK_BAND_COLOUR, DEFAULT_BENCHMARK_MEDIAN_COLOUR,
+)
 
 
 def build_distribution_chart(
@@ -17,10 +21,10 @@ def build_distribution_chart(
     user_nw: float | None = None,
     partner_nw: float | None = None,
     price_label: str = "nominal 2021",
-    person_colour: str = "#f97316",
-    partner_colour: str = "#10b981",
-    band_colour: str = "#93c5fd",
-    median_colour: str = "#1d4ed8",
+    person_colour: str = DEFAULT_PERSON_COLOUR,
+    partner_colour: str = DEFAULT_PARTNER_COLOUR,
+    band_colour: str = DEFAULT_BENCHMARK_BAND_COLOUR,
+    median_colour: str = DEFAULT_BENCHMARK_MEDIAN_COLOUR,
 ) -> go.Figure | None:
     """
     Fit a log-normal to P25/P50/P75 at the given age, plot its density curve,

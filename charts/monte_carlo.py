@@ -7,7 +7,10 @@ import numpy as np
 import plotly.graph_objects as go
 
 from utils.monte_carlo import percentile_envelope
-from ._helpers import TITLE_COLOUR, GRID_COLOUR
+from ._helpers import (
+    TITLE_COLOUR, GRID_COLOUR,
+    DEFAULT_BENCHMARK_MEDIAN_COLOUR, DEFAULT_PERSON_COLOUR,
+)
 
 
 def build_monte_carlo_chart(
@@ -16,10 +19,10 @@ def build_monte_carlo_chart(
     start_age: float,
     target: float | None = None,
     show_sample_paths: int = 0,
-    median_colour: str = "#1d4ed8",
+    median_colour: str = DEFAULT_BENCHMARK_MEDIAN_COLOUR,
     band_colours: tuple[str, str] = ("rgba(147,197,253,0.18)", "rgba(147,197,253,0.30)"),
     sample_path_colour: str = "rgba(148,163,184,0.25)",
-    target_colour: str = "#f97316",
+    target_colour: str = DEFAULT_PERSON_COLOUR,
     price_label: str = "nominal 2021 prices",
 ) -> go.Figure:
     """

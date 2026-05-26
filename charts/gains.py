@@ -12,6 +12,7 @@ from ._helpers import (
     TITLE_COLOUR, GRID_COLOUR,
     NEGATIVE_COLOUR,           # red used on loss bars
     NEUTRAL_GREY as ZERO_LINE_COLOUR,  # grey used on zero line — alias for readability
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
 )
 
 
@@ -27,7 +28,7 @@ def _hex_to_rgba(hex_colour: str, alpha: float = 0.12) -> str:
 def build_gains_chart(
     pdf: pd.DataFrame,
     *,
-    colour: str = "#f97316",
+    colour: str = DEFAULT_PERSON_COLOUR,
     name: str = "Your net worth",
 ) -> go.Figure | None:
     """
@@ -70,7 +71,7 @@ def build_gains_chart(
 def build_velocity_chart(
     pdf: pd.DataFrame,
     *,
-    colour: str = "#f97316",
+    colour: str = DEFAULT_PERSON_COLOUR,
 ) -> go.Figure | None:
     """
     % growth rate per period — shows acceleration/deceleration.
@@ -104,10 +105,10 @@ def build_velocity_chart(
 def build_cumulative_chart(
     pdf: pd.DataFrame,
     *,
-    colour: str = "#f97316",
+    colour: str = DEFAULT_PERSON_COLOUR,
     name: str = "Your net worth",
     partner_pdf: pd.DataFrame | None = None,
-    partner_colour: str = "#10b981",
+    partner_colour: str = DEFAULT_PARTNER_COLOUR,
     price_label: str = "nominal 2021",
 ) -> go.Figure:
     """Filled-area chart showing net worth over age — pure cumulative view."""

@@ -21,17 +21,19 @@ from utils.inference import derive_tail_percentiles
 from ._helpers import (
     fmt, fmt_delta, clean_note, hover_template, best_gain,
     TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR,
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
+    DEFAULT_BENCHMARK_BAND_COLOUR, DEFAULT_BENCHMARK_MEDIAN_COLOUR,
 )
 
 
 _DEFAULT_COLOURS = {
-    "p25":     "#93c5fd",
-    "p50":     "#1d4ed8",
-    "p75":     "#93c5fd",
-    "band":    "rgba(147,197,253,0.15)",
-    "pub":     "#1e40af",
-    "person":  "#f97316",
-    "partner": "#10b981",
+    "p25":     DEFAULT_BENCHMARK_BAND_COLOUR,
+    "p50":     DEFAULT_BENCHMARK_MEDIAN_COLOUR,
+    "p75":     DEFAULT_BENCHMARK_BAND_COLOUR,
+    "band":    "rgba(147,197,253,0.15)",   # P25-P75 band fill (transparent blue-300)
+    "pub":     "#1e40af",                  # ONS published marker (blue-800; chart-specific)
+    "person":  DEFAULT_PERSON_COLOUR,
+    "partner": DEFAULT_PARTNER_COLOUR,
 }
 
 

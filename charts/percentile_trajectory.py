@@ -5,7 +5,11 @@ from __future__ import annotations
 import pandas as pd
 import plotly.graph_objects as go
 
-from ._helpers import TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR
+from ._helpers import (
+    TITLE_COLOUR, GRID_COLOUR, AXIS_LABEL_COLOUR,
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
+    DEFAULT_BENCHMARK_BAND_COLOUR,
+)
 
 
 _DEFAULT_BAND_FILLS = [
@@ -21,9 +25,9 @@ def build_percentile_chart(
     *,
     traj_partner: pd.DataFrame | None = None,
     smooth: bool = False,
-    person_colour: str = "#f97316",
-    partner_colour: str = "#10b981",
-    reference_colour: str = "#93c5fd",
+    person_colour: str = DEFAULT_PERSON_COLOUR,
+    partner_colour: str = DEFAULT_PARTNER_COLOUR,
+    reference_colour: str = DEFAULT_BENCHMARK_BAND_COLOUR,
 ) -> go.Figure:
     """
     Estimated percentile over time, with P25/P50/P75 reference lines, shaded

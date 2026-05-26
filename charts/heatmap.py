@@ -10,7 +10,10 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from utils.inference import derive_tail_percentiles
-from ._helpers import TITLE_COLOUR, GRID_COLOUR
+from ._helpers import (
+    TITLE_COLOUR, GRID_COLOUR,
+    DEFAULT_PERSON_COLOUR, DEFAULT_PARTNER_COLOUR,
+)
 
 
 _DEFAULT_BAND_COLOURS = ["#eff6ff", "#bfdbfe", "#93c5fd", "#3b82f6", "#1d4ed8"]
@@ -22,8 +25,8 @@ def build_heatmap(
     *,
     personal_plot_df: pd.DataFrame | None = None,
     partner_plot_df: pd.DataFrame | None = None,
-    person_colour: str = "#f97316",
-    partner_colour: str = "#10b981",
+    person_colour: str = DEFAULT_PERSON_COLOUR,
+    partner_colour: str = DEFAULT_PARTNER_COLOUR,
     price_label: str = "nominal 2021 prices",
     band_colours: list[str] | None = None,
 ) -> go.Figure:
