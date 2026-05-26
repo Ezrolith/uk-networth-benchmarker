@@ -50,10 +50,16 @@ def test_empty_dataframe_handled():
 
 
 def test_recency_scoring_brackets():
-    """Verify the recency criterion (2024+ vs 2022 vs older)."""
-    very_recent = _df(10, 10, 2024)
-    moderate    = _df(10, 10, 2022)
-    old         = _df(10, 10, 2018)
+    """Verify the recency criterion: 'this year-1' beats 'this year-3' beats older.
+
+    Bands are now relative to today rather than hardcoded 2024, so this test
+    builds its inputs from date.today().year and stays correct as years pass.
+    """
+    from datetime import date
+    cy = date.today().year
+    very_recent = _df(10, 10, cy - 1)
+    moderate    = _df(10, 10, cy - 3)
+    old         = _df(10, 10, cy - 7)
     assert compute_data_quality(very_recent)["score"] > compute_data_quality(moderate)["score"]
     assert compute_data_quality(moderate)["score"]    > compute_data_quality(old)["score"]
 

@@ -7,6 +7,7 @@ users feedback on whether their data is dense / recent / long-spanning
 enough to support the downstream calculations.
 """
 from __future__ import annotations
+from datetime import date
 import pandas as pd
 
 
@@ -35,12 +36,17 @@ def compute_data_quality(pdf: pd.DataFrame) -> dict:
     elif n >= 2:  score += 10; notes.append("⚠️ Only 2–4 data points")
     else:                      notes.append("❌ Need at least 2 data points")
 
-    # Recency
+    # Recency — bands are relative to "today", not a hardcoded year, so the
+    # bar moves up year-by-year without manual maintenance.
     if "year" in pdf.columns and n > 0:
         max_year = int(pdf["year"].max())
-        if max_year >= 2024:   score += 25; notes.append("✅ Data up to 2024/25")
-        elif max_year >= 2022: score += 15; notes.append("🟡 Data to 2022–23 — add recent figures")
-        else:                  score += 5;  notes.append("⚠️ Data older than 2022")
+        current_year = date.today().year
+        if max_year >= current_year - 1:
+            score += 25; notes.append(f"✅ Data up to {max_year}")
+        elif max_year >= current_year - 3:
+            score += 15; notes.append(f"🟡 Data to {max_year} — add recent figures")
+        else:
+            score += 5;  notes.append(f"⚠️ Data older than {current_year - 3}")
 
     # Update frequency
     if avg_gap <= 1.5:  score += 25; notes.append("✅ Annual or more frequent updates")
