@@ -112,7 +112,7 @@ defensive tests against the most common deploy failure modes:
 ## Tests
 
 ```bash
-make test            # full suite, verbose (180 tests, ~5s)
+make test            # full suite, verbose (237 tests, ~7s)
 make test-quick      # terse output, line-format failures only
 make check           # py_compile + tests (matches CI)
 ```
@@ -141,7 +141,7 @@ make check           # py_compile + tests (matches CI)
 │                                    individual/gender conversion, CPI
 │   ├── monte_carlo.py              Simulation engine + glide path
 │   └── data_loader.py              CSV loading + share-link encode/decode
-├── tests/                          121 tests, ~5s runtime
+├── tests/                          237 tests, ~7s runtime
 │   ├── test_inference.py
 │   ├── test_data_loader.py
 │   ├── test_charts_helpers.py
