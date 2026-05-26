@@ -61,15 +61,22 @@ utils/
                           decile table, build_percentile_trajectory
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
-  uk_tax.py               All UK 2025/26 tax rules in one tested module:
+  uk_tax.py               All UK 2025/26 tax + demographic constants and helpers:
                           - Pension AA taper for £260k+ adjusted income
                           - effective_pension_allowance (AA + carryforward)
                           - isa_remaining / lisa_remaining (age-aware)
                           - pension_relief_estimate / lisa_bonus
                           - iht_payable + IHT_BANDS (4 scenarios up to £1m)
+                          - life_expectancy_at(retirement_age) (ONS 2020-22)
+                          - STATE_PENSION_AGE, STATE_PENSION_2026_27
                           - All constants exported (ISA_ALLOWANCE, PENSION_AA,
                             NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, etc.)
+  data_quality.py         compute_data_quality(pdf) → 0–100 score + notes list
+                          for personal data completeness/recency/density/span
+  summary.py              build_summary_stats(pdf, benchmark, label) → table
+                          DataFrame for the Summary Statistics expander
 scripts/
+  compile_check.py        Whole-tree py_compile (used by CI + Makefile)
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
