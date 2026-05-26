@@ -2062,6 +2062,13 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
                                    key="attr_return",
                                    help="What % would a passive investment have returned? ~5% is a common real-return assumption.")
         s_attr = personal_plot_df.sort_values("age")
+        # Mirror gains/velocity/summary aggregation: with monthly snapshots
+        # the per-row attribution would otherwise be ~23 micro-periods at ~1
+        # month each — unreadable and the assumed-return slider value would
+        # be effectively pro-rated to a sliver per row.
+        if "year" in s_attr.columns and len(s_attr) > s_attr["year"].nunique():
+            s_attr = (s_attr.groupby("year", as_index=False).last()
+                            .sort_values("year").reset_index(drop=True))
         if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
             attr_rows = []
             for i in range(1, len(s_attr)):
