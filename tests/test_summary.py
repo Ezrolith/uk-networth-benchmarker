@@ -135,27 +135,62 @@ def test_returns_dataframe_with_exact_columns(benchmark, history):
     assert list(result.columns) == ["Metric", "Value"]
 
 
-def test_worst_single_change_aggregates_monthly_to_annual(benchmark):
+def test_worst_change_aggregates_monthly_to_annual_and_labels_by_year(benchmark):
     """
-    With monthly snapshots, the "worst single change" row should report the
-    biggest annual drop, not the biggest single-month dip — matching the
-    gains chart, velocity chart and best_gain() helper.
+    With multi-year monthly snapshots, the worst-change and best-gain rows
+    should:
+    1. Report the biggest annual change, not a single-month delta.
+    2. Be labeled "worst/best annual ..." (not "single") and cite the
+       calendar year — not "at age 31.9" which reads as a single event
+       when it's actually a year-long aggregated change.
+
+    Three years of monthly data so best ≠ worst (one diff per year, max
+    and min are distinct rows).
     """
     rows = []
-    # 2024: 50k → 80k (annual: +30k)
-    for month in range(1, 13):
-        rows.append({"year": 2024, "age": 30 + month/12,
-                     "net_worth": 50_000 + month * 2_500})
-    # 2025: 80k → 30k (annual: -50k — the worst)
-    # with two big monthly drops along the way
-    targets = [70, 65, 60, 50, 35, 20, 25, 30, 35, 32, 31, 30]
-    for i, nw_k in enumerate(targets, start=1):
-        rows.append({"year": 2025, "age": 31 + i/12, "net_worth": nw_k * 1_000})
+    # 2024: ends at 50k
+    for m in range(1, 13):
+        rows.append({"year": 2024, "age": 30 + m/12,
+                     "net_worth": 50_000 - (12 - m) * 1_000})
+    # 2025: ends at 100k (+50k annual — the best)
+    for m in range(1, 13):
+        rows.append({"year": 2025, "age": 31 + m/12,
+                     "net_worth": 50_000 + m * 4_166})
+    # 2026: ends at 60k (-40k annual — the worst)
+    for m in range(1, 13):
+        rows.append({"year": 2026, "age": 32 + m/12,
+                     "net_worth": 100_000 - m * 3_333})
     pdf = pd.DataFrame(rows)
     result = build_summary_stats(pdf, benchmark)
-    worst_row = result[result["Metric"].str.contains("worst single change")]
+
+    # Worst row: annual wording + year reference, magnitude ≈ £40k
+    worst_row = result[result["Metric"].str.contains("worst annual change")]
     assert len(worst_row) == 1
     val = worst_row.iloc[0]["Value"]
-    # Annual drop is -£50k; biggest monthly drop is around -£15k.
-    # Output uses the compact fmt ("£50k"), so check the figure is present.
-    assert "50k" in val
+    assert "40k" in val
+    assert "in 2026" in val
+    assert "age" not in val
+
+    # Best row: same pattern, magnitude ≈ £50k
+    best_row = result[result["Metric"].str.contains("best annual gain")]
+    assert len(best_row) == 1
+    bval = best_row.iloc[0]["Value"]
+    assert "50k" in bval
+    assert "in 2025" in bval
+    assert "age" not in bval
+
+
+def test_summary_keeps_single_wording_for_one_row_per_year(benchmark):
+    """One-row-per-year data does NOT trigger annual aggregation, so the
+    rows should keep their pre-existing 'single ... at age X' wording —
+    we'd otherwise confuse users who never had monthly data."""
+    pdf = pd.DataFrame({
+        "year":      [2020, 2021, 2022, 2023],
+        "age":       [30, 31, 32, 33],
+        "net_worth": [25_000.0, 50_000.0, 30_000.0, 60_000.0],
+    })
+    result = build_summary_stats(pdf, benchmark)
+    metrics = result["Metric"].tolist()
+    assert any("best single gain" in m for m in metrics)
+    assert any("worst single change" in m for m in metrics)
+    assert not any("annual" in m for m in metrics)
