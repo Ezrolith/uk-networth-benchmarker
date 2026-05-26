@@ -180,3 +180,99 @@ def test_individual_basis_no_crash():
     at.session_state["basis"] = "Individual"
     at.run()
     assert len(at.exception) == 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PDF report generation — the most complex code path
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _decode_pdf_text(pdf_bytes: bytes) -> str:
+    """
+    Best-effort text extraction from a fpdf2-produced PDF without adding a
+    parsing dependency.
+
+    fpdf2 stores text in FlateDecode-compressed content streams. We:
+    1. Find every '<<.../Filter /FlateDecode.../Length N...>>stream...endstream'
+       block.
+    2. zlib-decompress each stream.
+    3. Concatenate the readable bytes (PDF text-showing operators like Tj/TJ
+       contain the literal text as ASCII).
+    """
+    import re, zlib
+    out_parts: list[str] = []
+    for m in re.finditer(
+        rb"<<[^>]*?/Filter\s*/FlateDecode[^>]*?>>\s*stream\s*(.*?)\s*endstream",
+        pdf_bytes, re.DOTALL,
+    ):
+        try:
+            decoded = zlib.decompress(m.group(1))
+        except Exception:
+            continue
+        try:
+            out_parts.append(decoded.decode("latin-1", errors="ignore"))
+        except Exception:
+            continue
+    return "\n".join(out_parts)
+
+
+def _count_pdf_pages(pdf_bytes: bytes) -> int:
+    """Pull the /Count from the PDF's /Pages object."""
+    import re
+    m = re.search(rb"/Count\s+(\d+)", pdf_bytes)
+    return int(m.group(1)) if m else 0
+
+
+def test_pdf_generation_with_demo_data_succeeds_and_includes_monte_carlo():
+    """
+    Most expensive test in the suite (~10-20s): generates a multi-page PDF
+    via matplotlib + fpdf2 end-to-end. Verifies the Monte Carlo page makes
+    it into the output — a user reported it missing on the live deploy, and
+    a regression that drops the page silently from the cycle of
+    `_mpl_monte_carlo()` returning None or the page rendering block being
+    skipped would otherwise have to be caught by manual QA every release.
+    """
+    at = _make_app_test(timeout=120)
+    # Pre-seed demo data so personal-data sections + MC + retirement run
+    at.session_state["_pending_demo_load"] = True
+    from data.demo_data import DEMO_HISTORY
+    at.session_state["you_rows"] = list(DEMO_HISTORY)
+    at.run()
+    assert len(at.exception) == 0
+
+    # Find the 'Generate PDF report' button and click it
+    gen_buttons = [b for b in at.button if "Generate PDF" in b.label]
+    assert len(gen_buttons) == 1, (
+        f"Expected exactly one 'Generate PDF' button, found {len(gen_buttons)}"
+    )
+    gen_buttons[0].click().run()
+    assert len(at.exception) == 0, (
+        "PDF generation raised: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+    # Verify the PDF was actually generated
+    assert "_pdf_bytes" in at.session_state
+    pdf_bytes = at.session_state["_pdf_bytes"]
+    assert isinstance(pdf_bytes, (bytes, bytearray))
+    assert pdf_bytes.startswith(b"%PDF-"), "Output isn't a valid PDF"
+    assert len(pdf_bytes) > 10_000, (
+        f"PDF suspiciously small ({len(pdf_bytes)} bytes)"
+    )
+
+    # Page count should be ≥10 with all sections rendered. The MC page is
+    # one of the conditionals, so missing it would shave off 1 page.
+    page_count = _count_pdf_pages(pdf_bytes)
+    assert page_count >= 10, (
+        f"PDF has only {page_count} pages — at least one section is missing"
+    )
+
+    # Extract text from the decompressed streams and verify Monte Carlo
+    # content is present. This catches the specific user-reported regression
+    # ("Monte Carlo missing from PDF") that the byte-substring approach
+    # couldn't see (compressed streams).
+    text = _decode_pdf_text(pdf_bytes)
+    assert "Monte Carlo" in text, (
+        "Monte Carlo page is missing from the generated PDF. "
+        f"PDF has {page_count} pages, decoded {len(text)} chars of text. "
+        "Either _mpl_monte_carlo() returned None or the page block silently failed."
+    )

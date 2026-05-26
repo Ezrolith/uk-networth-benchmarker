@@ -2577,6 +2577,7 @@ if personal_plot_df is not None and latest_nw is not None:
     # ── PDF generator ──────────────────────────────────────────────────────────
     def _generate_pdf() -> bytes:
         from fpdf import FPDF
+        from fpdf.enums import XPos, YPos  # for replacing the deprecated new_x=XPos.LMARGIN, new_y=YPos.NEXT kwarg
 
         BLUE  = (29, 78, 216)
         SLATE = (30, 41, 59)
@@ -2783,20 +2784,20 @@ if personal_plot_df is not None and latest_nw is not None:
 
         def H1(txt):
             pdf.set_font("Helvetica", "B", 14); pdf.set_text_color(*BLUE)
-            pdf.cell(0, 9, txt, ln=True)
+            pdf.cell(0, 9, txt, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             y0 = pdf.get_y()
             pdf.set_draw_color(*BLUE); pdf.line(15, y0, 195, y0)
             pdf.set_draw_color(0, 0, 0); pdf.ln(3); pdf.set_text_color(*SLATE)
 
         def H2(txt):
             pdf.set_font("Helvetica", "B", 11); pdf.set_text_color(*SLATE)
-            pdf.cell(0, 7, txt, ln=True)
+            pdf.cell(0, 7, txt, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         def KV(label, value, lw=70):
             pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*GREY)
             pdf.cell(lw, 6, label)
             pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*SLATE)
-            pdf.cell(0, 6, str(value), ln=True)
+            pdf.cell(0, 6, str(value), new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
         def SM(txt):
             pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
@@ -2828,20 +2829,20 @@ if personal_plot_df is not None and latest_nw is not None:
         pdf.set_fill_color(*BLUE); pdf.rect(0, 0, 210, 52, "F")
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 22); pdf.set_y(10)
-        pdf.cell(0, 13, "UK Net Worth Benchmarker", align="C", ln=True)
+        pdf.cell(0, 13, "UK Net Worth Benchmarker", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 13)
-        pdf.cell(0, 8, "Personal Report", align="C", ln=True)
+        pdf.cell(0, 8, "Personal Report", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(219, 234, 254)
-        pdf.cell(0, 7, f"Generated {_today}  |  ONS WAS Wave 8 (2020-2022)", align="C", ln=True)
+        pdf.cell(0, 7, f"Generated {_today}  |  ONS WAS Wave 8 (2020-2022)", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(*SLATE)
         pdf.set_y(62)
 
         # ── Hero: big net worth number ─────────────────────────────────────────
         pdf.set_font("Helvetica", "B", 34); pdf.set_text_color(*BLUE)
-        pdf.cell(0, 18, _fmt(latest_nw), align="C", ln=True)
+        pdf.cell(0, 18, _fmt(latest_nw), align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_font("Helvetica", "", 11); pdf.set_text_color(*GREY)
-        pdf.cell(0, 7, f"Current net worth  |  Age {latest_age:.1f}", align="C", ln=True)
+        pdf.cell(0, 7, f"Current net worth  |  Age {latest_age:.1f}", align="C", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.ln(4)
 
         # ── Three stat boxes ────────────────────────────────────────────────────
@@ -2866,10 +2867,10 @@ if personal_plot_df is not None and latest_nw is not None:
             pdf.rect(bx, _stat_y, _bw, _bh, 'F')
             pdf.set_xy(bx, _stat_y + 2)
             pdf.set_font("Helvetica", "B", 15); pdf.set_text_color(*BLUE)
-            pdf.cell(_bw, 8, val, align="C", ln=False)
+            pdf.cell(_bw, 8, val, align="C", new_x=XPos.RIGHT, new_y=YPos.TOP)
             pdf.set_xy(bx, _stat_y + 10)
             pdf.set_font("Helvetica", "", 7); pdf.set_text_color(*GREY)
-            pdf.cell(_bw, 6, lbl, align="C", ln=False)
+            pdf.cell(_bw, 6, lbl, align="C", new_x=XPos.RIGHT, new_y=YPos.TOP)
         pdf.set_xy(15, _stat_y + _bh + 5)
         pdf.set_text_color(*SLATE)
 
@@ -2966,7 +2967,7 @@ if personal_plot_df is not None and latest_nw is not None:
             TR(i, (pl, 35, pk=="p50"), (_fmt(v), 45, pk=="p50"), (pos, 100, False))
         pdf.set_font("Helvetica", "I", 7.5); pdf.set_text_color(*GREY)
         pdf.cell(0, 5, "P25, P50, P75: published ONS data.  "
-                 "P10, P90: derived from log-normal model (indicative).", ln=True)
+                 "P10, P90: derived from log-normal model (indicative).", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
         pdf.set_text_color(*SLATE)
 
         pdf.ln(4); H1("Growth history")
@@ -3008,7 +3009,7 @@ if personal_plot_df is not None and latest_nw is not None:
                (f"~{_ordinal(round(p_d))}" if p_d else "n/a", 40, False))
             if note_d:
                 pdf.set_font("Helvetica", "I", 8); pdf.set_text_color(*GREY)
-                pdf.cell(22, 4.5, ""); pdf.cell(0, 4.5, f"  Note: {note_d}", ln=True)
+                pdf.cell(22, 4.5, ""); pdf.cell(0, 4.5, f"  Note: {note_d}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_text_color(*SLATE)
 
         # ── Page 4: Main chart ─────────────────────────────────────────────────
@@ -3051,7 +3052,7 @@ if personal_plot_df is not None and latest_nw is not None:
                     _yrs_col = "year" if "year" in _s_ann.columns else "age"
                     pdf.ln(5)
                     pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*BLUE)
-                    pdf.cell(0, 6, "Summary statistics", ln=True)
+                    pdf.cell(0, 6, "Summary statistics", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_draw_color(*BLUE)
                     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
                     pdf.ln(3); pdf.set_draw_color(0, 0, 0)
@@ -3086,7 +3087,7 @@ if personal_plot_df is not None and latest_nw is not None:
             # Projected values table
             pdf.ln(4)
             pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
-            pdf.cell(0, 6, f"Projected values at age {wi_age}:", ln=True)
+            pdf.cell(0, 6, f"Projected values at age {wi_age}:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
             pdf.ln(1)
             TH(("Scenario", 90), (f"Net worth at age {wi_age}", 50), ("vs benchmark median", 40))
             _ann = wi_monthly * 12
@@ -3158,7 +3159,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 # Outcome summary table
                 pdf.ln(4)
                 pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*SLATE)
-                pdf.cell(0, 6, f"Outcomes at age {_mc_target_age}:", ln=True)
+                pdf.cell(0, 6, f"Outcomes at age {_mc_target_age}:", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.ln(1)
                 _mc_final = mc_paths[:, -1]
                 _mc_p10 = float(np.percentile(_mc_final, 10))
@@ -3219,7 +3220,7 @@ if personal_plot_df is not None and latest_nw is not None:
                     pct_t = min(latest_nw / tgt_v * 100, 100)
                     pdf.ln(3); H2(f"{tgt_lbl}")
                     pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
-                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(tgt_v)}", ln=True)
+                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(tgt_v)}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.ln(1); _pbar(pct_t)
                     if tgt_v > latest_nw:
                         KV("  Remaining gap:", _fmt(tgt_v - latest_nw))
@@ -3242,14 +3243,14 @@ if personal_plot_df is not None and latest_nw is not None:
                     else:
                         pdf.set_font("Helvetica", "B", 9)
                         pdf.set_text_color(16, 185, 129)
-                        pdf.cell(0, 6, "  Goal achieved!", ln=True)
+                        pdf.cell(0, 6, "  Goal achieved!", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                         pdf.set_text_color(*SLATE)
 
                 if fire_number > 0:
                     _fi_pct = min(latest_nw/fire_number*100, 100)
                     pdf.ln(3); H2("Financial independence tracker")
                     pdf.set_font("Helvetica", "", 9); pdf.set_text_color(*GREY)
-                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(fire_number)} FIRE target", ln=True)
+                    pdf.cell(0, 5, f"{_fmt(latest_nw)} of {_fmt(fire_number)} FIRE target", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.ln(1); _pbar(_fi_pct, colour=(16, 185, 129))
                     KV("Sustainable spending at current NW:",
                        f"{_fmt(latest_nw/25/52)}/week  ({_fmt(latest_nw/25)}/yr)")
@@ -3292,7 +3293,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 pdf.ln(3)
 
                 pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*BLUE)
-                pdf.cell(0, 6, "Estimated annual income at retirement", ln=True)
+                pdf.cell(0, 6, "Estimated annual income at retirement", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                 pdf.set_draw_color(*BLUE); pdf.line(15, pdf.get_y(), 195, pdf.get_y())
                 pdf.ln(3); pdf.set_draw_color(0, 0, 0)
                 TH(("Source", 90), ("Annual income", 50), ("Per week", 40))
@@ -3319,12 +3320,12 @@ if personal_plot_df is not None and latest_nw is not None:
                         pdf.set_text_color(16, 185, 129)
                         pdf.set_font("Helvetica", "B", 10)
                         pdf.cell(0, 6, f"Exceeds target ({_fmt(_target_pdf)}/yr) by {_fmt(_gap)}/yr.",
-                                 ln=True)
+                                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     else:
                         pdf.set_text_color(217, 119, 6)
                         pdf.set_font("Helvetica", "B", 10)
                         pdf.cell(0, 6, f"Short of target ({_fmt(_target_pdf)}/yr) by {_fmt(abs(_gap))}/yr.",
-                                 ln=True)
+                                 new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_text_color(*SLATE)
 
                 pdf.ln(4)
