@@ -222,6 +222,34 @@ def _count_pdf_pages(pdf_bytes: bytes) -> int:
     return int(m.group(1)) if m else 0
 
 
+def test_app_runs_with_partner_data_loaded():
+    """
+    Both the user's data and the partner's data loaded. Exercises:
+    - _personal_data_section called twice (once for 'you', once for 'partner')
+    - Combined household banner under the metrics row
+    - IHT calculator's combined-household toggle (added in Session 8)
+    - Head-to-head leaderboard
+    - Partner overlay on every chart
+    """
+    at = _make_app_test()
+    from data.demo_data import DEMO_HISTORY
+
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = list(DEMO_HISTORY)
+
+    # Partner: same shape but 20% larger NW
+    at.session_state["partner_method"] = "Manual entry"
+    at.session_state["partner_rows"] = [
+        {**row, "net_worth": row["net_worth"] * 1.2}
+        for row in DEMO_HISTORY
+    ]
+    at.run()
+    assert len(at.exception) == 0, (
+        f"App crashed with partner data loaded: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+
 def test_app_handles_excel_serial_year_csv_data_end_to_end():
     """
     Reproduce the exact CSV pattern a user uploaded that crashed in
