@@ -56,7 +56,7 @@ def test_utils_uk_tax_exports_all_names_used_by_app():
     from utils.uk_tax import (  # noqa: F401
         tapered_pension_allowance, effective_pension_allowance,
         isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
-        iht_payable, IHT_BANDS, IHT_STANDARD_RATE,
+        iht_payable, IHT_BANDS,
         ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
     )
 
