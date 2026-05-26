@@ -1,6 +1,6 @@
 # Test suite
 
-223 tests across 14 files, ~7s runtime. Run with `make test` or `pytest -v`.
+247 tests across 15 files, ~13s runtime. Run with `make test` or `pytest -v`.
 
 ## What each file covers
 
@@ -37,6 +37,7 @@
 | `test_compile_check.py` (3) | Meta-test the `scripts/compile_check.py` gate itself — confirms it detects a deliberately-broken file and skips cache directories |
 | `test_bump_version.py` (5) | Meta-test the `scripts/bump_version.py` release tooling — no-args mode, --dry doesn't modify files, invalid formats rejected, same-version is a no-op, three-part semver accepted |
 | `test_data_files.py` (11) | Bundled CSVs exist, have the expected schemas, IQR ordering (P25 < P50 < P75) is intact, asset class shares sum to 100 |
+| `test_app_runtime.py` (7) | **Streamlit AppTest integration tests.** Actually run `app.py` inside a synthetic Streamlit runtime and assert: no exceptions on cold start, no exceptions on the demo-data-loaded path, no duplicate widget keys, the demo button's session_state pre-seed pattern works, and the main sidebar toggles (log scale, real terms, Individual basis) don't crash. Each AppTest run takes ~1-2s, so this layer is the most expensive in the suite — but it catches the bug class that has slipped past pure unit tests four times in production (duplicate keys, post-widget session_state writes, name regressions, etc.). |
 
 ## Shared infrastructure
 
