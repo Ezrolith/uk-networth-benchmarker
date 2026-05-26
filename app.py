@@ -238,7 +238,13 @@ def _personal_data_section(
         st.caption("One row per year. Net worth in £.")
         ss_key = f"{key_prefix}_rows"
         if ss_key not in st.session_state:
-            st.session_state[ss_key] = [{"year": 2024, "age": 30, "net_worth": 0, "note": ""}]
+            # Default to current year + age 30. (We can't reliably mirror the
+            # primary user's age here for partner data because latest_age isn't
+            # populated until after the sidebar runs.)
+            from datetime import date
+            st.session_state[ss_key] = [
+                {"year": date.today().year, "age": 30, "net_worth": 0, "note": ""}
+            ]
         edited = st.data_editor(
             pd.DataFrame(st.session_state[ss_key]),
             num_rows="dynamic", use_container_width=True,
