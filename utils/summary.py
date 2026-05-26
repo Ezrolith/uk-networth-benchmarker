@@ -51,12 +51,33 @@ def build_summary_stats(
     if cagr is not None:
         rows.append({"Metric": f"{label} — CAGR", "Value": f"{cagr*100:+.2f}%"})
 
+    # Detect whether the diff-based stats below will run on annually-aggregated
+    # data. When they do, the "best gain"/"worst change" rows describe a
+    # year-long delta (not a single observation), so we label by calendar
+    # year rather than the misleading "at age 31.9" — that age is just the
+    # last observation of the year and reads as if there were a single event.
+    will_aggregate = ("year" in s.columns
+                      and s["year"].nunique() > 1
+                      and len(s) > s["year"].nunique())
+
+    def _period_label(age_val: float) -> tuple[str, str]:
+        """Return (metric_qualifier, value_suffix) for a diff-based row.
+        Aggregated → 'annual ... in 2024'. Raw → 'single ... at age 30.5'."""
+        if will_aggregate:
+            matched = s[s["age"] == age_val]
+            if len(matched) > 0 and "year" in matched.columns:
+                yr = int(matched["year"].iloc[-1])
+                return "annual", f"in {yr}"
+        return "single", f"at age {age_val:.1f}"
+
     bg = best_gain(s)
     if bg:
         bg_age, bg_amt, bg_pct = bg
+        qual, suffix = _period_label(bg_age)
+        metric = "best annual gain" if qual == "annual" else "best single gain"
         rows.append({
-            "Metric": f"{label} — best single gain",
-            "Value":  f"{fmt_delta(bg_amt)} ({bg_pct:+.0f}%) at age {bg_age:.1f}",
+            "Metric": f"{label} — {metric}",
+            "Value":  f"{fmt_delta(bg_amt)} ({bg_pct:+.0f}%) {suffix}",
         })
 
     # 'Worst single change' needs at least 2 rows to compute a diff. With 1 row,
@@ -71,9 +92,7 @@ def build_summary_stats(
         ws = s
         # Only aggregate if data spans 2+ years. Single-year monthly data
         # would collapse to 1 row and silently skip the worst-change metric.
-        if ("year" in ws.columns
-                and ws["year"].nunique() > 1
-                and len(ws) > ws["year"].nunique()):
+        if will_aggregate:
             ws = ws.groupby("year", as_index=False).last().sort_values("year")
         if len(ws) >= 2:
             diffs = ws["net_worth"].diff()
@@ -81,9 +100,11 @@ def build_summary_stats(
             if worst_idx is not None and not pd.isna(worst_idx):
                 wl = float(diffs[worst_idx])
                 wa = float(ws.loc[worst_idx, "age"])
+                qual, suffix = _period_label(wa)
+                metric = "worst annual change" if qual == "annual" else "worst single change"
                 rows.append({
-                    "Metric": f"{label} — worst single change",
-                    "Value":  f"{fmt_delta(wl)} at age {wa:.1f}",
+                    "Metric": f"{label} — {metric}",
+                    "Value":  f"{fmt_delta(wl)} {suffix}",
                 })
 
     pct = estimate_exact_percentile(nw_end, round(float(last["age"])), benchmark)
