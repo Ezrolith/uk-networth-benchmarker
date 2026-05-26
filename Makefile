@@ -10,6 +10,8 @@
 #   make data        refresh was_data.csv + was_asset_class.csv from scripts,
 #                    then verify tests still pass
 #   make data-only   just regenerate the CSVs without verifying
+#   make version     show the current APP_VERSION
+#   make pre-release run the full pre-release checklist (compile + test + git status)
 #   make help        show this list
 #
 # Cross-platform note: most targets use python directly (not shell-specific
@@ -20,7 +22,7 @@ PYTHON ?= python
 
 .DEFAULT_GOAL := help
 
-.PHONY: help install test test-quick compile run check data data-only clean
+.PHONY: help install test test-quick compile run check data data-only clean version pre-release
 
 help:
 	@echo "UK Net Worth Benchmarker - common dev tasks"
@@ -33,6 +35,8 @@ help:
 	@echo "  make check       compile + test (matches CI)"
 	@echo "  make data        refresh CSVs + verify tests pass"
 	@echo "  make data-only   refresh CSVs without verifying"
+	@echo "  make version     show current APP_VERSION"
+	@echo "  make pre-release full pre-release checklist (compile + test + git status)"
 	@echo "  make clean       remove __pycache__ and .pytest_cache"
 
 install:
@@ -61,6 +65,30 @@ data: data-only test-quick
 data-only:
 	$(PYTHON) scripts/update_was_data.py
 	$(PYTHON) scripts/update_asset_class_data.py
+
+version:
+	@$(PYTHON) scripts/bump_version.py
+
+# Run the full pre-release checklist. Compiles every file, runs all tests,
+# then shows git status so you can spot any uncommitted changes before
+# tagging a release. Bail on the first failing step.
+pre-release: compile test
+	@echo ""
+	@echo "=== Current version ==="
+	@$(PYTHON) scripts/bump_version.py
+	@echo ""
+	@echo "=== Git status ==="
+	@git status --short
+	@echo ""
+	@echo "=== Recent commits ==="
+	@git log --oneline -10
+	@echo ""
+	@echo "Pre-release checks passed. Next steps:"
+	@echo "  1. python scripts/bump_version.py X.Y      (bump version)"
+	@echo "  2. Update CHANGELOG.md with the new section"
+	@echo "  3. Update CLAUDE.md 'Current version'"
+	@echo "  4. git commit -am 'Bump to vX.Y'"
+	@echo "  5. git tag vX.Y && git push --tags"
 
 clean:
 	$(PYTHON) -c "import shutil, pathlib; \
