@@ -34,8 +34,20 @@ def build_gains_chart(
     """
     Bar chart: net worth change per period. Negative bars rendered red.
     Returns None if fewer than 2 data points.
+
+    If the input has multiple rows per calendar year (e.g. monthly snapshots),
+    the data is aggregated to annual using the last row of each year. This
+    keeps the chart readable when users have dense data and matches the PDF
+    report's behaviour (no on-screen vs PDF visual inconsistency).
     """
     s = pdf.sort_values("age").copy()
+
+    # Annual aggregation if monthly/quarterly data is present
+    use_year_axis = False
+    if "year" in s.columns and len(s) > s["year"].nunique():
+        s = s.groupby("year", as_index=False).last().sort_values("year")
+        use_year_axis = True
+
     s["gain"] = s["net_worth"].diff()
     s["pct_gain"] = s["net_worth"].pct_change() * 100
     s = s.dropna(subset=["gain"])
@@ -43,22 +55,28 @@ def build_gains_chart(
         return None
 
     bar_colours = [colour if g >= 0 else NEGATIVE_COLOUR for g in s["gain"]]
+    # X axis: years (integer ticks) when we aggregated, age (continuous) otherwise
+    x_values = s["year"].astype(int) if use_year_axis else s["age"]
+    x_label  = "Year" if use_year_axis else "Age"
+    x_hover  = "%{x}" if use_year_axis else "%{x:.1f}"
+
     fig = go.Figure(go.Bar(
-        x=s["age"], y=s["gain"],
+        x=x_values, y=s["gain"],
         marker_color=bar_colours,
         name=name,
         hovertemplate=(
-            "<b>Age %{x:.1f}</b><br>"
+            f"<b>{x_label} {x_hover}</b><br>"
             "Gain: £%{y:,.0f}<br>"
             "Change: %{customdata:.1f}%<extra></extra>"
         ),
         customdata=s["pct_gain"],
     ))
     fig.add_hline(y=0, line=dict(color=ZERO_LINE_COLOUR, width=1))
+    title_suffix = " (aggregated to annual)" if use_year_axis else ""
     fig.update_layout(
-        title=dict(text=f"Net worth change per period — {name}",
+        title=dict(text=f"Net worth change per period — {name}{title_suffix}",
                    font=dict(size=14, color=TITLE_COLOUR), x=0),
-        xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
+        xaxis=dict(title=x_label, gridcolor=GRID_COLOUR, zeroline=False),
         yaxis=dict(title="Change (£)", tickprefix="£", tickformat=",.0f",
                    gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
