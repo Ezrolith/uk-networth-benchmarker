@@ -59,14 +59,19 @@ def build_summary_stats(
             "Value":  f"{fmt_delta(bg_amt)} ({bg_pct:+.0f}%) at age {bg_age:.1f}",
         })
 
-    worst_idx = s["net_worth"].diff().idxmin()
-    if worst_idx is not None and not pd.isna(worst_idx):
-        wl = float(s["net_worth"].diff()[worst_idx])
-        wa = float(s.loc[worst_idx, "age"])
-        rows.append({
-            "Metric": f"{label} — worst single change",
-            "Value":  f"{fmt_delta(wl)} at age {wa:.1f}",
-        })
+    # 'Worst single change' needs at least 2 rows to compute a diff. With 1 row,
+    # diff() returns a single-element all-NaN series; calling .idxmin() on that
+    # triggers a pandas FutureWarning and will eventually raise.
+    if len(s) >= 2:
+        diffs = s["net_worth"].diff()
+        worst_idx = diffs.idxmin()
+        if worst_idx is not None and not pd.isna(worst_idx):
+            wl = float(diffs[worst_idx])
+            wa = float(s.loc[worst_idx, "age"])
+            rows.append({
+                "Metric": f"{label} — worst single change",
+                "Value":  f"{fmt_delta(wl)} at age {wa:.1f}",
+            })
 
     pct = estimate_exact_percentile(nw_end, round(float(last["age"])), benchmark)
     if pct:

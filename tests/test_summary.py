@@ -32,6 +32,28 @@ def test_empty_dataframe_returns_empty_result(benchmark):
     assert len(result) == 0
 
 
+def test_single_row_no_diff_metrics_no_pandas_warning(benchmark):
+    """
+    With only one data point, no diff-based metrics (best gain, worst single
+    change) make sense — but the function shouldn't crash or emit a pandas
+    FutureWarning either.
+    """
+    import warnings
+    one = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50_000.0]})
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")  # turn warnings into errors
+        result = build_summary_stats(one, benchmark)
+    # Core rows still present
+    metrics = result["Metric"].tolist()
+    assert any("age range" in m for m in metrics)
+    assert any("net worth range" in m for m in metrics)
+    # Diff-based rows should NOT be present
+    assert not any("worst single change" in m for m in metrics)
+    assert not any("best single gain" in m for m in metrics)
+    # CAGR shouldn't appear for a single point either
+    assert not any("CAGR" in m for m in metrics)
+
+
 def test_always_includes_three_core_rows(benchmark, history):
     """Age range, net worth range, total change should always appear."""
     result = build_summary_stats(history, benchmark)
