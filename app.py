@@ -2062,6 +2062,20 @@ if personal_plot_df is not None and len(personal_plot_df) >= 2:
                                    key="attr_return",
                                    help="What % would a passive investment have returned? ~5% is a common real-return assumption.")
         s_attr = personal_plot_df.sort_values("age")
+        # Mirror gains/velocity/summary aggregation: with monthly snapshots
+        # the per-row attribution would otherwise be ~23 micro-periods at ~1
+        # month each — unreadable and the assumed-return slider value would
+        # be effectively pro-rated to a sliver per row.
+        #
+        # Guard: only aggregate when data spans 2+ years. For a user with one
+        # year of monthly data there's no annual aggregation to do — collapsing
+        # 12 rows to 1 would silently skip the whole table (len < 2 guard
+        # below). Better to render the raw monthly rows than nothing.
+        if ("year" in s_attr.columns
+                and s_attr["year"].nunique() > 1
+                and len(s_attr) > s_attr["year"].nunique()):
+            s_attr = (s_attr.groupby("year", as_index=False).last()
+                            .sort_values("year").reset_index(drop=True))
         if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
             attr_rows = []
             for i in range(1, len(s_attr)):
@@ -2646,8 +2660,14 @@ if personal_plot_df is not None and latest_nw is not None:
             except Exception:
                 return None
 
-        # Annual aggregation: last entry per calendar year, used by gains chart + summary
-        if "year" in _s_rpt.columns:
+        # Annual aggregation: collapse to one row per year when data spans
+        # 2+ years with multiple rows per year. Single-year monthly data
+        # falls through to raw rows so the gains chart and summary stats
+        # aren't silently empty (matches the in-app gains/velocity/summary
+        # behaviour after the same fix).
+        if ("year" in _s_rpt.columns
+                and _s_rpt["year"].nunique() > 1
+                and len(_s_rpt) > _s_rpt["year"].nunique()):
             _s_ann = (_s_rpt.sort_values("age")
                        .groupby("year", as_index=False).last()
                        .sort_values("year"))
@@ -2659,16 +2679,28 @@ if personal_plot_df is not None and latest_nw is not None:
                 s = _s_ann
                 if len(s) < 2: return None
                 gains  = s["net_worth"].diff().dropna().values
-                years  = (s["year"].iloc[1:].astype(int).values
-                          if "year" in s.columns else s["age"].iloc[1:].values)
+                # Year axis only when there's exactly one row per year
+                # (either natively or after aggregation). For single-year
+                # monthly fallback, use age — otherwise 11 bars would
+                # stack at the same year tick.
+                one_per_year = ("year" in s.columns
+                                and len(s) == s["year"].nunique())
+                if one_per_year:
+                    x_vals = s["year"].iloc[1:].astype(int).values
+                    x_label = "Year"
+                    title = "Year-on-year net worth change  (blue = gain, red = loss)"
+                else:
+                    x_vals = s["age"].iloc[1:].values
+                    x_label = "Age"
+                    title = "Net worth change per period  (blue = gain, red = loss)"
                 colors = ["#1d4ed8" if g >= 0 else "#ef4444" for g in gains]
                 fig, ax = _plt.subplots(figsize=(11, 3.5))
-                ax.bar(years, gains, color=colors, width=0.6)
+                ax.bar(x_vals, gains, color=colors, width=0.6)
                 ax.axhline(0, color="black", lw=0.5)
                 ax.yaxis.set_major_formatter(_mtick.FuncFormatter(_gbp))
-                ax.set_xlabel("Year"); ax.set_ylabel("Change")
+                ax.set_xlabel(x_label); ax.set_ylabel("Change")
                 ax.grid(True, alpha=0.25, axis="y")
-                ax.set_title("Year-on-year net worth change  (blue = gain, red = loss)", fontsize=11)
+                ax.set_title(title, fontsize=11)
                 fig.tight_layout(); return _save(fig)
             except Exception:
                 return None
@@ -3051,21 +3083,36 @@ if personal_plot_df is not None and latest_nw is not None:
                 if len(_gvals) > 0:
                     _pos = int((_gvals > 0).sum())
                     _ibx = _gvals.idxmax(); _iwx = _gvals.idxmin()
-                    _yrs_col = "year" if "year" in _s_ann.columns else "age"
+                    # Year labels only when there's exactly one row per year
+                    # (after any aggregation). Single-year monthly fallback
+                    # labels by age — "Best year: +£X (2024)" would otherwise
+                    # repeat the same year on every row.
+                    _one_per_year = ("year" in _s_ann.columns
+                                     and len(_s_ann) == _s_ann["year"].nunique())
+                    if _one_per_year:
+                        _yrs_col = "year"
+                        _best_label, _worst_label = "Best year:", "Worst year:"
+                        _period_label = "Positive years:"
+                        _fmt_val = lambda v: f"{int(v)}"
+                    else:
+                        _yrs_col = "age"
+                        _best_label, _worst_label = "Best period:", "Worst period:"
+                        _period_label = "Positive periods:"
+                        _fmt_val = lambda v: f"age {float(v):.1f}"
                     pdf.ln(5)
                     pdf.set_font("Helvetica", "B", 9); pdf.set_text_color(*BLUE)
                     pdf.cell(0, 6, "Summary statistics", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_draw_color(*BLUE)
                     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
                     pdf.ln(3); pdf.set_draw_color(0, 0, 0)
-                    KV("Positive years:", f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
-                    KV("Average annual gain:", _fmt_delta(float(_gvals.mean())))
+                    KV(_period_label, f"{_pos} of {len(_gvals)}  ({100*_pos/len(_gvals):.0f}%)")
+                    KV("Average gain:", _fmt_delta(float(_gvals.mean())))
                     if not pd.isna(_ibx):
-                        KV("Best year:", f"{_fmt_delta(float(_gvals[_ibx]))}  "
-                           f"({int(_s_ann.loc[_ibx, _yrs_col])})")
+                        KV(_best_label, f"{_fmt_delta(float(_gvals[_ibx]))}  "
+                           f"({_fmt_val(_s_ann.loc[_ibx, _yrs_col])})")
                     if not pd.isna(_iwx):
-                        KV("Worst year:", f"{_fmt_delta(float(_gvals[_iwx]))}  "
-                           f"({int(_s_ann.loc[_iwx, _yrs_col])})")
+                        KV(_worst_label, f"{_fmt_delta(float(_gvals[_iwx]))}  "
+                           f"({_fmt_val(_s_ann.loc[_iwx, _yrs_col])})")
             except Exception:
                 pass
 

@@ -450,3 +450,71 @@ def test_pdf_generation_with_demo_data_succeeds_and_includes_monte_carlo():
         f"PDF has {page_count} pages, decoded {len(text)} chars of text. "
         "Either _mpl_monte_carlo() returned None or the page block silently failed."
     )
+
+
+def test_pdf_generation_with_single_year_monthly_data_succeeds():
+    """
+    A user with ~12 monthly snapshots in their first year of tracking should
+    still get a complete PDF report — the gains chart and summary stats
+    block must not be silently empty. Pre-fix, the PDF aggregator collapsed
+    12 monthly rows to 1 row, then `_gvals = diff().dropna()` was empty, so
+    the chart returned None AND the "Best year"/"Worst year" lines never
+    rendered.
+    """
+    rows = [{"year": 2024, "age": 30 + m / 12, "net_worth": 50_000 + m * 1_000, "note": ""}
+            for m in range(1, 13)]
+    at = _make_app_test(timeout=120)
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = rows
+    at.run()
+    assert len(at.exception) == 0
+
+    gen_buttons = [b for b in at.button if "Generate PDF" in b.label]
+    assert len(gen_buttons) == 1
+    gen_buttons[0].click().run()
+    assert len(at.exception) == 0, (
+        "PDF generation crashed on single-year monthly data: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+    assert "_pdf_bytes" in at.session_state
+    pdf_bytes = at.session_state["_pdf_bytes"]
+    assert pdf_bytes.startswith(b"%PDF-")
+    # Page count should still be >=8 — gains and summary should not have
+    # been silently dropped just because everything is in one year.
+    assert _count_pdf_pages(pdf_bytes) >= 8
+
+
+def test_app_handles_monthly_snapshot_data_end_to_end():
+    """
+    Users with frequent snapshots (e.g. exporting from a banking app every
+    month) end up with >1 row per calendar year. Several recent fixes pushed
+    annual aggregation into the chart builders and summary helpers; this
+    integration test makes sure the full app still loads cleanly when the
+    actual personal data has that monthly density.
+
+    Regression guard: catches any future change that introduces a code path
+    that explodes on dense per-year input (e.g. a builder that doesn't
+    sort_values + groupby and instead assumes one row per year).
+    """
+    rows = []
+    # 24 monthly rows spanning 2024 and 2025
+    for month in range(1, 13):
+        rows.append({
+            "year": 2024, "age": 30 + month / 12,
+            "net_worth": 50_000 + month * 1_500, "note": "",
+        })
+    for month in range(1, 13):
+        rows.append({
+            "year": 2025, "age": 31 + month / 12,
+            "net_worth": 70_000 + month * 2_000, "note": "",
+        })
+
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = rows
+    at.run()
+    assert len(at.exception) == 0, (
+        "App crashed on monthly snapshot data: "
+        f"{[e.message for e in at.exception]}"
+    )

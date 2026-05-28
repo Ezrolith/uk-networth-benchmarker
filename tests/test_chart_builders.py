@@ -192,6 +192,13 @@ def test_gains_chart_aggregates_monthly_data_to_annual():
     # Should have exactly 1 bar (one year-on-year diff)
     bar = fig.data[0]
     assert len(bar.x) == 1
+    # The bar value should be the annual diff:
+    #   last 2024 row = 50_000 + 12*1000 = 62_000
+    #   last 2025 row = 70_000 + 12*1500 = 88_000
+    #   annual gain = 26_000
+    # Locks in the aggregation math — a regression that returned a monthly
+    # delta (e.g. 1_500) would still satisfy len==1 but fail this assertion.
+    assert bar.y[0] == pytest.approx(26_000)
     # Title should mention aggregation
     assert "aggregated" in fig.layout.title.text
     # X-axis should be 'Year' not 'Age'
@@ -210,6 +217,22 @@ def test_gains_chart_no_aggregation_when_one_row_per_year():
     # 3 bars (4 points, 3 diffs)
     assert len(fig.data[0].x) == 3
     # No 'aggregated' suffix in title
+    assert "aggregated" not in fig.layout.title.text
+
+
+def test_gains_chart_does_not_aggregate_single_year_monthly_data():
+    """A user with ~12 monthly snapshots in a single year has no year-over-year
+    aggregation to do. Aggregating to a single row would collapse to zero bars
+    (diff of length 1 → NaN → dropped). The chart must fall through to per-row
+    bars instead of silently returning None or rendering blank."""
+    rows = [{"year": 2024, "age": 30 + m / 12, "net_worth": 50_000 + m * 1_000}
+            for m in range(1, 13)]
+    pdf = pd.DataFrame(rows)
+    fig = build_gains_chart(pdf)
+    assert fig is not None
+    # 12 monthly rows → 11 diff bars (not 0, not 1)
+    assert len(fig.data[0].x) == 11
+    # No aggregation suffix in title
     assert "aggregated" not in fig.layout.title.text
 
 
@@ -238,6 +261,12 @@ def test_velocity_chart_aggregates_monthly_data_to_annual():
     assert fig is not None
     # 2 years aggregated → 1 pct_change bar
     assert len(fig.data[0].x) == 1
+    # The bar value should be the annual % change:
+    #   last 2024 row = 62_000, last 2025 row = 88_000
+    #   (88_000 - 62_000) / 62_000 ≈ 41.94%
+    # Locks in the aggregation math — a regression that returned a monthly
+    # % change (e.g. ~2%) would still satisfy len==1 but fail this assertion.
+    assert fig.data[0].y[0] == pytest.approx(41.94, abs=0.1)
     # Title shows the annual qualifier
     assert "annual" in fig.layout.title.text
     # X axis switches to Year
@@ -255,6 +284,20 @@ def test_velocity_chart_no_aggregation_when_one_row_per_year():
     assert len(fig.data[0].x) == 3
     assert "annual" not in fig.layout.title.text
     assert fig.layout.xaxis.title.text == "Age"
+
+
+def test_velocity_chart_does_not_aggregate_single_year_monthly_data():
+    """Single-year monthly data has no annual % change to compute. The chart
+    must fall through to per-row bars rather than collapsing to one row and
+    returning None."""
+    rows = [{"year": 2024, "age": 30 + m / 12, "net_worth": 50_000 + m * 1_000}
+            for m in range(1, 13)]
+    pdf = pd.DataFrame(rows)
+    fig = build_velocity_chart(pdf)
+    assert fig is not None
+    # 12 monthly rows → 11 % change bars
+    assert len(fig.data[0].x) == 11
+    assert "annual" not in fig.layout.title.text
 
 
 def test_cumulative_chart_builds(personal_history):
