@@ -163,9 +163,15 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
 
     # Strip currency symbols and thousands separators from net_worth.
     # Excel often saves "£5,237" (or "$5,237", "€5,237") rather than 5237 —
-    # the column then comes in as object dtype and astype(float) would
+    # the column then comes in as a string dtype and astype(float) would
     # crash. Clean it up before casting. Preserves negatives and decimals.
-    if df["net_worth"].dtype == object:
+    #
+    # Backend-agnostic check: pandas may store the column as `object`, the
+    # newer `string` extension dtype, or ArrowDtype("string") depending on
+    # pandas version + whether pyarrow is installed. CI hit ArrowDtype where
+    # `dtype == object` was False — so we check `is_numeric_dtype` instead,
+    # which is True for any int/float dtype and False for every string flavour.
+    if not pd.api.types.is_numeric_dtype(df["net_worth"]):
         df["net_worth"] = (
             df["net_worth"].astype(str)
             .str.replace("£", "", regex=False)
