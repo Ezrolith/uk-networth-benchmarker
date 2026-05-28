@@ -122,6 +122,41 @@ def test_best_gain_handles_unsorted_input():
     assert age == 32  # still finds the right gain after sorting
 
 
+def test_best_gain_aggregates_monthly_to_annual():
+    """With monthly snapshots, best_gain should report the biggest annual jump,
+    not the biggest single-month delta — matching the gains chart aggregation."""
+    rows = []
+    # 2024: net worth grows 50k → 62k (annual gain £12k)
+    # but biggest single month is +£3k
+    for month in range(1, 13):
+        rows.append({"year": 2024, "age": 30 + month / 12, "net_worth": 50_000 + month * 1_000})
+    # 2025: net worth jumps 62k → 100k (annual gain £38k, the winner)
+    # biggest single month is +£5k (Jan)
+    rows.append({"year": 2025, "age": 31 + 1/12, "net_worth": 67_000})
+    for month in range(2, 13):
+        rows.append({"year": 2025, "age": 31 + month / 12, "net_worth": 67_000 + (month - 1) * 3_000})
+    pdf = pd.DataFrame(rows)
+    result = best_gain(pdf)
+    assert result is not None
+    _, gain, _ = result
+    # Annual gain is £38k (62k → 100k), not a monthly delta (~£5k)
+    assert gain > 30_000
+
+
+def test_best_gain_no_aggregation_when_one_row_per_year():
+    """With one row per year, behaviour is unchanged from before the fix."""
+    pdf = pd.DataFrame({
+        "year":      [2020, 2021, 2022, 2023],
+        "age":       [30, 31, 32, 33],
+        "net_worth": [10_000, 15_000, 70_000, 75_000],
+    })
+    result = best_gain(pdf)
+    assert result is not None
+    age, gain, _ = result
+    assert age == 32
+    assert gain == pytest.approx(55_000)
+
+
 # ── hover_template ─────────────────────────────────────────────────────────────
 
 def test_hover_template_basic():

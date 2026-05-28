@@ -80,29 +80,42 @@ scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
-  test_inference.py       18 tests on inference layer
-  test_data_loader.py     17 tests on CSV parsing + URL encode/decode
+  test_inference.py       20 tests on inference layer
+  test_data_loader.py     23 tests on CSV parsing (incl. Excel serial dates,
+                          implausible-age warnings) + URL encode/decode
   test_charts_helpers.py  24 tests on formatting helpers
-  test_chart_builders.py  43 smoke tests on chart builders (includes main_figure)
-  test_monte_carlo.py     24 tests on simulation, glide path, envelope,
+  test_chart_builders.py  45 smoke tests on chart builders (incl. main_figure
+                          and gains-chart annual aggregation)
+  test_monte_carlo.py     28 tests on simulation, glide path, envelope,
                           probabilities, chart
-  test_uk_tax.py          37 tests on pension taper, ISA/LISA remaining,
-                          relief estimates, LISA bonus, IHT payable + bands
+  test_uk_tax.py          49 tests on pension taper, ISA/LISA remaining,
+                          relief estimates, LISA bonus, IHT payable + bands,
+                          state pension + life expectancy
   test_demo_data.py       8 tests verifying the demo data shape, CPI round-trip,
                           and percentile trajectory upward
+  test_data_quality.py    9 tests on the 0–100 data quality scorer
+  test_summary.py         10 tests on build_summary_stats (incl. single-row
+                          edge case)
   test_app_imports.py     6 defensive tests that parse app.py's import block
                           with `ast` and verify every imported name exists in
                           its target module. Catches the 2026-05-25 deploy
                           incident class of bug (app.py references X but
                           utils/uk_tax.py is stale) in CI.
+  test_app_runtime.py     15 Streamlit AppTest integration tests — app loads
+                          without exception, demo button flow, no duplicate
+                          widget keys, share URL bootstrap, Excel-serial CSV
+                          end-to-end, PDF Monte Carlo page presence.
   test_requirements.py    4 tests verifying requirements.txt covers every
                           third-party import in the codebase and is well-formed.
                           Catches the other deploy failure mode (forgot to add
                           a new dep to requirements.txt).
+  test_data_files.py      11 tests verifying data/*.csv schemas + invariants
+  test_compile_check.py   3 tests around scripts/compile_check.py
+  test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (180 tests total, ~5s runtime)
-.github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12)
+                          (260 tests total, ~24s runtime)
+.github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
 REVIEW_LOG.md             Session-by-session audit notes
@@ -199,12 +212,12 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 85 tests, ~4s
+python -m pytest tests/ -v          # 260 tests, ~24s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
 
-CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12).
+CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
 

@@ -62,16 +62,25 @@ def build_summary_stats(
     # 'Worst single change' needs at least 2 rows to compute a diff. With 1 row,
     # diff() returns a single-element all-NaN series; calling .idxmin() on that
     # triggers a pandas FutureWarning and will eventually raise.
+    #
+    # Aggregate monthly/quarterly snapshots to annual first — mirrors the gains
+    # chart, velocity chart and best_gain() so the table doesn't silently
+    # report the biggest *monthly* drop while the chart shows year-over-year
+    # bars.
     if len(s) >= 2:
-        diffs = s["net_worth"].diff()
-        worst_idx = diffs.idxmin()
-        if worst_idx is not None and not pd.isna(worst_idx):
-            wl = float(diffs[worst_idx])
-            wa = float(s.loc[worst_idx, "age"])
-            rows.append({
-                "Metric": f"{label} — worst single change",
-                "Value":  f"{fmt_delta(wl)} at age {wa:.1f}",
-            })
+        ws = s
+        if "year" in ws.columns and len(ws) > ws["year"].nunique():
+            ws = ws.groupby("year", as_index=False).last().sort_values("year")
+        if len(ws) >= 2:
+            diffs = ws["net_worth"].diff()
+            worst_idx = diffs.idxmin()
+            if worst_idx is not None and not pd.isna(worst_idx):
+                wl = float(diffs[worst_idx])
+                wa = float(ws.loc[worst_idx, "age"])
+                rows.append({
+                    "Metric": f"{label} — worst single change",
+                    "Value":  f"{fmt_delta(wl)} at age {wa:.1f}",
+                })
 
     pct = estimate_exact_percentile(nw_end, round(float(last["age"])), benchmark)
     if pct:
