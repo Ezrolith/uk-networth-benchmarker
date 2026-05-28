@@ -64,12 +64,40 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     - Extra columns (only year/age/net_worth/note are kept)
     - Mixed date formats — tries ISO first, then dayfirst (UK)
     """
-    try:
-        df = pd.read_csv(uploaded_file)
-    except pd.errors.EmptyDataError:
+    # Read with encoding fallback. Excel on Windows saves CSVs as cp1252 by
+    # default, not UTF-8 — a £ symbol becomes byte 0xa3 which is invalid
+    # UTF-8 and raises UnicodeDecodeError. Try utf-8 first (also covers
+    # StringIO test inputs where pandas ignores the encoding kwarg), then
+    # cp1252 (the typical Excel save), then latin-1 (a superset of cp1252
+    # that decodes any byte without raising).
+    def _try_read(enc):
+        if hasattr(uploaded_file, "seek"):
+            try:
+                uploaded_file.seek(0)
+            except Exception:
+                pass
+        kwargs = {} if enc is None else {"encoding": enc}
+        return pd.read_csv(uploaded_file, **kwargs)
+
+    df = None
+    last_unicode_err: UnicodeDecodeError | None = None
+    for enc in (None, "cp1252", "latin-1"):
+        try:
+            df = _try_read(enc)
+            break
+        except UnicodeDecodeError as e:
+            last_unicode_err = e
+            continue
+        except pd.errors.EmptyDataError:
+            raise ValueError(
+                "The uploaded file is empty. Add at least a header row and one data "
+                "row (year, age, net_worth), then try again."
+            )
+    if df is None:
+        # Should be unreachable — latin-1 decodes any byte — but be explicit.
         raise ValueError(
-            "The uploaded file is empty. Add at least a header row and one data "
-            "row (year, age, net_worth), then try again."
+            "Could not decode the CSV file. Try saving it as 'CSV UTF-8' from "
+            f"Excel and re-uploading. (Underlying error: {last_unicode_err})"
         )
     # Strip whitespace from column names so 'year, age, net_worth' works the same
     # as 'year,age,net_worth'.
@@ -132,7 +160,34 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
 
     # age: keep as float — decimal ages give more precise chart positioning
     df["age"] = df["age"].astype(float)
-    df["net_worth"] = df["net_worth"].astype(float)
+
+    # Strip currency symbols and thousands separators from net_worth.
+    # Excel often saves "£5,237" (or "$5,237", "€5,237") rather than 5237 —
+    # the column then comes in as a string dtype and astype(float) would
+    # crash. Clean it up before casting. Preserves negatives and decimals.
+    #
+    # Backend-agnostic check: pandas may store the column as `object`, the
+    # newer `string` extension dtype, or ArrowDtype("string") depending on
+    # pandas version + whether pyarrow is installed. CI hit ArrowDtype where
+    # `dtype == object` was False — so we check `is_numeric_dtype` instead,
+    # which is True for any int/float dtype and False for every string flavour.
+    if not pd.api.types.is_numeric_dtype(df["net_worth"]):
+        df["net_worth"] = (
+            df["net_worth"].astype(str)
+            .str.replace("£", "", regex=False)
+            .str.replace("$", "", regex=False)
+            .str.replace("€", "", regex=False)
+            .str.replace(",", "", regex=False)
+            .str.strip()
+        )
+    try:
+        df["net_worth"] = df["net_worth"].astype(float)
+    except ValueError as e:
+        raise ValueError(
+            "Could not parse the 'net_worth' column as numbers. Check for "
+            "unexpected characters in the values (e.g. notes, units). "
+            f"(Underlying error: {e})"
+        )
 
     df = df.sort_values("age").reset_index(drop=True)
 

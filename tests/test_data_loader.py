@@ -180,6 +180,67 @@ def test_excel_year_artifact_warning():
     assert "excel_year_warning" in df.attrs
 
 
+def test_parse_cp1252_encoded_file_with_pound_signs():
+    """
+    Excel on Windows saves CSVs as cp1252 by default. A user-uploaded file
+    with £ in the net_worth values used to crash with:
+      'utf-8' codec can't decode byte 0xa3 in position N: invalid start byte
+    The parser should fall back to cp1252 and strip the currency symbol.
+    """
+    # The exact byte pattern the user uploaded — £ symbol encoded as cp1252 0xa3
+    csv_bytes = (
+        b"year,age,net_worth\n"
+        b"2017,32,\xa30\n"
+        b"2018,34,\"\xa35,237\"\n"
+        b"2019,35,\"\xa318,302\"\n"
+        b"2020,36,\"\xa338,268\"\n"
+    )
+    df = parse_personal_csv(io.BytesIO(csv_bytes))
+    assert len(df) == 4
+    assert df.iloc[0]["net_worth"] == 0.0
+    assert df.iloc[1]["net_worth"] == 5237.0
+    assert df.iloc[3]["net_worth"] == 38268.0
+
+
+def test_parse_utf8_file_with_pound_signs_in_values():
+    """UTF-8-encoded file with proper £ encoding should also work (and the
+    £ should be stripped from numeric values)."""
+    csv = (
+        "year,age,net_worth\n"
+        "2024,30,\"£50,000\"\n"
+        "2025,31,\"£75,500\"\n"
+    )
+    df = parse_personal_csv(io.BytesIO(csv.encode("utf-8")))
+    assert df.iloc[0]["net_worth"] == 50_000.0
+    assert df.iloc[1]["net_worth"] == 75_500.0
+
+
+def test_parse_dollar_and_euro_currency_symbols_stripped():
+    """Non-UK users may export with $ or €. Strip those too."""
+    csv = "year,age,net_worth\n2024,30,\"$50,000\"\n2025,31,\"€75,500\"\n"
+    df = parse_personal_csv(io.BytesIO(csv.encode("utf-8")))
+    assert df.iloc[0]["net_worth"] == 50_000.0
+    assert df.iloc[1]["net_worth"] == 75_500.0
+
+
+def test_parse_negative_net_worth_with_currency_symbol():
+    """Negative net worth (early career, debt > assets) with £ prefix must
+    still come through as a negative float."""
+    csv = "year,age,net_worth\n2024,25,\"-£5,000\"\n2025,26,\"£10,000\"\n"
+    df = parse_personal_csv(io.BytesIO(csv.encode("utf-8")))
+    assert df.iloc[0]["net_worth"] == -5_000.0
+    assert df.iloc[1]["net_worth"] == 10_000.0
+
+
+def test_parse_thousands_separator_without_currency_symbol():
+    """A bare '5,237' (no £) should also be accepted — some users export
+    plain numbers but Excel still applies the thousands separator."""
+    csv = "year,age,net_worth\n2024,30,\"50,000\"\n2025,31,\"75,500\"\n"
+    df = parse_personal_csv(io.BytesIO(csv.encode("utf-8")))
+    assert df.iloc[0]["net_worth"] == 50_000.0
+    assert df.iloc[1]["net_worth"] == 75_500.0
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # URL encoding round-trip
 # ──────────────────────────────────────────────────────────────────────────────
