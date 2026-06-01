@@ -6,6 +6,30 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.12] — June 2026 (Session 9, part 5)
+
+Interactive wealth-mix editor — play with your composition in real time.
+
+### Changed
+- **Auto-balancing composition sliders.** The sidebar "Your wealth composition"
+  is now four sliders (Property / Pension / Financial / Physical) that always
+  total 100% — move one and the other three rebalance proportionally (integer
+  rounding drift handed to the largest fractional parts, via an `on_change`
+  callback). Replaces the four number-inputs and their "must total 100%"
+  warning. `personal_asset_split` is therefore always set, so the
+  investable-wealth SWR figure and the asset-class overlay always populate.
+
+### Added
+- **Live £-makeup panel** under the main chart: a horizontal stacked bar plus
+  per-component £ metrics splitting your latest net worth, then your
+  **drawable / investable** subtotal (financial + physical + accessible
+  pension; home equity excluded) and what it funds at 4%. Updates in real time
+  as you drag the sliders.
+
+292 tests green (the auto-balance callback is exercised by the AppTest render suite).
+
+---
+
 ## [2.11] — June 2026 (Session 9, part 4)
 
 Liquid-vs-total spending realism, plain-language explainers, and an optional

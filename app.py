@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.11)
+UK Net Worth Benchmarker (v2.12)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.11"
+APP_VERSION = "v2.12"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -383,28 +383,56 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Personal asset composition ────────────────────────────────────────────
-    with st.expander("Your wealth composition (optional)"):
-        st.caption("Enter your approximate split — shown on the asset class chart.")
-        pa_prop = st.number_input("Property %",    0, 100, 40, key="pa_prop")
-        pa_pen  = st.number_input("Pension %",     0, 100, 30, key="pa_pen")
-        pa_fin  = st.number_input("Financial %",   0, 100, 20, key="pa_fin")
-        pa_phys = st.number_input("Physical %",    0, 100, 10, key="pa_phys")
-        pa_total = pa_prop + pa_pen + pa_fin + pa_phys
-        if pa_total != 100:
-            # Be specific about which way it's off and by how much
-            diff = pa_total - 100
-            direction = "over" if diff > 0 else "under"
-            st.warning(
-                f"Percentages sum to **{pa_total}%** ({direction} by {abs(diff)}). "
-                f"Adjust any value(s) to make them total 100% so the split is included in the chart."
-            )
+    # ── Personal asset composition (auto-balancing sliders) ────────────────────
+    # Four sliders that always sum to 100%: move one and the other three rebalance
+    # proportionally. Drives personal_asset_split — the asset-class overlay, the
+    # investable-wealth SWR figure, and the live £-makeup panel below the chart.
+    _WC_KEYS = [("wc_prop", "Property", 40), ("wc_pen", "Pension", 30),
+                ("wc_fin", "Financial", 20), ("wc_phys", "Physical", 10)]
+    for _k, _name, _default in _WC_KEYS:
+        st.session_state.setdefault(_k, _default)
+
+    def _wc_rebalance(changed_key):
+        """Keep the four composition sliders summing to 100% (integer percentages).
+
+        Runs as an on_change callback — fires after the moved slider has committed
+        its new value, while the other widgets haven't re-instantiated yet, so we
+        can safely rewrite their session_state. The remainder is split across the
+        others in proportion to their previous values; integer rounding drift is
+        handed to the components with the largest fractional parts.
+        """
+        keys = [k for k, _, _ in _WC_KEYS]
+        new_val = st.session_state[changed_key]
+        others = [k for k in keys if k != changed_key]
+        remaining = 100 - new_val
+        prev_sum = sum(st.session_state[k] for k in others)
+        if prev_sum <= 0:
+            base = remaining // len(others)
+            extra = remaining - base * len(others)
+            for i, k in enumerate(others):
+                st.session_state[k] = base + (1 if i < extra else 0)
+            return
+        raw = {k: st.session_state[k] / prev_sum * remaining for k in others}
+        floored = {k: int(raw[k]) for k in others}
+        drift = remaining - sum(floored.values())
+        for k in sorted(others, key=lambda k: raw[k] - floored[k], reverse=True)[:drift]:
+            floored[k] += 1
+        for k in others:
+            st.session_state[k] = floored[k]
+
+    with st.expander("Your wealth composition (auto-balancing)"):
+        st.caption("Slide any component — the others rebalance so the mix always totals 100%. "
+                   "Drives the asset-class chart and the £-makeup panel below the main chart.")
+        for _k, _name, _ in _WC_KEYS:
+            st.slider(f"{_name} %", 0, 100, key=_k, on_change=_wc_rebalance, args=(_k,))
+        _wc_total = sum(st.session_state[k] for k, _, _ in _WC_KEYS)
+        st.caption(f"Total: **{_wc_total}%**")
         personal_asset_split = {
-            "Property": pa_prop / 100,
-            "Pension":  pa_pen  / 100,
-            "Financial":pa_fin  / 100,
-            "Physical": pa_phys / 100,
-        } if pa_total == 100 else None
+            "Property":  st.session_state["wc_prop"] / 100,
+            "Pension":   st.session_state["wc_pen"]  / 100,
+            "Financial": st.session_state["wc_fin"]  / 100,
+            "Physical":  st.session_state["wc_phys"] / 100,
+        }
 
     st.divider()
 
@@ -863,6 +891,53 @@ else:
         "Filled circles = ONS published data (ages 20,30,40,50,60,70,80). "
         "Lines are PCHIP-interpolated. Dotted verticals = age-band boundaries."
     )
+
+
+# ── Wealth-mix £ makeup (driven by the auto-balancing sidebar sliders) ─────────
+if latest_nw is not None and latest_nw > 0 and personal_asset_split is not None:
+    with st.expander("🎚️ Your wealth mix — £ makeup of your net worth", expanded=False):
+        st.caption(
+            "Drag the **Your wealth composition** sliders in the sidebar — they always total "
+            "100%, and this splits your latest net worth across components live."
+        )
+        _mix_order = [("Property", "🏠", "#1d4ed8"), ("Pension", "💼", "#10b981"),
+                      ("Financial", "💷", "#f97316"), ("Physical", "🚗", "#a855f7")]
+        _mix_amt = {name: latest_nw * personal_asset_split[name] for name, _, _ in _mix_order}
+
+        _mix_fig = go.Figure()
+        for _name, _icon, _col in _mix_order:
+            _mix_fig.add_trace(go.Bar(
+                y=["Net worth"], x=[_mix_amt[_name]], name=_name, orientation="h",
+                marker_color=_col,
+                hovertemplate=f"{_name}: £%{{x:,.0f}} "
+                              f"({personal_asset_split[_name]*100:.0f}%)<extra></extra>",
+            ))
+        _mix_fig.update_layout(
+            barmode="stack", height=130, showlegend=True,
+            legend=dict(orientation="h", y=-0.35),
+            margin=dict(l=10, r=10, t=10, b=10),
+            xaxis=dict(title=None, tickprefix="£", tickformat=",.0f"),
+            yaxis=dict(title=None),
+        )
+        st.plotly_chart(_mix_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+        _mix_cols = st.columns(4)
+        for (_name, _icon, _col), _c in zip(_mix_order, _mix_cols):
+            with _c:
+                st.metric(f"{_icon} {_name}", _fmt(_mix_amt[_name]))
+                st.caption(f"{personal_asset_split[_name]*100:.0f}% of net worth")
+
+        # Drawable / investable wealth (same carve-out as the SWR figure):
+        # excludes home equity and pre-57 pension.
+        _mix_locked = latest_age is not None and latest_age < 57
+        _mix_investable = _mix_amt["Financial"] + _mix_amt["Physical"] + (
+            0.0 if _mix_locked else _mix_amt["Pension"])
+        st.success(
+            f"**Drawable / investable ≈ {_fmt(_mix_investable)}** "
+            f"(financial + physical{', pension locked until 57' if _mix_locked else ' + pension'}; "
+            f"home equity excluded). At 4% that funds **~{_fmt(_mix_investable * 0.04)}/yr**.",
+            icon="💧",
+        )
 
 
 if personal_plot_df is not None and len(personal_plot_df) == 1:

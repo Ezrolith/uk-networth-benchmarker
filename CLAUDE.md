@@ -230,6 +230,14 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
+**v2.12** (June 2026) — Session 9 (part 5): **interactive wealth-mix editor**.
+The sidebar composition input is now four **auto-balancing sliders** that always
+sum to 100% (move one, the others rebalance via an `on_change` callback). A live
+**£-makeup panel** under the main chart splits your net worth across components
+(horizontal bar + per-component metrics) and shows the drawable/investable
+subtotal and its 4% income, updating as you slide. `personal_asset_split` is now
+always set. 292 tests green. See CHANGELOG.md.
+
 **v2.11** (June 2026) — Session 9 (part 4): **spending realism + liabilities**.
 The 4%/25× FIRE figures now flag that they use *total* net worth and, when a
 wealth-composition split is entered, show an **investable-wealth** figure that
