@@ -291,6 +291,36 @@ def test_encode_decode_roundtrip():
     )
 
 
+def test_encode_decode_roundtrip_with_liabilities():
+    original = pd.DataFrame({
+        "year":        [2020, 2023, 2026],
+        "age":         [31.0, 34.0, 37.5],
+        "net_worth":   [18500.0, 90000.0, 183871.5],
+        "liabilities": [120000.0, 110000.0, 95000.0],
+    })
+    restored = decode_personal_data(encode_personal_data(original))
+    assert "liabilities" in restored.columns
+    pd.testing.assert_series_equal(
+        restored.sort_values("age")["liabilities"].reset_index(drop=True),
+        original.sort_values("age")["liabilities"].reset_index(drop=True),
+        check_dtype=False, check_names=False,
+    )
+
+
+def test_encode_omits_all_zero_liabilities():
+    """An all-zero liabilities column is left out of the token, keeping URLs short."""
+    df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0], "liabilities": [0.0]})
+    restored = decode_personal_data(encode_personal_data(df))
+    assert "liabilities" not in restored.columns
+
+
+def test_decode_backward_compatible_no_liabilities():
+    """Tokens encoded before liabilities existed decode without that column."""
+    df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0]})
+    restored = decode_personal_data(encode_personal_data(df))
+    assert "liabilities" not in restored.columns
+
+
 def test_encoded_token_is_url_safe():
     df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0]})
     token = encode_personal_data(df)

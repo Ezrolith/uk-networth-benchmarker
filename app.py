@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.12)
+UK Net Worth Benchmarker (v2.13)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.12"
+APP_VERSION = "v2.13"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(

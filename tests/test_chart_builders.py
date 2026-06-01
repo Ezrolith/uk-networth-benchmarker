@@ -146,10 +146,35 @@ def test_distribution_chart_clamps_age_over_85(benchmark):
 def test_gains_chart_builds(personal_history):
     fig = build_gains_chart(personal_history)
     assert fig is not None
-    assert len(fig.data) == 1  # single bar trace
+    assert len(fig.data) == 1  # single bar trace (no liabilities column)
     bar = fig.data[0]
     # Should have 3 bars (4 data points → 3 diffs)
     assert len(bar.x) == 3
+
+
+def test_gains_chart_adds_debt_paydown_line_when_liabilities_present():
+    pdf = pd.DataFrame({
+        "year": [2020, 2021, 2022],
+        "age":  [30.0, 31.0, 32.0],
+        "net_worth":   [50_000.0, 70_000.0, 95_000.0],
+        "liabilities": [200_000.0, 190_000.0, 175_000.0],  # paid down 10k then 15k
+    })
+    fig = build_gains_chart(pdf)
+    assert len(fig.data) == 2  # bar + debt-paydown line
+    debt = fig.data[1]
+    assert debt.name == "Debt paid down"
+    assert list(debt.y) == [10_000.0, 15_000.0]
+
+
+def test_gains_chart_no_debt_line_when_liabilities_all_zero():
+    pdf = pd.DataFrame({
+        "year": [2020, 2021],
+        "age":  [30.0, 31.0],
+        "net_worth":   [50_000.0, 70_000.0],
+        "liabilities": [0.0, 0.0],
+    })
+    fig = build_gains_chart(pdf)
+    assert len(fig.data) == 1  # all-zero liabilities → no debt line
 
 
 def test_gains_chart_colours_negatives_red():

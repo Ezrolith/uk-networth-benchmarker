@@ -54,6 +54,12 @@ def build_gains_chart(
 
     s["gain"] = s["net_worth"].diff()
     s["pct_gain"] = s["net_worth"].pct_change() * 100
+    # Optional debt-paydown overlay: the year-on-year reduction in liabilities
+    # (positive = debt paid down). Computed before the dropna so it stays aligned
+    # with the gain bars. Only shown when liabilities data is actually present.
+    has_debt = bool("liabilities" in s.columns and s["liabilities"].abs().sum() > 0)
+    if has_debt:
+        s["debt_paid"] = -s["liabilities"].diff()
     s = s.dropna(subset=["gain"])
     if len(s) < 1:
         return None
@@ -75,6 +81,16 @@ def build_gains_chart(
         ),
         customdata=s["pct_gain"],
     ))
+    if has_debt:
+        fig.add_trace(go.Scatter(
+            x=x_values, y=s["debt_paid"],
+            mode="lines+markers", name="Debt paid down",
+            line=dict(color="#7c3aed", width=2, dash="dot"),
+            marker=dict(size=6, color="#7c3aed"),
+            hovertemplate=(
+                f"<b>{x_label} {x_hover}</b><br>Debt paid down: £%{{y:,.0f}}<extra></extra>"
+            ),
+        ))
     fig.add_hline(y=0, line=dict(color=ZERO_LINE_COLOUR, width=1))
     title_suffix = " (aggregated to annual)" if use_year_axis else ""
     fig.update_layout(
@@ -85,7 +101,8 @@ def build_gains_chart(
                    gridcolor=GRID_COLOUR),
         plot_bgcolor="white", paper_bgcolor="white",
         height=240, margin=dict(l=70, r=40, t=50, b=50),
-        showlegend=False,
+        showlegend=has_debt,
+        legend=dict(orientation="h", y=-0.25),
     )
     return fig
 

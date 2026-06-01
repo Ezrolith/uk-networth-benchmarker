@@ -32,20 +32,36 @@ def load_was_data() -> pd.DataFrame:
 # ── Shareable URL helpers ─────────────────────────────────────────────────────
 
 def encode_personal_data(df: pd.DataFrame) -> str:
-    """Compress personal data to a URL-safe base64 string for sharing."""
-    records = df[["year", "age", "net_worth"]].round({"age": 4, "net_worth": 2}).to_dict("records")
+    """Compress personal data to a URL-safe base64 string for sharing.
+
+    Includes the optional 'liabilities' column only when it carries non-zero
+    data, so URLs for the common (no-liabilities) case stay as short as before
+    and older readers keep working.
+    """
+    cols = ["year", "age", "net_worth"]
+    rounding = {"age": 4, "net_worth": 2}
+    if "liabilities" in df.columns and (df["liabilities"].fillna(0) != 0).any():
+        cols.append("liabilities")
+        rounding["liabilities"] = 2
+    records = df[cols].round(rounding).to_dict("records")
     raw = json.dumps(records, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(zlib.compress(raw, level=9)).decode()
 
 
 def decode_personal_data(encoded: str) -> pd.DataFrame:
-    """Decode a shareable URL token back into a personal data DataFrame."""
+    """Decode a shareable URL token back into a personal data DataFrame.
+
+    Backward-compatible: tokens encoded before liabilities existed simply have
+    no 'liabilities' key and decode to a frame without that column.
+    """
     raw = zlib.decompress(base64.urlsafe_b64decode(encoded.encode() + b"=="))
     records = json.loads(raw.decode())
     df = pd.DataFrame(records)
     df["year"]      = df["year"].astype(int)
     df["age"]       = df["age"].astype(float)
     df["net_worth"] = df["net_worth"].astype(float)
+    if "liabilities" in df.columns:
+        df["liabilities"] = pd.to_numeric(df["liabilities"], errors="coerce").fillna(0.0)
     return df.sort_values("age").reset_index(drop=True)
 
 

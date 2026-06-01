@@ -6,6 +6,32 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.13] — June 2026 (Session 9, part 6)
+
+Liabilities everywhere: share URL + a debt-paydown line on the gains chart.
+
+### Added
+- **Liabilities round-trip through the share URL.** `encode_personal_data`
+  includes the optional liabilities column when it carries non-zero data (kept
+  out otherwise so the common case stays compact); `decode_personal_data` is
+  backward-compatible with older tokens that have no liabilities key.
+- **Debt-paydown line on the annual-gains chart.** When liabilities data is
+  present, `build_gains_chart` overlays a dotted line of the year-on-year
+  reduction in liabilities (debt paid down) alongside the net-worth-change bars.
+
+### Fixed
+- `build_gains_chart` now coerces its `showlegend` flag to a Python `bool`
+  (plotly rejects numpy bools) — would otherwise have raised once the manual /
+  demo flow began attaching an all-zero liabilities column. Caught by the
+  AppTest render suite before it could ship.
+
+### Tests
+- +3 data-loader URL round-trip tests (liabilities round-trips, all-zero
+  omitted, old-token backward compat) and +2 gains-chart tests (debt line
+  present / absent). 297 tests, green.
+
+---
+
 ## [2.12] — June 2026 (Session 9, part 5)
 
 Interactive wealth-mix editor — play with your composition in real time.

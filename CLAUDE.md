@@ -84,12 +84,12 @@ scripts/
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
   test_inference.py       21 tests on inference layer (incl. CPI-series sanity)
-  test_data_loader.py     27 tests on CSV parsing (incl. Excel serial dates,
+  test_data_loader.py     30 tests on CSV parsing (incl. Excel serial dates,
                           implausible-age warnings, optional liabilities column)
-                          + URL encode/decode
+                          + URL encode/decode (incl. liabilities round-trip)
   test_charts_helpers.py  24 tests on formatting helpers
-  test_chart_builders.py  45 smoke tests on chart builders (incl. main_figure
-                          and gains-chart annual aggregation)
+  test_chart_builders.py  47 smoke tests on chart builders (incl. main_figure,
+                          gains-chart annual aggregation + debt-paydown line)
   test_monte_carlo.py     28 tests on simulation, glide path, envelope,
                           probabilities, chart
   test_uk_tax.py          59 tests on pension taper, ISA/LISA remaining,
@@ -119,7 +119,7 @@ tests/
   test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (292 tests total, ~28s runtime)
+                          (297 tests total, ~28s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -221,7 +221,7 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 292 tests, ~28s
+python -m pytest tests/ -v          # 297 tests, ~28s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
@@ -229,6 +229,12 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.13** (June 2026) — Session 9 (part 6): **liabilities in the share URL +
+a debt-paydown line on the gains chart**. `encode_personal_data` now carries
+non-zero liabilities (decode stays backward-compatible); `build_gains_chart`
+overlays year-on-year debt-paid-down when liabilities are present. Fixed a
+numpy-bool `showlegend` plotly rejected. +5 tests, 297 green.
 
 **v2.12** (June 2026) — Session 9 (part 5): **interactive wealth-mix editor**.
 The sidebar composition input is now four **auto-balancing sliders** that always
