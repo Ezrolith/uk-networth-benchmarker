@@ -58,6 +58,8 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     - age: integer or decimal (32.4 is fine; gives more precise chart positioning)
     - net_worth: any numeric value including negatives
     - note: optional free-text label for a data point (shown in hover tooltip)
+    - liabilities: optional total debts at that point (mortgage, loans). Context
+      only — net_worth stays the benchmark input.
 
     Tolerant of common CSV issues:
     - Whitespace around column names (Excel often pads after the comma)
@@ -118,6 +120,8 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     if "note" in df.columns:
         df["note"] = df["note"].fillna("").astype(str)
         keep_cols.append("note")
+    if "liabilities" in df.columns:
+        keep_cols.append("liabilities")
     df = df[keep_cols].dropna(subset=["year", "age", "net_worth"])
 
     # year: accept plain integers, ISO dates, or UK dd/mm/yyyy dates
@@ -188,6 +192,21 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
             "unexpected characters in the values (e.g. notes, units). "
             f"(Underlying error: {e})"
         )
+
+    # Optional 'liabilities' column (total debts at that point). Same currency
+    # tolerance as net_worth; coerced to a non-negative magnitude. Used only for
+    # gross-assets-vs-net-worth context — net_worth stays the benchmark input.
+    if "liabilities" in df.columns:
+        if not pd.api.types.is_numeric_dtype(df["liabilities"]):
+            df["liabilities"] = (
+                df["liabilities"].astype(str)
+                .str.replace("£", "", regex=False)
+                .str.replace("$", "", regex=False)
+                .str.replace("€", "", regex=False)
+                .str.replace(",", "", regex=False)
+                .str.strip()
+            )
+        df["liabilities"] = pd.to_numeric(df["liabilities"], errors="coerce").fillna(0.0).abs()
 
     df = df.sort_values("age").reset_index(drop=True)
 

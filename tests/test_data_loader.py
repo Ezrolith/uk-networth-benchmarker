@@ -33,6 +33,35 @@ def test_parse_basic_csv():
     assert df.iloc[1]["net_worth"] == 52000.0
 
 
+def test_parse_optional_liabilities_column():
+    """An optional 'liabilities' column is parsed and preserved; net_worth is untouched."""
+    csv = "year,age,net_worth,liabilities\n2020,28,12000,16000\n2024,32,52000,146000\n"
+    df = parse_personal_csv(io.StringIO(csv))
+    assert "liabilities" in df.columns
+    assert df.iloc[0]["liabilities"] == 16000.0
+    assert df.iloc[1]["liabilities"] == 146000.0
+    assert df.iloc[1]["net_worth"] == 52000.0  # benchmark input unaffected
+
+
+def test_liabilities_column_is_optional():
+    """A CSV without a liabilities column parses fine and gains no liabilities column."""
+    df = parse_personal_csv(io.StringIO("year,age,net_worth\n2020,28,12000\n"))
+    assert "liabilities" not in df.columns
+
+
+def test_liabilities_currency_symbols_stripped():
+    """Liabilities tolerate currency symbols / thousands separators like net_worth."""
+    csv = 'year,age,net_worth,liabilities\n2024,32,"£52,000","£146,000"\n'
+    df = parse_personal_csv(io.StringIO(csv))
+    assert df.iloc[0]["liabilities"] == 146000.0
+
+
+def test_liabilities_coerced_to_non_negative_magnitude():
+    """A stray negative debt is stored as a magnitude."""
+    df = parse_personal_csv(io.StringIO("year,age,net_worth,liabilities\n2024,32,52000,-146000\n"))
+    assert df.iloc[0]["liabilities"] == 146000.0
+
+
 def test_parse_excel_date_year_extracts_year():
     """Excel often auto-formats a year column as dd/mm/yyyy. Parser must extract the year."""
     csv = "year,age,net_worth\n01/05/2024,32,52000\n01/05/2025,33,65000\n"

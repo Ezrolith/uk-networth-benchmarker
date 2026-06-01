@@ -6,6 +6,38 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.11] — June 2026 (Session 9, part 4)
+
+Liquid-vs-total spending realism, plain-language explainers, and an optional
+liabilities column.
+
+### Fixed
+- **The 4% / 25× FIRE figures no longer silently assume all net worth is
+  drawable.** The "Implied sustainable spending" and FI-progress metrics still
+  show the total-NW figure, but now carry a caveat and — when a wealth-
+  composition split has been entered — an **investable-wealth** figure that
+  excludes home equity (not income-producing) and pre-57 pension (locked). This
+  stops the tool overstating FIRE readiness for property-heavy households (the
+  audit flagged a 2–3× overstatement).
+
+### Added
+- **Plain-language explainers**: the headline banner now says "roughly N in 100
+  people your age have less wealth than you", and the investable-wealth note
+  spells out "at 4% this sustainably funds ~£X/yr".
+- **Optional `liabilities` column** in the personal CSV / manual entry. When
+  present, the app shows a `gross assets − liabilities = net worth` breakdown
+  under the headline metrics, and the column round-trips through CSV
+  upload/download. Net worth remains the only benchmark input. CSV template
+  (bundled + in-app) and the manual-entry editor updated.
+  - Not yet encoded in the share URL, and the time-series debt-paydown line in
+    the gains chart is a deliberate follow-up.
+
+### Tests
+- 4 round-trip tests in `test_data_loader` (liabilities parsed, optional,
+  currency-stripped, coerced to a non-negative magnitude). 292 tests, green.
+
+---
+
 ## [2.10] — June 2026 (Session 9, part 3)
 
 Information architecture: the main content is reorganised into tabs with the

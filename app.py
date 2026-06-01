@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.10)
+UK Net Worth Benchmarker (v2.11)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.10"
+APP_VERSION = "v2.11"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -242,7 +242,9 @@ def _personal_data_section(
         template = pd.DataFrame({
             "year": [2020, 2021, 2022, 2023, 2024],
             "age":  [28, 29, 30, 31, 32],
-            "net_worth": [12000, 18500, 27000, 38000, 52000],
+            "net_worth":   [12000, 18500, 27000, 38000, 52000],
+            "liabilities": [16000, 14000, 158000, 152000, 146000],
+            "note":        ["", "", "bought flat", "", ""],
         })
         st.download_button(
             "Download CSV template",
@@ -270,15 +272,20 @@ def _personal_data_section(
                         pass
             st.session_state[ss_key] = [
                 {"year": date.today().year, "age": _default_age,
-                 "net_worth": 0, "note": ""}
+                 "net_worth": 0, "liabilities": 0, "note": ""}
             ]
+        _editor_df = pd.DataFrame(st.session_state[ss_key])
+        if "liabilities" not in _editor_df.columns:
+            _editor_df["liabilities"] = 0.0  # show the optional column even for older/restored data
         edited = st.data_editor(
-            pd.DataFrame(st.session_state[ss_key]),
+            _editor_df,
             num_rows="dynamic", use_container_width=True,
             column_config={
                 "year":      st.column_config.NumberColumn("Year",     min_value=1960, max_value=2030, step=1,    format="%d"),
                 "age":       st.column_config.NumberColumn("Age",      min_value=16,   max_value=100,  step=1,    format="%d"),
                 "net_worth": st.column_config.NumberColumn("Net worth (£)", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%,d"),
+                "liabilities": st.column_config.NumberColumn("Liabilities (£, optional)", min_value=0, max_value=50_000_000, step=1_000, format="£%,d",
+                                                          help="Total debts at that point (mortgage, loans). Context only — net worth drives the benchmark."),
                 "note":      st.column_config.TextColumn("Note (optional)", max_chars=80,
                                                           help="Short label shown in hover tooltip, e.g. 'bought house'"),
             },
@@ -296,6 +303,9 @@ def _personal_data_section(
                 cleaned["net_worth"] = cleaned["net_worth"].astype(float)
                 cleaned["note"]      = (cleaned["note"].fillna("").astype(str)
                                         if "note" in cleaned.columns else "")
+                if "liabilities" in cleaned.columns:
+                    cleaned["liabilities"] = pd.to_numeric(
+                        cleaned["liabilities"], errors="coerce").fillna(0.0).abs()
                 cleaned = cleaned.sort_values("age").reset_index(drop=True)
                 st.session_state[ss_key] = cleaned.to_dict("records")
                 result_df = cleaned
@@ -712,6 +722,19 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
             else:
                 st.metric("Above P75 by", _fmt(latest_nw - p75v))
 
+    # Gross-assets-vs-net-worth context when a liabilities column was supplied.
+    if personal_df is not None and "liabilities" in personal_df.columns:
+        _latest_raw = personal_df.sort_values("age").iloc[-1]
+        _liab = float(_latest_raw.get("liabilities", 0) or 0)
+        if _liab > 0:
+            _nw_raw = float(_latest_raw["net_worth"])
+            st.caption(
+                f"💳 Latest position: **{_fmt(_nw_raw + _liab)}** gross assets − "
+                f"**{_fmt(_liab)}** liabilities = **{_fmt(_nw_raw)}** net worth"
+                + (" (nominal)" if real_terms else "")
+                + ". Net worth is what's compared to the benchmark."
+            )
+
     # Row 2: growth & progress
     first_age = float(sorted_pdf.iloc[0]["age"])
     first_nw  = float(sorted_pdf.iloc[0]["net_worth"])
@@ -773,6 +796,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** ({price_note}) "
         f"places you {'at approximately the **' + str(round(exact_pct)) + 'th percentile** (±~5–10 pts)' if exact_pct else '**' + band_desc + '**'} "
         f"on a {basis.lower()} basis in the UK."
+        + (f" Roughly **{round(exact_pct)} in 100** people your age have less wealth than you." if exact_pct else "")
         + (f" That's {multiples_str} at your age." if multiples_str else "")
         + (f" (Up {_fmt(delta_val)} from previous.)" if delta_val and delta_val > 0 else
            f" (Down {_fmt(abs(delta_val))} from previous.)" if delta_val and delta_val < 0 else "")
@@ -1184,6 +1208,30 @@ with tab_prog:
                 fi_pct = min(latest_nw / fi_target * 100, 100) if fi_target > 0 else 0
                 st.metric("FI progress", f"{fi_pct:.0f}%",
                           help=f"{fi_pct:.1f}% of the way to your FIRE number.")
+
+            # Liquid-vs-total: the 4% / 25× rule applies to *investable* wealth,
+            # not home equity (not drawable income) or pre-57 pension (locked).
+            # Surface the accessible figure when an asset split has been entered.
+            st.caption(
+                "⚠️ The figures above use **total** net worth. The 4% / 25× rule really applies "
+                "to **investable** wealth — home equity isn't drawable income and pension is "
+                "locked until age 57. Enter *Your wealth composition* in the sidebar for the "
+                "accessible view."
+            )
+            if personal_asset_split is not None:
+                _locked_pension = latest_age is not None and latest_age < 57
+                _excl_share = personal_asset_split["Property"] + (
+                    personal_asset_split["Pension"] if _locked_pension else 0.0)
+                _liquid_nw = latest_nw * max(0.0, 1.0 - _excl_share)
+                _liquid_annual = _liquid_nw * 0.04
+                st.success(
+                    f"**Investable wealth ≈ {_fmt(_liquid_nw)}** "
+                    f"(excludes home equity{' and pre-57 pension' if _locked_pension else ''}). "
+                    f"At 4% that sustainably funds **~{_fmt(_liquid_annual)}/yr** "
+                    f"(~{_fmt(_liquid_annual / 52)}/wk) — versus {_fmt(implied_annual)}/yr "
+                    f"implied by total net worth.",
+                    icon="💧",
+                )
 
     # Partner summary metric
     if partner_plot_df is not None and len(partner_plot_df) > 0:
@@ -2468,9 +2516,9 @@ with tab_share:
 
             with share_col2:
                 st.markdown("**Download as CSV**")
-                export_df = personal_plot_df[["year", "age", "net_worth"]].copy()
-                if "note" in personal_plot_df.columns:
-                    export_df["note"] = personal_plot_df["note"]
+                _export_cols = ["year", "age", "net_worth"] + [
+                    c for c in ("liabilities", "note") if c in personal_plot_df.columns]
+                export_df = personal_plot_df[_export_cols].copy()
                 csv_bytes = export_df.to_csv(index=False).encode("utf-8")
                 from datetime import datetime as _dt
                 fname = f"my_net_worth_{_dt.now():%Y-%m-%d}.csv"
@@ -2482,9 +2530,9 @@ with tab_share:
                          "for backup or to re-upload later.",
                 )
                 if partner_plot_df is not None and len(partner_plot_df) > 0:
-                    p_export = partner_plot_df[["year", "age", "net_worth"]].copy()
-                    if "note" in partner_plot_df.columns:
-                        p_export["note"] = partner_plot_df["note"]
+                    _p_cols = ["year", "age", "net_worth"] + [
+                        c for c in ("liabilities", "note") if c in partner_plot_df.columns]
+                    p_export = partner_plot_df[_p_cols].copy()
                     p_csv = p_export.to_csv(index=False).encode("utf-8")
                     p_fname = f"partner_net_worth_{_dt.now():%Y-%m-%d}.csv"
                     st.download_button(
