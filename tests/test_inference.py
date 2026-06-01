@@ -142,6 +142,21 @@ def test_personal_cpi_adjustment_per_row():
     assert out.iloc[1]["net_worth"] == pytest.approx(50_000, rel=1e-6)
 
 
+def test_cpi_table_is_clean_2015_base_series():
+    """UK_CPI must be a clean ONS annual-average series on the 2015=100 base.
+
+    Guards two historical bugs:
+    - 2020 was stalled at the 2019 value (a fake 0% inflation year).
+    - Pre-2015 values were spliced from a different base, making the index
+      *fall* ~6.6% at 2014→2015 (an impossible year-on-year deflation).
+    """
+    years = sorted(UK_CPI)
+    assert UK_CPI[2015] == pytest.approx(100.0)  # the index base year
+    for earlier, later in zip(years, years[1:]):
+        assert UK_CPI[later] >= UK_CPI[earlier], f"UK_CPI fell from {earlier} to {later}"
+    assert UK_CPI[2020] > UK_CPI[2019], "2020 must not duplicate 2019 (stalled-CPI bug)"
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Individual + gender conversions
 # ──────────────────────────────────────────────────────────────────────────────

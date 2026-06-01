@@ -1,5 +1,6 @@
 """Tests for scripts/bump_version.py — the release-version bumper."""
 from __future__ import annotations
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -64,3 +65,20 @@ def test_accepts_three_part_semver():
     result = _run("2.7.1", "--dry")
     assert result.returncode == 0
     assert "would change" in result.stdout
+
+
+def test_app_docstring_version_matches_app_version():
+    """The module docstring '(vN.N)' must equal APP_VERSION.
+
+    These drifted once (docstring v2.6 vs APP_VERSION v2.7) because the bumper
+    only patched the constant. The bumper now covers both; this locks it in.
+    """
+    app_py = (ROOT / "app.py").read_text(encoding="utf-8")
+    const_m = re.search(r'APP_VERSION\s*=\s*"v([\d.]+)"', app_py)
+    doc_m = re.search(r'UK Net Worth Benchmarker \(v([\d.]+)\)', app_py)
+    assert const_m, "APP_VERSION not found in app.py"
+    assert doc_m, "versioned docstring header not found in app.py"
+    assert doc_m.group(1) == const_m.group(1), (
+        f"docstring v{doc_m.group(1)} != APP_VERSION v{const_m.group(1)} "
+        "— run scripts/bump_version.py to resync"
+    )

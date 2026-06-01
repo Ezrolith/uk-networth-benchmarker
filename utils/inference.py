@@ -96,15 +96,19 @@ _INDIVIDUAL_FACTORS_BY_MIDPOINT = {
 }
 
 # ── UK CPI (2015 = 100) ───────────────────────────────────────────────────────
-# Annual average ONS CPI. Extended to 2025 using OBR central forecast.
+# ONS CPI all-items annual average index, 2015 = 100 (ONS series D7BT).
+# 2000–2025 are published annual averages; 2026 is an estimate (~2.5% on the
+# 2025 actual) pending the full-year figure. NB the previous table spliced a
+# different pre-2015 base onto the 2015=100 series (a fake ~7% step at 2014→15)
+# and stalled 2020 at the 2019 value — both corrected here.
 UK_CPI = {
-    2000: 79.3,  2001: 80.9,  2002: 81.9,  2003: 83.5,
-    2004: 84.8,  2005: 87.0,  2006: 89.4,  2007: 91.5,
-    2008: 95.4,  2009: 95.2,  2010: 97.9,  2011: 101.9,
-    2012: 104.5, 2013: 106.4, 2014: 107.1, 2015: 100.0,
-    2016: 101.0, 2017: 103.6, 2018: 106.0, 2019: 108.5,
-    2020: 108.5, 2021: 111.8, 2022: 121.9, 2023: 132.0,
-    2024: 136.2, 2025: 139.0, 2026: 141.7,  # 2026 estimated: ~1.9% from 2025 (OBR March 2025 forecast)
+    2000: 72.7,  2001: 73.6,  2002: 74.5,  2003: 75.5,
+    2004: 76.5,  2005: 78.1,  2006: 79.9,  2007: 81.8,
+    2008: 84.7,  2009: 86.6,  2010: 89.4,  2011: 93.4,
+    2012: 96.1,  2013: 98.5,  2014: 100.0, 2015: 100.0,
+    2016: 100.7, 2017: 103.4, 2018: 105.9, 2019: 107.8,
+    2020: 108.7, 2021: 111.6, 2022: 121.7, 2023: 130.6,
+    2024: 133.9, 2025: 138.4, 2026: 141.9,  # 2026 estimated (~2.5% on 2025 actual)
 }
 
 DATA_YEAR = 2021  # mid-point of WAS Wave 8 (April 2020 to March 2022)

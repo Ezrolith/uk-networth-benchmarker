@@ -114,7 +114,7 @@ tests/
   test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (260 tests total, ~24s runtime)
+                          (278 tests total, ~28s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -212,7 +212,7 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 260 tests, ~24s
+python -m pytest tests/ -v          # 278 tests, ~28s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
@@ -220,6 +220,18 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.8** (June 2026) — Session 9: data-accuracy, correctness & honesty pass
+(no new features). CPI table rebuilt from real ONS annual averages — fixes a
+pre-2015 base-splice (a fake ~7% deflation at 2014→2015) and a stalled-2020
+value that skewed every real-terms figure; state pension 2026/27 → £12,548;
+IHT freeze → April 2031; goal/FIRE ETA + savings-rate CAGR now routed through
+`safe_cagr` (no more fantasy CAGR on tiny starts); regional methodology table
+corrected (South East is the wealthiest region; London's median sits *below*
+the GB median); percentile ±5–10pt uncertainty surfaced; nominal/real notes on
+the projection panels; cash-ISA-£12k and pensions-in-IHT-estate (both 6 Apr
+2027) flagged; `bump_version.py` now syncs the module docstring too. 278 tests,
+all green. See CHANGELOG.md for the full v2.8 entry.
 
 **v2.7** (May 2026) — Session 8 added the PDF Monte Carlo page, MC
 'Reroll' button, IHT combined household estate toggle, LISA 40-50 gap

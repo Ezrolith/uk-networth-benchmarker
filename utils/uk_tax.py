@@ -13,7 +13,7 @@ Covers:
 - LISA government bonus (25%, capped at £1,000/yr)
 - Inheritance Tax: NRB + RNRB, the four common scenario thresholds,
   iht_payable() computing taxable estate, IHT due, and after-IHT value
-- State pension assumption for forecasts (2026/27 estimate)
+- State pension assumption for forecasts (2026/27 confirmed: £12,548/yr)
 
 All money values in £. All rates as fractions (0.40 not 40).
 """
@@ -26,7 +26,7 @@ LISA_ALLOWANCE        = 4_000    # Lifetime ISA, counts inside ISA total
 PENSION_AA            = 60_000   # Standard pension Annual Allowance
 TAPER_THRESHOLD       = 260_000  # Adjusted income above which taper begins
 TAPER_FLOOR           = 10_000   # Minimum tapered AA (reached at £360k adjusted income)
-STATE_PENSION_2026_27 = 12_400   # Full new State Pension estimate for 2026/27 (£/yr)
+STATE_PENSION_2026_27 = 12_548   # Full new State Pension 2026/27: £241.30/wk × 52 (+4.8% triple lock)
 STATE_PENSION_AGE      = 67      # SPA for cohorts retiring 2028+; rises to 68 from 2044
                                  # (proposed; could be brought forward). 66 for cohorts
                                  # who already qualified pre-2028.
@@ -54,7 +54,8 @@ def life_expectancy_at(retirement_age: int) -> int:
     return int(85 - max(0, retirement_age - 65) * 0.2)
 
 # ── IHT (Inheritance Tax) thresholds 2025/26 ───────────────────────────────────
-# Both nil-rate bands are frozen at these values until April 2030.
+# Both nil-rate bands are frozen at these values until April 2031
+# (the freeze was extended by a further year at the Autumn Budget 2025).
 NIL_RATE_BAND          = 325_000  # Per person standard nil-rate band
 RESIDENCE_NIL_RATE_BAND = 175_000  # Extra if main residence left to direct descendants
 IHT_STANDARD_RATE      = 0.40     # Standard IHT rate above the thresholds

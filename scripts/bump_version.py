@@ -2,7 +2,7 @@
 Bump the project version across every file that references it.
 
 Without this, a release means manually editing:
-  - app.py            (APP_VERSION = "v2.6")
+  - app.py            (APP_VERSION = "v2.6" AND the module docstring '(v2.6)')
   - pyproject.toml    (version = "2.6")
   - CLAUDE.md         ('Current version' section)
   - REVIEW_LOG.md     (sometimes)
@@ -40,6 +40,13 @@ REPLACEMENTS: list[tuple[str, str, str]] = [
         "app.py",
         r'APP_VERSION\s*=\s*"v[\d.]+"',
         'APP_VERSION = "v{v}"',
+    ),
+    (
+        # Module docstring header, e.g. "UK Net Worth Benchmarker (v2.7)".
+        # Kept in sync with APP_VERSION so bumps don't leave it stale.
+        "app.py",
+        r'UK Net Worth Benchmarker \(v[\d.]+\)',
+        'UK Net Worth Benchmarker (v{v})',
     ),
     (
         "pyproject.toml",

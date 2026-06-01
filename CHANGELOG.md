@@ -6,6 +6,55 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.8] — June 2026 (Session 9)
+
+Data-accuracy, correctness and honesty pass — every quoted figure re-grounded
+against current published sources. No new feature surface. Driven by a verified
+multi-dimension audit (51 findings, 25 quantitative claims web/code-checked).
+
+### Fixed — data currency
+- **CPI table rebuilt from real ONS annual averages** (series D7BT, 2015=100).
+  The previous table spliced a different pre-2015 base onto the 2015=100 series
+  (a fake ~7% deflation step at 2014→2015) and stalled 2020 at the 2019 value
+  (implied 0% inflation in 2020). Both corrected: 2000–2025 now match published
+  annual averages, 2026 is a documented estimate. Affects every real-terms figure.
+- **State pension 2026/27 → £12,548** (£241.30/wk, +4.8% triple lock; was a
+  £12,400 estimate). Sidebar default + help updated.
+- **IHT nil-rate-band freeze → April 2031** (extended at Autumn Budget 2025;
+  was April 2030).
+
+### Fixed — correctness
+- The goal/FIRE ETA and savings-rate calculators now route their CAGR through
+  the shared `safe_cagr` guard, so a tiny starting balance (e.g. £2k) no longer
+  produces a fantasy triple-digit CAGR and a too-good ETA — they fall back to the
+  average-gain estimate. (The ISA-bridge ETA already did this; the codebase was
+  inconsistent about applying its own rule.)
+- Regional methodology table corrected: it previously claimed London was the
+  wealthiest region (+30–40%). Per ONS WAS Wave 8 the **South East** is highest
+  (£489,800) and **London's median sits below the GB median** (£293,700) — high
+  prices ≠ high median wealth where over half of households rent. Speculative
+  per-region premiums replaced with ONS-confirmed anchors only; no precise
+  (high-uncertainty) London figure quoted.
+
+### Added — honesty / forward-looking flags
+- Headline percentile now carries its ±~5–10 point uncertainty in the metric
+  help and the summary banner (was buried in Methodology only).
+- Nominal/real reconciliation note on the retirement-income, ISA-bridge and
+  drawdown panels when the *Real terms* toggle is off.
+- Cash-ISA £12,000 under-65 limit from 6 April 2027 flagged in the tax-wrapper
+  panel; unused pensions entering the IHT estate from 6 April 2027 flagged in the
+  IHT panel (and dropped from the "outside estate" mitigation list).
+- WAS accreditation/data-quality caveat added to Methodology limitations.
+
+### Tooling
+- `scripts/bump_version.py` now also syncs the module docstring version (it had
+  drifted to v2.6 while `APP_VERSION` was v2.7). New `test_bump_version` guard
+  asserts docstring == `APP_VERSION`.
+- New `test_inference` guard asserts `UK_CPI` is a clean, non-decreasing 2015=100
+  series (locks the stalled-2020 and base-splice fixes).
+
+---
+
 ## [2.7] — May 2026 (Session 8)
 
 Post-deploy-fix continuation of Session 7. ~60 commits of bug fixes,

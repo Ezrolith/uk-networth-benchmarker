@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.6)
+UK Net Worth Benchmarker (v2.8)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -15,7 +15,7 @@ Features:
   - ISA / accessible-wealth bridge calculator for early retirement
   - IHT exposure calculator
   - Multi-page PDF report
-  - 150-test safety net + CI
+  - Large pytest safety net + CI
 
 This file is the Streamlit UI orchestration layer. All chart builders live in
 `charts/`, all maths in `utils/` (inference, monte_carlo, uk_tax). See
@@ -78,7 +78,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.7"
+APP_VERSION = "v2.8"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -422,12 +422,12 @@ with st.sidebar:
             "Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
             format="%d", key="pen_income",
         )
-        # 2026/27 full new State Pension projected: ~£12,400/yr (triple-lock uprated)
+        # 2026/27 full new State Pension: £12,548/yr (£241.30/wk, +4.8% triple lock)
         state_pension = st.number_input(
-            "Expected state pension (£/yr)", 0, 20_000, 12_400, 100,
+            "Expected state pension (£/yr)", 0, 20_000, 12_548, 100,
             format="%d", key="state_pension",
             help="Full new State Pension 2025/26: £11,973/yr; "
-                 "2026/27 estimate ~£12,400/yr (triple-lock).",
+                 "2026/27: £12,548/yr (£241.30/wk, +4.8% triple lock).",
         )
         if retirement_age and pension_income:
             private_needed = max(0, pension_income - state_pension)
@@ -453,26 +453,29 @@ with st.sidebar:
             if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
                 fs  = float(sorted_pdf2.iloc[0]["net_worth"])
                 asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
-                if asp > 0.5 and fs > 0 and latest_nw > 0:
-                    cagr_s = (latest_nw / fs) ** (1 / asp) - 1
-                    if cagr_s > 0:
-                        for tgt_label, tgt_val in [
-                            ("goal", goal_amount),
-                            ("FIRE number", fire_number),
-                        ]:
-                            if tgt_val > latest_nw:
-                                yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
-                                if 0 < yrs_s < 60:
-                                    savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
-                                    savings_rate = max(0, savings_needed) / annual_income * 100
-                                    st.caption(
-                                        f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
-                                        f"~{yrs_s:.0f} yrs at {cagr_s*100:.1f}% CAGR: "
-                                        f"save **{savings_rate:.0f}%** of income "
-                                        f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
-                                    )
-                    else:
-                        st.caption("Your historical CAGR is non-positive — cannot project savings rate from compound growth alone.")
+                cagr_s = _safe_cagr(fs, latest_nw, asp)
+                if cagr_s is not None and cagr_s > 0:
+                    for tgt_label, tgt_val in [
+                        ("goal", goal_amount),
+                        ("FIRE number", fire_number),
+                    ]:
+                        if tgt_val > latest_nw:
+                            yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
+                            if 0 < yrs_s < 60:
+                                savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
+                                savings_rate = max(0, savings_needed) / annual_income * 100
+                                st.caption(
+                                    f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
+                                    f"~{yrs_s:.0f} yrs at {cagr_s*100:.1f}% CAGR: "
+                                    f"save **{savings_rate:.0f}%** of income "
+                                    f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
+                                )
+                else:
+                    st.caption(
+                        f"Can't project a reliable savings rate: a starting net worth below "
+                        f"£{CAGR_MIN_START:,} or flat/negative historical growth would distort "
+                        f"the compound estimate."
+                    )
             else:
                 st.caption("Add at least 2 personal data points to enable the savings rate projection.")
         elif latest_nw is None:
@@ -675,7 +678,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                              "distinguish further at this end.")
             else:
                 pct_label = f"~{exact_pct:.0f}th"
-                pct_help  = "Log-normal fit to P25/P50/P75. Indicative only."
+                pct_help  = "Log-normal fit to P25/P50/P75 — indicative, roughly ±5–10 percentile points."
             st.metric("Est. percentile", pct_label, help=pct_help)
         else:
             short_band = {
@@ -765,7 +768,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
 
     st.info(
         f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** ({price_note}) "
-        f"places you {'at approximately the **' + str(round(exact_pct)) + 'th percentile**' if exact_pct else '**' + band_desc + '**'} "
+        f"places you {'at approximately the **' + str(round(exact_pct)) + 'th percentile** (±~5–10 pts)' if exact_pct else '**' + band_desc + '**'} "
         f"on a {basis.lower()} basis in the UK."
         + (f" That's {multiples_str} at your age." if multiples_str else "")
         + (f" (Up {_fmt(delta_val)} from previous.)" if delta_val and delta_val > 0 else
@@ -885,12 +888,11 @@ if personal_plot_df is not None and latest_nw is not None:
                 st.progress(pct_there / 100)
             with cols[1]:
                 if age_span > 0.5 and latest_nw > 0:
-                    if first_nw > 0:
-                        cagr_cur = (latest_nw / first_nw) ** (1 / age_span) - 1
-                        if cagr_cur > 0.001:
-                            yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
-                            st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
-                                      help=f"At your current {cagr_cur*100:.1f}% CAGR.")
+                    cagr_cur = _safe_cagr(first_nw, latest_nw, age_span)
+                    if cagr_cur is not None and cagr_cur > 0.001:
+                        yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
+                        st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                  help=f"At your current {cagr_cur*100:.1f}% CAGR.")
                     else:
                         avg_gain = (latest_nw - first_nw) / age_span
                         if avg_gain > 0:
@@ -898,7 +900,7 @@ if personal_plot_df is not None and latest_nw is not None:
                             if 0 < yrs < 60:
                                 st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
                                           help=f"At your average gain of {_fmt(avg_gain)}/yr. "
-                                               f"(CAGR unavailable — started from zero or negative.)")
+                                               f"(CAGR not shown for small or zero starting balances.)")
 
 # Log scale warning
 if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
@@ -915,6 +917,12 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "and shows estimated annual income from three sources. "
             "All figures in **today's money (real terms)**. Indicative only — not advice."
         )
+        if not real_terms:
+            st.caption(
+                "⚠️ The benchmark and percentile above are currently shown in **nominal** terms "
+                "(the *Real terms* sidebar toggle is off), but this projection works in today's "
+                "money. Turn on **Real terms** in the sidebar for consistent units."
+            )
 
         ri_col1, ri_col2, ri_col3 = st.columns(3)
         with ri_col1:
@@ -1022,6 +1030,12 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "(ISA, GIA, savings — not pension) to cover spending until the pension unlocks. "
             "This calculator sizes that bridge fund."
         )
+        if not real_terms:
+            st.caption(
+                "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
+                "toggle is off); the figures here are in today's money. Turn on **Real terms** "
+                "for consistent units."
+            )
 
         ib_col1, ib_col2, ib_col3 = st.columns(3)
         with ib_col1:
@@ -1151,6 +1165,12 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "Shows the age your pot is depleted — and how that compares to UK life expectancy. "
             "**All figures in today's money (real terms).** Indicative only — not advice."
         )
+        if not real_terms:
+            st.caption(
+                "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
+                "toggle is off); the figures here are in today's money. Turn on **Real terms** "
+                "for consistent units."
+            )
 
         dd_col1, dd_col2, dd_col3, dd_col4 = st.columns(4)
         with dd_col1:
@@ -1446,6 +1466,11 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "Track how much of each year's UK tax-advantaged wrapper allowance you're using. "
             "Pension annual allowance includes 3-year carryforward of unused capacity. "
             "**Allowances as of 2025/26.** Indicative — not tax advice."
+        )
+        st.caption(
+            "📅 From **6 April 2027** the cash-ISA limit drops to **£12,000/yr** for under-65s "
+            "(within the unchanged £20,000 overall ISA allowance); over-65s keep the full "
+            "£20,000 in cash."
         )
 
         # Allowance constants imported from utils/uk_tax.py (tested in test_uk_tax.py).
@@ -1745,7 +1770,12 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             st.caption(
                 f"Taxable estate: {_fmt(taxable_estate)} (estate above threshold). "
                 f"Possible mitigation: gifts out of income, seven-year gifting rules, "
-                f"life insurance in trust, pension wealth (outside estate), charitable giving."
+                f"life insurance in trust, charitable giving."
+            )
+            st.caption(
+                "⚠️ From **6 April 2027** most unused pension funds fall **inside** the estate "
+                "for IHT (transfers to a spouse or charity stay exempt) — pensions will no "
+                "longer sit outside it."
             )
         st.caption(
             "Simplified estimate — does not account for taper relief, business/agricultural property relief, "
@@ -2536,32 +2566,32 @@ No data is transmitted to or stored on any server.
 
 ### Regional variation
 
-WAS publishes regional breakdowns but this tool currently shows GB-wide figures only.
-Wealth varies substantially by region — approximate median total wealth premiums vs GB median
-(WAS Wave 8):
+WAS publishes some regional figures but this tool currently shows GB-wide figures only.
+Wealth varies substantially by region. The ONS WAS Wave 8 bulletin (April 2020 to March
+2022) published these median **household total wealth** anchors:
 
-| Region | Approx. premium vs GB median |
-|---|---|
-| London | +30–40% |
-| South East | +20–30% |
-| East of England | +10–20% |
-| South West | ±5% |
-| East Midlands / West Midlands | −5 to −10% |
-| Yorkshire / Humber | −10 to −15% |
-| North West | −10 to −15% |
-| North East | −20 to −25% |
-| Wales | −15 to −20% |
-| Scotland | −5 to +5% |
+| Region | Median household total wealth | vs GB median |
+|---|---|---|
+| South East (wealthiest region) | £489,800 | +67% |
+| Great Britain | £293,700 | — |
+| North East (least wealthy) | £179,900 | −39% |
 
-If you live in London or the South East, you are likely comparing against a benchmark
-that understates your peers' wealth; in the North or Wales, it overstates it.
-A region filter is on the roadmap (requires expanded WAS regional tables).
+Counter-intuitively, **London's median sits *below* the GB median** — high house prices
+don't make the typical household wealthy when over half of London households rent and the
+population skews younger. (London's *mean* is the highest in the country, pulled up by a
+wealthy tail, but the *median* household is not.) ONS also flags extra uncertainty on the
+Round 8 London estimate (pandemic non-response), so we don't quote a precise London figure
+here. ONS did not publish a full per-region median table for Wave 8; a region filter
+remains on the roadmap pending those tables.
 
 ### Known limitations
 
 - WAS excludes Northern Ireland; figures = Great Britain only.
 - Very wealthy households (~top 1–2%) are under-represented; P75 is reliable, above P90 less so.
 - Wave 8 (2020–2022) predates 2023–2026 inflation/house-price movements; real-terms adjustment is partial.
+- Wave 8 is the latest published wave, but the UK statistics regulator has flagged data-quality
+  caveats on recent WAS rounds — treat it as the best available source rather than a certified
+  gold standard, and read single-year movements with care.
 - 75+ band uses age-80 midpoint — a modelling assumption over a wide age range.
 - What-if and FIRE projections are illustrative only. Not financial advice.
 """)
