@@ -186,7 +186,7 @@ sidebar block so goal/savings calculator widgets can safely reference them.
 | Show annotations | Toggle arrows + crosshairs (off = clean for screenshots) |
 | Colourblind-safe palette | Okabe-Ito deuteranopia-friendly colours |
 | Age range slider | Zoom x-axis (16–85); does not discard data |
-| Your wealth composition | Enter own property/pension/financial/physical % split |
+| (Wealth composition) | Auto-balancing sliders moved to the "🎚️ Adjust your wealth mix" panel under the chart (was a sidebar input) |
 | Goal calculator | Target net worth, FIRE number, pension pot estimator, savings rate |
 | Partner's net worth | Second person's data (same upload/manual options) |
 | Download benchmark data | CSV of current benchmark respecting all settings |
@@ -232,6 +232,14 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.17** (June 2026) — Session 9 (part 10): **wealth-mix editor UX**. The
+auto-balancing composition sliders moved from the sidebar into the "🎚️ Adjust
+your wealth mix" panel under the chart — sliders now sit next to the live bar +
+£ figures (two-column: drag left, watch right), open by default, each slider
+labelled with its live £ value and %. `personal_asset_split` is now always
+defined (from session_state) so the asset-class overlay + investable SWR figure
+always populate. 302 tests green.
 
 **v2.16** (June 2026) — Session 9 (part 9): **Region filter**. A sidebar Region
 selector scales the GB benchmark to a region's median household total wealth (ONS

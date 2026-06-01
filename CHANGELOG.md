@@ -6,6 +6,26 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.17] — June 2026 (Session 9, part 10)
+
+Wealth-mix editor made easier to use (user feedback: the sliders were unclear
+and hard to find in the sidebar).
+
+### Changed
+- The auto-balancing composition sliders moved out of the sidebar into the
+  **🎚️ Adjust your wealth mix** panel directly under the chart, so the sliders
+  now sit **next to** the live bar and £ figures in a two-column layout (drag on
+  the left, watch the bar + drawable-wealth figure update on the right). The
+  panel is open by default and clearly captioned ("drag a slider, the rest
+  auto-balance").
+- Each slider is labelled with its live £ value and %, e.g. "🏠 Property — £76k
+  (40%)", so the makeup is legible while you drag.
+- `personal_asset_split` is now always defined (from session_state), so the
+  asset-class overlay and the investable-wealth SWR figure always populate
+  (no longer gated on the split having been entered). 302 tests, green.
+
+---
+
 ## [2.16] — June 2026 (Session 9, part 9)
 
 Region filter — scale the benchmark to a region's wealth level.
