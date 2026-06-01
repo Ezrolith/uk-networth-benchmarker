@@ -7,7 +7,7 @@
 
 [project]
 name = "uk-networth-benchmarker"
-version = "2.8"
+version = "2.9"
 description = "UK net worth distribution visualiser using ONS Wealth and Assets Survey data."
 readme = "README.md"
 requires-python = ">=3.11"

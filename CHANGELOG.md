@@ -6,6 +6,38 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.9] — June 2026 (Session 9, part 2)
+
+Retirement income realism — the audit's #1-ranked feature. Turns the
+"pre-tax indicative" retirement figures into net spendable income.
+
+### Added
+- **Income tax on retirement income.** New `income_tax_2025_26()` in
+  `utils/uk_tax.py` (rUK 2025/26: £12,570 personal allowance with the
+  £1-per-£2 taper above £100k — the 60% trap — and the 20/40/45% bands).
+  The Retirement income forecast now shows a **Net annual income** metric
+  after income tax on the taxable part (annuity + state pension); the 4% ISA
+  draw is treated as tax-free. The target comparison uses the net figure, so
+  it no longer overstates success.
+- **25% tax-free pension lump sum (PCLS).** New `tax_free_lump_sum()` (25% of
+  the pot, capped at the £268,275 Lump Sum Allowance). The forecast annuitises
+  only the remaining 75% and shows the tax-free lump sum as its own one-off
+  line — previously it annuitised 100% of the pot, overstating annuity income.
+- **Second bridge leg** (pension-access age → state-pension age) inside the ISA
+  bridge expander, reusing the 4% PV-of-annuity factor and showing both legs
+  combined. Replaces the old "you may still need a second bridge" caveat.
+- **Drawdown tax caveat**: the state-pension £-for-£ offset note now flags that
+  it assumes the state pension sits within the Personal Allowance, and that
+  drawdown figures are pre-tax (wrapper-dependent).
+- PDF report Page 9 (retirement income) mirrors all of the above: tax-free
+  lump sum line, income-tax row, net-income row, net-vs-target verdict.
+
+### Tests
+- 10 new tests in `test_uk_tax.py` for the income-tax bands, the 60%
+  personal-allowance trap, monotonicity, and the PCLS cap. 288 tests, green.
+
+---
+
 ## [2.8] — June 2026 (Session 9)
 
 Data-accuracy, correctness and honesty pass — every quoted figure re-grounded

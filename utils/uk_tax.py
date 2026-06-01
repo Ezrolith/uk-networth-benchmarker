@@ -180,3 +180,60 @@ def pension_relief_estimate(
 def lisa_bonus(contribution: float) -> float:
     """LISA government bonus: 25% on contributions, up to £1,000/yr."""
     return min(contribution * 0.25, 1_000.0)
+
+
+# ── Income tax 2025/26 (England, Wales & Northern Ireland) ─────────────────────
+# Scotland sets its own rates/bands and is NOT modelled here. rUK bands are
+# frozen to April 2028. National Insurance and the dividend/savings allowances
+# are out of scope (this models earned/pension income).
+PERSONAL_ALLOWANCE        = 12_570   # tax-free personal allowance
+BASIC_RATE_BAND           = 37_700   # taxable income (above the PA) taxed at 20%
+ADDITIONAL_RATE_THRESHOLD = 125_140  # taxable income above which the 45% rate applies
+PA_TAPER_THRESHOLD        = 100_000  # PA reduced £1 per £2 of income above this
+BASIC_RATE                = 0.20
+HIGHER_RATE               = 0.40
+ADDITIONAL_RATE           = 0.45
+
+# Pension tax-free lump sum cap — the Lump Sum Allowance, fixed when the
+# Lifetime Allowance was abolished in April 2024. Normally 25% of a pension can
+# be taken tax-free, capped at this amount.
+PENSION_LSA               = 268_275
+
+
+def income_tax_2025_26(gross_income: float) -> float:
+    """
+    Estimated UK income tax (England/Wales/NI, 2025/26) on a gross annual income.
+
+    Models the £12,570 personal allowance and its £1-per-£2 taper above
+    £100,000 (gone entirely at £125,140 — the 60% effective-rate band), then
+    the 20% / 40% / 45% bands on taxable income. Scotland has different
+    rates/bands and is not modelled. Excludes National Insurance and the
+    dividend/savings allowances.
+
+    Returns the income tax due in £ (0 for income at or below the allowance).
+    """
+    if gross_income <= 0:
+        return 0.0
+
+    if gross_income <= PA_TAPER_THRESHOLD:
+        allowance = PERSONAL_ALLOWANCE
+    else:
+        allowance = max(0.0, PERSONAL_ALLOWANCE - (gross_income - PA_TAPER_THRESHOLD) / 2)
+
+    taxable = max(0.0, gross_income - allowance)
+
+    tax = min(taxable, BASIC_RATE_BAND) * BASIC_RATE
+    if taxable > BASIC_RATE_BAND:
+        higher_portion = min(taxable, ADDITIONAL_RATE_THRESHOLD) - BASIC_RATE_BAND
+        tax += higher_portion * HIGHER_RATE
+    if taxable > ADDITIONAL_RATE_THRESHOLD:
+        tax += (taxable - ADDITIONAL_RATE_THRESHOLD) * ADDITIONAL_RATE
+    return tax
+
+
+def tax_free_lump_sum(pension_pot: float) -> float:
+    """
+    Tax-free pension commencement lump sum: 25% of the pot, capped at the
+    Lump Sum Allowance (£268,275). Returns £ (0 for a non-positive pot).
+    """
+    return min(max(0.0, pension_pot) * 0.25, PENSION_LSA)

@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.8)
+UK Net Worth Benchmarker (v2.9)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -61,6 +61,7 @@ from utils.uk_tax        import (  # noqa: F401
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
     iht_payable, IHT_BANDS,
+    income_tax_2025_26, tax_free_lump_sum, PENSION_LSA,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD,
     STATE_PENSION_AGE, life_expectancy_at,
 )
@@ -78,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.8"
+APP_VERSION = "v2.9"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -950,9 +951,14 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         _ri_pension_pot = _ri_nw_at_retire * (ri_pension_share / 100)
         _ri_other_wealth = _ri_nw_at_retire - _ri_pension_pot
 
+        # 25% tax-free pension commencement lump sum (PCLS), capped at the Lump
+        # Sum Allowance. The remaining 75% is what gets annuitised.
+        _ri_pcls       = tax_free_lump_sum(_ri_pension_pot)
+        _ri_annuitised = _ri_pension_pot - _ri_pcls
+
         # Annuity rate at retirement age (gilt-linked single-life, recent UK levels)
         _ri_ann_rate = 0.065 + (ri_retire_age - 65) * 0.0025
-        _ri_annuity = _ri_pension_pot * max(_ri_ann_rate, 0.02)
+        _ri_annuity = _ri_annuitised * max(_ri_ann_rate, 0.02)
 
         # 4% draw from non-pension wealth (ISAs, GIAs, property income proxy)
         _ri_drawdown = _ri_other_wealth * 0.04
@@ -962,6 +968,13 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
 
         _ri_total = _ri_annuity + _ri_drawdown + _ri_state_pen
 
+        # Income tax (rUK 2025/26): the annuity and state pension are taxable
+        # income; the 4% draw is assumed to come from ISAs/accessible wealth
+        # (tax-free) and the 25% PCLS is tax-free. Net = pre-tax total − tax.
+        _ri_taxable = _ri_annuity + _ri_state_pen
+        _ri_tax     = income_tax_2025_26(_ri_taxable)
+        _ri_net     = _ri_total - _ri_tax
+
         st.markdown(
             f"#### Projected income at age {ri_retire_age}  ·  "
             f"net worth ≈ {_fmt(_ri_nw_at_retire)}"
@@ -969,23 +982,40 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         inc_c1, inc_c2, inc_c3, inc_c4 = st.columns(4)
         with inc_c1:
             st.metric("Annuity from pension", f"{_fmt(_ri_annuity)}/yr",
-                      help=f"From pension pot {_fmt(_ri_pension_pot)} at "
-                           f"{_ri_ann_rate*100:.1f}% annuity rate. "
-                           "Drawdown can be more flexible but rate varies with markets.")
+                      help=f"From {_fmt(_ri_annuitised)} — the 75% left after the 25% tax-free "
+                           f"lump sum — at a {_ri_ann_rate*100:.1f}% annuity rate. Taxable income; "
+                           "drawdown can be more flexible but rates vary with markets.")
         with inc_c2:
             st.metric("4% draw from other wealth", f"{_fmt(_ri_drawdown)}/yr",
-                      help=f"From non-pension wealth {_fmt(_ri_other_wealth)} at 4% safe-withdrawal rate.")
+                      help=f"From non-pension wealth {_fmt(_ri_other_wealth)} at 4% safe-withdrawal "
+                           "rate. Assumed tax-free (ISA / accessible wrappers).")
         with inc_c3:
             if _ri_state_pen > 0:
                 st.metric("State pension", f"{_fmt(_ri_state_pen)}/yr",
-                          help="From state pension age (currently 66, rising to 67 by 2028).")
+                          help="From state pension age (currently 66, rising to 67 by 2028). Taxable.")
             else:
                 st.metric("State pension", "Not yet eligible",
                           help=f"State pension age is 66–67. You'd retire {67 - ri_retire_age:.0f}+ years before that.")
         with inc_c4:
-            st.metric("Total annual income", f"{_fmt(_ri_total)}/yr",
+            st.metric("Total income (pre-tax)", f"{_fmt(_ri_total)}/yr",
                       delta=f"~{_fmt(_ri_total/52)}/week",
-                      help="Sum of the three sources above. Pre-tax.")
+                      help="Sum of the three sources above, before income tax.")
+
+        # Net-of-tax + tax-free lump sum — the figures you can actually spend.
+        net_c1, net_c2, net_c3 = st.columns(3)
+        with net_c1:
+            st.metric("Tax-free lump sum (one-off)", _fmt(_ri_pcls),
+                      help="25% of your pension pot, taken tax-free at retirement (capped at the "
+                           f"£{PENSION_LSA:,} Lump Sum Allowance). A one-off, not annual income.")
+        with net_c2:
+            st.metric("Income tax", f"−{_fmt(_ri_tax)}/yr",
+                      help=f"rUK 2025/26 income tax on the taxable {_fmt(_ri_taxable)}/yr "
+                           "(annuity + state pension). The 4% ISA draw and the 25% lump sum are "
+                           "tax-free. Scotland differs.")
+        with net_c3:
+            st.metric("Net annual income", f"{_fmt(_ri_net)}/yr",
+                      delta=f"~{_fmt(_ri_net/52)}/week",
+                      help="Annual income after income tax — what you can actually spend.")
 
         # Compare to target
         try:
@@ -993,18 +1023,19 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
         except (NameError, ValueError):
             _target = 0
         if _target > 0:
-            _pct = min(_ri_total / _target * 100, 999)
-            _delta = _ri_total - _target
+            _pct = min(_ri_net / _target * 100, 999)
+            _delta = _ri_net - _target
             if _delta >= 0:
                 st.success(
-                    f"You would exceed your target of {_fmt(_target)}/yr by **{_fmt(_delta)}/yr** "
-                    f"({_pct:.0f}% of target).",
+                    f"Your **net** income would exceed your target of {_fmt(_target)}/yr by "
+                    f"**{_fmt(_delta)}/yr** ({_pct:.0f}% of target, after income tax).",
                     icon="✅",
                 )
             else:
                 st.warning(
-                    f"You would fall **{_fmt(abs(_delta))}/yr short** of your target of {_fmt(_target)}/yr "
-                    f"({_pct:.0f}% of target). Consider saving more, working longer, or accepting a lower income.",
+                    f"Your **net** income would fall **{_fmt(abs(_delta))}/yr short** of your target "
+                    f"of {_fmt(_target)}/yr ({_pct:.0f}% of target, after income tax). "
+                    "Consider saving more, working longer, or accepting a lower income.",
                     icon="⚠️",
                 )
 
@@ -1012,8 +1043,9 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             "**Notes.** Real return assumed constant — actual returns vary year to year. "
             "Annuity figures are level (no inflation linking) using current UK gilt-linked rates. "
             "Drawdown uses the 4% rule (Trinity Study) — for a 30-year retirement; longer horizons "
-            "or higher equity exposure may require lower rates. Pre-tax: income tax applies above "
-            "the Personal Allowance (~£12,570)."
+            "or higher equity exposure may require lower rates. Income tax is the rUK 2025/26 "
+            "estimate (England/Wales/NI — Scotland differs) and assumes the 4% draw comes from "
+            "ISAs/tax-free wrappers."
         )
 
 # ── ISA bridge calculator (early retirement before pension access) ────────────
@@ -1144,13 +1176,37 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
                             icon="✅",
                         )
 
+            # ── Second leg: pension access age → state pension age ──────────────
+            # Pension wealth is now accessible, but the state pension hasn't
+            # started, so you still self-fund the full spend for these years.
+            leg2_years = max(0, STATE_PENSION_AGE - ib_pension_age)
+            if leg2_years > 0:
+                leg2_factor = (1 - (1 + r) ** -leg2_years) / r if r > 0 else leg2_years
+                leg2_pot = ib_annual_spend * leg2_factor
+                st.markdown(
+                    f"**Second leg — pension access ({ib_pension_age}) to state pension "
+                    f"({STATE_PENSION_AGE})**"
+                )
+                l2c1, l2c2, l2c3 = st.columns(3)
+                with l2c1:
+                    st.metric("Leg-2 years", f"{leg2_years}",
+                              help="Years drawing your own pot before the state pension starts.")
+                with l2c2:
+                    st.metric("Leg-2 pot (4% real)", _fmt(leg2_pot),
+                              help="Self-funded from pension + accessible wealth, since the state "
+                                   "pension isn't in payment yet. PV-of-annuity at 4% real.")
+                with l2c3:
+                    st.metric("Both legs combined", _fmt(bridge_swr + leg2_pot),
+                              help=f"Leg 1 (accessible-only, to age {ib_pension_age}) + Leg 2 "
+                                   f"(to state pension age {STATE_PENSION_AGE}). From the state "
+                                   "pension age onward, the state pension reduces your annual need.")
+
             st.caption(
-                "**Assumes 4% real return on the bridge fund during drawdown.** Bridge years are "
-                "between FIRE age and pension access age; this calculator does NOT check that the "
-                "bridge fund is actually in accessible wrappers — you'll need to verify your "
-                "ISA + GIA balance specifically (not pension) covers this. State pension (from 66/67) "
-                "is not modelled here; if your pension access is before state pension age, you may "
-                "still need a smaller second bridge from pension access to state pension."
+                "**Assumes 4% real return during drawdown.** Leg 1 (to pension access age) must be "
+                "in accessible wrappers (ISA / GIA, not pension) — this tool doesn't verify that, so "
+                "check your ISA + GIA balance covers it. Leg 2 (pension access to state pension age) "
+                "can also draw on pension. From state pension age, the state pension reduces the "
+                "annual need."
             )
 
 
@@ -1202,6 +1258,13 @@ if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
             value=True, key="dd_sp",
             help="If checked, state pension income (from age 66/67) is subtracted from the annual "
                  "spend, so less is drawn from the pot once you qualify.")
+        if dd_include_sp:
+            st.caption(
+                "State pension is subtracted £-for-£ from the annual spend — a simplification that "
+                "assumes it falls within your Personal Allowance and isn't itself taxed. Drawdown "
+                "figures are pre-tax; tax on withdrawals depends on your wrapper mix (ISA "
+                "withdrawals are tax-free, pension income is taxable above the allowance)."
+            )
 
         # Simulate
         _dd_pot = float(dd_start_pot)
@@ -2524,10 +2587,12 @@ If personal CAGR is available, the calculator also projects when you'd reach
 the bridge target at your current growth rate, and compares against your
 chosen FIRE age — green if you'd hit it with buffer, amber if you'd be late.
 
-**Caveats.** Does not verify that your bridge wealth is actually held in
-accessible wrappers — that's on you. Does not model state pension (kicks in
-at 66/67), so a second mini-bridge from pension-access to state-pension age
-may also be relevant.
+The forecast now also sizes a **second leg** from pension-access age to state
+pension age (where the state pension starts to reduce your annual need), reusing
+the same 4% PV-of-annuity factor, and shows the two legs combined.
+
+**Caveat.** Does not verify that your leg-1 wealth is actually held in accessible
+wrappers (ISA / GIA, not pension) — that's on you to check.
 
 ### Retirement income forecast
 
@@ -2535,14 +2600,18 @@ Projects your net worth to your chosen retirement age using a configurable real
 return (default 4%), splits the result into pension wrappers vs other wealth using
 your asset composition, then estimates annual income from three sources:
 
-- **Pension annuity** = pension pot × annuity rate. Rate ≈ 6.5% at age 65, with
-  small adjustment for retirement age (single-life, level annuity, gilt-linked).
-  Drawdown can be more flexible — this is a conservative income proxy.
+- **Pension annuity** = the 75% of the pension pot left after the 25% tax-free
+  lump sum (PCLS, capped at the £268,275 Lump Sum Allowance) × annuity rate
+  (≈6.5% at 65, single-life level gilt-linked). Drawdown can be more flexible —
+  this is a conservative income proxy.
 - **4% drawdown** from non-pension wealth (ISAs, GIAs, property-equivalent).
-  Follows the Trinity Study 4% rule for a 30-year horizon.
+  Follows the Trinity Study 4% rule for a 30-year horizon. Assumed tax-free.
 - **State pension** included from age 67 (post-2028 cohort); your input figure.
 
-All figures pre-tax. Compare against your target income to see if the plan stacks up.
+The forecast shows the **25% tax-free lump sum** separately, then a **net annual
+income** after rUK 2025/26 income tax on the taxable part (annuity + state
+pension); the target comparison uses the net figure. (England/Wales/NI rates —
+Scotland differs; the 4% ISA draw is treated as tax-free.)
 
 ### Retirement drawdown — pot longevity
 
@@ -3359,16 +3428,20 @@ if personal_plot_df is not None and latest_nw is not None:
                     _pen_share = 0.30
                 _pen_pot = _nw_at_retire * _pen_share
                 _other  = _nw_at_retire - _pen_pot
+                _pcls_pdf = tax_free_lump_sum(_pen_pot)  # 25% tax-free, capped at the LSA
                 _ann_rate_pdf = 0.065 + (_retire_age_pdf - 65) * 0.0025
-                _annuity_pdf  = _pen_pot * max(_ann_rate_pdf, 0.02)
+                _annuity_pdf  = (_pen_pot - _pcls_pdf) * max(_ann_rate_pdf, 0.02)
                 _draw_pdf     = _other * 0.04
                 _sp_pdf       = state_pension if (_retire_age_pdf >= 67 and state_pension) else 0
                 _total_pdf    = _annuity_pdf + _draw_pdf + _sp_pdf
+                _tax_pdf      = income_tax_2025_26(_annuity_pdf + _sp_pdf)
+                _net_pdf      = _total_pdf - _tax_pdf
 
                 KV("Projected net worth at retirement:", _fmt(_nw_at_retire))
                 KV("  Assumed real return until retirement:", "4.0% per year")
                 KV("  Pension wrappers (annuity source):", f"{_fmt(_pen_pot)}  ({_pen_share*100:.0f}%)")
                 KV("  Other wealth (4% drawdown source):", _fmt(_other))
+                KV("  Tax-free lump sum (25%, one-off):", _fmt(_pcls_pdf))
                 pdf.ln(3)
 
                 pdf.set_font("Helvetica", "B", 10); pdf.set_text_color(*BLUE)
@@ -3377,10 +3450,12 @@ if personal_plot_df is not None and latest_nw is not None:
                 pdf.ln(3); pdf.set_draw_color(0, 0, 0)
                 TH(("Source", 90), ("Annual income", 50), ("Per week", 40))
                 rows_inc = [
-                    ("Pension annuity", _annuity_pdf, False),
+                    ("Pension annuity (on 75% after tax-free cash)", _annuity_pdf, False),
                     ("4% drawdown from other wealth", _draw_pdf, False),
                     ("State pension", _sp_pdf, False),
-                    ("Total", _total_pdf, True),
+                    ("Total (pre-tax)", _total_pdf, True),
+                    ("Less income tax", -_tax_pdf, False),
+                    ("Net annual income", _net_pdf, True),
                 ]
                 for _idx, (lbl_inc, val_inc, bold) in enumerate(rows_inc):
                     TR(_idx, (lbl_inc, 90, bold),
@@ -3394,26 +3469,27 @@ if personal_plot_df is not None and latest_nw is not None:
                     _target_pdf = 0
                 if _target_pdf > 0:
                     pdf.ln(3)
-                    _gap = _total_pdf - _target_pdf
+                    _gap = _net_pdf - _target_pdf
                     if _gap >= 0:
                         pdf.set_text_color(16, 185, 129)
                         pdf.set_font("Helvetica", "B", 10)
-                        pdf.cell(0, 6, f"Exceeds target ({_fmt(_target_pdf)}/yr) by {_fmt(_gap)}/yr.",
+                        pdf.cell(0, 6, f"Net income exceeds target ({_fmt(_target_pdf)}/yr) by {_fmt(_gap)}/yr.",
                                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     else:
                         pdf.set_text_color(217, 119, 6)
                         pdf.set_font("Helvetica", "B", 10)
-                        pdf.cell(0, 6, f"Short of target ({_fmt(_target_pdf)}/yr) by {_fmt(abs(_gap))}/yr.",
+                        pdf.cell(0, 6, f"Net income short of target ({_fmt(_target_pdf)}/yr) by {_fmt(abs(_gap))}/yr.",
                                  new_x=XPos.LMARGIN, new_y=YPos.NEXT)
                     pdf.set_text_color(*SLATE)
 
                 pdf.ln(4)
                 SM(
                     "Assumptions: 4% real return on NW until retirement; "
-                    f"annuity at {_ann_rate_pdf*100:.1f}% (gilt-linked level annuity, single life); "
-                    "4% safe withdrawal from non-pension wealth; "
-                    "state pension included from age 67. "
-                    "Pre-tax: income tax applies above the Personal Allowance (~£12,570/yr)."
+                    f"annuity at {_ann_rate_pdf*100:.1f}% (gilt-linked level annuity, single life) "
+                    "on the 75% left after the 25% tax-free lump sum; "
+                    "4% safe withdrawal from non-pension wealth; state pension from age 67. "
+                    "Income tax is the rUK 2025/26 estimate on annuity + state pension "
+                    "(4% draw assumed tax-free from ISAs; Scotland differs)."
                 )
         except Exception: pass
 

@@ -68,7 +68,9 @@ utils/
                           - pension_relief_estimate / lisa_bonus
                           - iht_payable + IHT_BANDS (4 scenarios up to £1m)
                           - life_expectancy_at(retirement_age) (ONS 2020-22)
-                          - STATE_PENSION_AGE, STATE_PENSION_2026_27
+                          - STATE_PENSION_AGE, STATE_PENSION_2026_27 (£12,548)
+                          - income_tax_2025_26 (rUK bands + PA taper / 60% trap)
+                          - tax_free_lump_sum (25% PCLS, capped at LSA £268,275)
                           - All constants exported (ISA_ALLOWANCE, PENSION_AA,
                             NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, etc.)
   data_quality.py         compute_data_quality(pdf) → 0–100 score + notes list
@@ -80,7 +82,7 @@ scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
-  test_inference.py       20 tests on inference layer
+  test_inference.py       21 tests on inference layer (incl. CPI-series sanity)
   test_data_loader.py     23 tests on CSV parsing (incl. Excel serial dates,
                           implausible-age warnings) + URL encode/decode
   test_charts_helpers.py  24 tests on formatting helpers
@@ -88,9 +90,10 @@ tests/
                           and gains-chart annual aggregation)
   test_monte_carlo.py     28 tests on simulation, glide path, envelope,
                           probabilities, chart
-  test_uk_tax.py          49 tests on pension taper, ISA/LISA remaining,
+  test_uk_tax.py          59 tests on pension taper, ISA/LISA remaining,
                           relief estimates, LISA bonus, IHT payable + bands,
-                          state pension + life expectancy
+                          state pension + life expectancy, income tax bands +
+                          PA taper, tax-free lump sum cap
   test_demo_data.py       8 tests verifying the demo data shape, CPI round-trip,
                           and percentile trajectory upward
   test_data_quality.py    9 tests on the 0–100 data quality scorer
@@ -114,7 +117,7 @@ tests/
   test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (278 tests total, ~28s runtime)
+                          (288 tests total, ~28s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -212,7 +215,7 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 278 tests, ~28s
+python -m pytest tests/ -v          # 288 tests, ~28s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
@@ -220,6 +223,14 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.9** (June 2026) — Session 9 (part 2): **retirement income realism**. New
+`income_tax_2025_26()` + `tax_free_lump_sum()` in utils/uk_tax.py. The
+Retirement income forecast now models the 25% tax-free pension lump sum
+(annuitising only the remaining 75%) and shows a **net-of-tax** annual income
+(rUK 2025/26) alongside pre-tax; the target check uses the net figure. Added a
+second bridge leg (pension access → state pension), a drawdown tax caveat, and
+mirrored it all in the PDF report. +10 uk_tax tests, 288 green. See CHANGELOG.md.
 
 **v2.8** (June 2026) — Session 9: data-accuracy, correctness & honesty pass
 (no new features). CPI table rebuilt from real ONS annual averages — fixes a

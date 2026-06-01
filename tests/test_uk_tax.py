@@ -17,10 +17,11 @@ from utils.uk_tax import (  # noqa: E402
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
     iht_payable, life_expectancy_at,
+    income_tax_2025_26, tax_free_lump_sum,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD, TAPER_FLOOR,
     NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, IHT_STANDARD_RATE, IHT_REDUCED_RATE,
     IHT_BANDS, STATE_PENSION_AGE, STATE_PENSION_2026_27,
-    LIFE_EXPECTANCY_AT_AGE,
+    LIFE_EXPECTANCY_AT_AGE, PERSONAL_ALLOWANCE, PENSION_LSA,
 )
 
 
@@ -302,3 +303,64 @@ def test_life_expectancy_monotone_non_increasing():
     values = [LIFE_EXPECTANCY_AT_AGE[a] for a in ages]
     for a, b in zip(values, values[1:]):
         assert a >= b, f"Life expectancy not monotone non-increasing: {values}"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Income tax 2025/26 (rUK) + tax-free pension lump sum
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_income_tax_zero_at_or_below_personal_allowance():
+    assert income_tax_2025_26(0) == 0
+    assert income_tax_2025_26(PERSONAL_ALLOWANCE) == 0
+    assert income_tax_2025_26(-5_000) == 0
+
+
+def test_income_tax_basic_rate():
+    # £30k: taxable £17,430 all at 20% = £3,486
+    assert income_tax_2025_26(30_000) == pytest.approx(3_486.0)
+
+
+def test_income_tax_at_basic_rate_ceiling():
+    # £50,270 gross → £37,700 taxable, all basic rate = £7,540
+    assert income_tax_2025_26(50_270) == pytest.approx(7_540.0)
+
+
+def test_income_tax_higher_rate():
+    # £60k: 20%×37,700 + 40%×(47,430−37,700) = 7,540 + 3,892 = £11,432
+    assert income_tax_2025_26(60_000) == pytest.approx(11_432.0)
+
+
+def test_income_tax_personal_allowance_taper_is_60pc_trap():
+    # Between £100k and £125,140 the effective marginal rate is 60%
+    # (40% + the £1-per-£2 PA withdrawal).
+    delta = income_tax_2025_26(110_000) - income_tax_2025_26(100_000)
+    assert delta == pytest.approx(6_000.0)  # 60% of the extra £10k
+
+
+def test_income_tax_additional_rate():
+    # £150k: PA fully tapered to 0; 20%×37,700 + 40%×(125,140−37,700)
+    #        + 45%×(150,000−125,140) = 7,540 + 34,976 + 11,187 = £53,703
+    assert income_tax_2025_26(150_000) == pytest.approx(53_703.0)
+
+
+def test_income_tax_monotonic_increasing():
+    prev = -1.0
+    for income in range(0, 200_001, 5_000):
+        tax = income_tax_2025_26(income)
+        assert tax >= prev, f"tax fell at £{income}"
+        prev = tax
+
+
+def test_tax_free_lump_sum_quarter_of_small_pot():
+    assert tax_free_lump_sum(200_000) == pytest.approx(50_000.0)
+
+
+def test_tax_free_lump_sum_capped_at_lsa():
+    # 25% of a £2m pot would be £500k, but the Lump Sum Allowance caps it.
+    assert tax_free_lump_sum(2_000_000) == pytest.approx(PENSION_LSA)
+    assert PENSION_LSA == 268_275
+
+
+def test_tax_free_lump_sum_non_positive():
+    assert tax_free_lump_sum(0) == 0
+    assert tax_free_lump_sum(-100) == 0
