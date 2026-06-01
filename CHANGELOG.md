@@ -6,6 +6,19 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.15] — June 2026 (Session 9, part 8)
+
+Scenario A/B compare.
+
+### Added
+- **Plan A vs Plan B** projection at the top of the Planning tab: set two plans
+  (monthly saving, annual real return, horizon) and compare projected net worth,
+  the implied percentile at the horizon age, and each plan against your FIRE
+  number — side-by-side metrics + a comparison bar chart + a verdict. Reuses the
+  log-normal percentile model and an FV-of-annuity projection. 297 tests green.
+
+---
+
 ## [2.14] — June 2026 (Session 9, part 7)
 
 Sidebar declutter: the planning calculators moved into the 🎯 Planning tab.

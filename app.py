@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.14)
+UK Net Worth Benchmarker (v2.15)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.14"
+APP_VERSION = "v2.15"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -1395,6 +1395,84 @@ with tab_plan:
                 st.caption("Add at least 2 personal data points to enable the savings rate projection.")
         else:
             st.caption("Add your net worth data in the sidebar to enable this calculator.")
+
+    # ── Scenario A/B compare ─────────────────────────────────────────────────────
+    with st.expander("Scenario A/B compare — Plan A vs Plan B", expanded=False):
+        st.caption("Set two plans side by side and compare projected net worth, percentile and "
+                   "your FIRE number, starting from your latest net worth.")
+        if latest_nw is None or latest_nw <= 0:
+            st.info("Add your net worth data (sidebar) to use the scenario comparison.")
+        else:
+            def _scenario_inputs(label, prefix, d_monthly, d_ret, d_years):
+                st.markdown(f"**{label}**")
+                monthly = st.number_input("Monthly saving (£)", 0, 50_000, d_monthly, 100, key=f"{prefix}_monthly")
+                ret     = st.number_input("Annual real return (%)", -2.0, 12.0, d_ret, 0.25, key=f"{prefix}_ret")
+                years   = st.number_input("Years to project", 1, 50, d_years, 1, key=f"{prefix}_years")
+                return monthly, ret / 100.0, years
+
+            ab_in = st.columns(2)
+            with ab_in[0]:
+                a_monthly, a_r, a_years = _scenario_inputs("Plan A", "ab_a", 500, 4.0, 15)
+            with ab_in[1]:
+                b_monthly, b_r, b_years = _scenario_inputs("Plan B", "ab_b", 1_000, 6.0, 15)
+
+            def _project_plan(monthly, r, years):
+                annual = monthly * 12
+                if abs(r) < 1e-9:
+                    fv = latest_nw + annual * years
+                else:
+                    fv = latest_nw * (1 + r) ** years + annual * (((1 + r) ** years - 1) / r)
+                tgt_age = latest_age + years if latest_age is not None else years
+                pct = estimate_exact_percentile(fv, round(min(tgt_age, 85)), benchmark)
+                return fv, tgt_age, pct
+
+            a_fv, a_age, a_pct = _project_plan(a_monthly, a_r, a_years)
+            b_fv, b_age, b_pct = _project_plan(b_monthly, b_r, b_years)
+
+            ab_out = st.columns(2)
+            with ab_out[0]:
+                st.metric("Plan A — projected net worth", _fmt(a_fv),
+                          help=f"At age {a_age:.0f}, {a_r*100:.1f}% real return, "
+                               f"£{a_monthly:,}/mo saving.")
+                if a_pct:
+                    st.caption(f"≈ **{a_pct:.0f}th** percentile at age {a_age:.0f}")
+            with ab_out[1]:
+                st.metric("Plan B — projected net worth", _fmt(b_fv),
+                          delta=f"{_fmt(b_fv - a_fv)} vs A",
+                          help=f"At age {b_age:.0f}, {b_r*100:.1f}% real return, "
+                               f"£{b_monthly:,}/mo saving.")
+                if b_pct:
+                    st.caption(f"≈ **{b_pct:.0f}th** percentile at age {b_age:.0f}")
+
+            ab_fig = go.Figure()
+            ab_fig.add_trace(go.Bar(
+                x=["Plan A", "Plan B"], y=[a_fv, b_fv],
+                marker_color=[COLOURS["person"], COLOURS["partner"]],
+                text=[_fmt(a_fv), _fmt(b_fv)], textposition="outside",
+                hovertemplate="%{x}: £%{y:,.0f}<extra></extra>",
+            ))
+            if fire_number and fire_number > 0:
+                ab_fig.add_hline(y=fire_number, line=dict(color=NEUTRAL_GREY, width=1, dash="dash"),
+                                 annotation_text=f"FIRE number {_fmt(fire_number)}",
+                                 annotation_position="top left")
+            ab_fig.update_layout(
+                title=dict(text="Projected net worth — Plan A vs Plan B",
+                           font=dict(size=14, color=TITLE_COLOUR), x=0),
+                height=260, showlegend=False,
+                yaxis=dict(tickprefix="£", tickformat=",.0f", gridcolor=GRID_COLOUR),
+                margin=dict(l=70, r=30, t=50, b=30),
+                plot_bgcolor="white", paper_bgcolor="white",
+            )
+            st.plotly_chart(ab_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+            _winner = "Plan B" if b_fv >= a_fv else "Plan A"
+            _diff = abs(b_fv - a_fv)
+            _msg = f"**{_winner}** ends ahead by **{_fmt(_diff)}** over the horizon."
+            if fire_number and fire_number > 0:
+                _hits = [n for n, fv in (("Plan A", a_fv), ("Plan B", b_fv)) if fv >= fire_number]
+                _msg += (f" {' and '.join(_hits)} clear{'s' if len(_hits) == 1 else ''} the FIRE number."
+                         if _hits else " Neither plan reaches the FIRE number in this horizon.")
+            st.success(_msg)
 
     st.divider()
 

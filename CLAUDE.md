@@ -230,6 +230,12 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
+**v2.15** (June 2026) — Session 9 (part 8): **Scenario A/B compare**. A
+"Plan A vs Plan B" projection at the top of the Planning tab — two parameter
+sets (monthly saving, real return, horizon) compared on projected net worth,
+implied percentile at the horizon age, and against the FIRE number, with
+side-by-side metrics + a comparison bar chart + a verdict. 297 tests green.
+
 **v2.14** (June 2026) — Session 9 (part 7): **sidebar declutter — calculators
 moved to the Planning tab**. The goal/FIRE, retirement-pot and savings-rate
 calculators now live at the top of the 🎯 Planning tab; their values are read in
