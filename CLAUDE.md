@@ -230,6 +230,14 @@ CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 
 
 ## Current version
 
+**v2.14** (June 2026) — Session 9 (part 7): **sidebar declutter — calculators
+moved to the Planning tab**. The goal/FIRE, retirement-pot and savings-rate
+calculators now live at the top of the 🎯 Planning tab; their values are read in
+earlier sections via `st.session_state.get(key, default)` (widgets own the keys,
+early sections only read — no Session-State write warning). Bug fix: the
+savings-rate calc now actually computes (in the sidebar it read `latest_nw`,
+which is `None` at sidebar render time, so it never worked). 297 tests green.
+
 **v2.13** (June 2026) — Session 9 (part 6): **liabilities in the share URL +
 a debt-paydown line on the gains chart**. `encode_personal_data` now carries
 non-zero liabilities (decode stays backward-compatible); `build_gains_chart`

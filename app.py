@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.13)
+UK Net Worth Benchmarker (v2.14)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.13"
+APP_VERSION = "v2.14"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -436,89 +436,18 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Wealth goals: target + FIRE ────────────────────────────────────────────
-    with st.expander("Wealth goal & FIRE number"):
-        st.caption("Set net worth targets to track progress against.")
-        goal_amount = st.number_input(
-            "Target net worth (£)", 0, 10_000_000, 500_000, 10_000,
-            format="%d", key="goal_amount",
-            help="A custom net worth milestone you're working toward.",
-        )
-        fire_spending = st.number_input(
-            "Annual retirement spending (£)", 0, 500_000, 30_000, 1_000,
-            format="%d", key="fire_spend",
-            help="Used to compute your FIRE number (25× spending, 4% SWR).",
-        )
-        fire_number = fire_spending * 25  # 4% safe withdrawal rate
-        st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
-
-    # ── Retirement income & pension pot ────────────────────────────────────────
-    with st.expander("Retirement income & pension pot"):
-        retirement_age = st.number_input(
-            "Target retirement age", 50, 80, 65, 1, key="ret_age",
-        )
-        pension_income = st.number_input(
-            "Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
-            format="%d", key="pen_income",
-        )
-        # 2026/27 full new State Pension: £12,548/yr (£241.30/wk, +4.8% triple lock)
-        state_pension = st.number_input(
-            "Expected state pension (£/yr)", 0, 20_000, 12_548, 100,
-            format="%d", key="state_pension",
-            help="Full new State Pension 2025/26: £11,973/yr; "
-                 "2026/27: £12,548/yr (£241.30/wk, +4.8% triple lock).",
-        )
-        if retirement_age and pension_income:
-            private_needed = max(0, pension_income - state_pension)
-            # Annuity rate: gilt-linked rates ~6.5% at age 65 in late 2024/25
-            annuity_rate = 0.065 + (retirement_age - 65) * 0.0025
-            pot_needed   = private_needed / max(annuity_rate, 0.02)
-            st.caption(
-                f"Private pension pot needed: **{_fmt(pot_needed)}** "
-                f"(for £{private_needed:,}/yr net of state pension, "
-                f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age}). "
-                f"Single-life level annuity assumption — drawdown can be more flexible."
-            )
-
-    # ── Savings rate calculator ────────────────────────────────────────────────
-    with st.expander("Savings rate calculator"):
-        st.caption("How much of your income do you need to save to hit each target?")
-        annual_income = st.number_input(
-            "Annual gross income (£)", 0, 1_000_000, 50_000, 1_000,
-            format="%d", key="annual_income",
-        )
-        if annual_income > 0 and latest_nw is not None and latest_nw > 0:
-            sorted_pdf2 = personal_plot_df.sort_values("age") if personal_plot_df is not None else None
-            if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
-                fs  = float(sorted_pdf2.iloc[0]["net_worth"])
-                asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
-                cagr_s = _safe_cagr(fs, latest_nw, asp)
-                if cagr_s is not None and cagr_s > 0:
-                    for tgt_label, tgt_val in [
-                        ("goal", goal_amount),
-                        ("FIRE number", fire_number),
-                    ]:
-                        if tgt_val > latest_nw:
-                            yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
-                            if 0 < yrs_s < 60:
-                                savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
-                                savings_rate = max(0, savings_needed) / annual_income * 100
-                                st.caption(
-                                    f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
-                                    f"~{yrs_s:.0f} yrs at {cagr_s*100:.1f}% CAGR: "
-                                    f"save **{savings_rate:.0f}%** of income "
-                                    f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
-                                )
-                else:
-                    st.caption(
-                        f"Can't project a reliable savings rate: a starting net worth below "
-                        f"£{CAGR_MIN_START:,} or flat/negative historical growth would distort "
-                        f"the compound estimate."
-                    )
-            else:
-                st.caption("Add at least 2 personal data points to enable the savings rate projection.")
-        elif latest_nw is None:
-            st.caption("Add your net worth data above to enable this calculator.")
+    # Calculator inputs now live in the 🎯 Planning tab (so the sidebar holds only
+    # display + data controls). Their values are read here from session_state,
+    # with defaults matching the widgets, so earlier sections — the goal/FIRE
+    # progress and weeks-to-FI in the Progress tab — work regardless of render
+    # order. The Planning-tab widgets own these keys; we only read them here.
+    goal_amount    = st.session_state.get("goal_amount", 500_000)
+    fire_spending  = st.session_state.get("fire_spend", 30_000)
+    fire_number    = fire_spending * 25  # 4% safe withdrawal rate
+    retirement_age = st.session_state.get("ret_age", 65)
+    pension_income = st.session_state.get("pen_income", 20_000)
+    state_pension  = st.session_state.get("state_pension", 12_548)
+    annual_income  = st.session_state.get("annual_income", 50_000)
 
     st.divider()
 
@@ -1381,8 +1310,96 @@ with tab_prog:
 
 
 with tab_plan:
+    # ── Planning inputs & calculators (moved here from the sidebar) ──────────────
+    st.subheader("Goal, FIRE & savings calculators")
+    st.caption("These set the targets used by the planning tools below and the "
+               "goal/FIRE progress in the Progress tab.")
+    with st.expander("Wealth goal & FIRE number", expanded=True):
+        st.caption("Set net worth targets to track progress against.")
+        goal_amount = st.number_input(
+            "Target net worth (£)", 0, 10_000_000, 500_000, 10_000,
+            format="%d", key="goal_amount",
+            help="A custom net worth milestone you're working toward.",
+        )
+        fire_spending = st.number_input(
+            "Annual retirement spending (£)", 0, 500_000, 30_000, 1_000,
+            format="%d", key="fire_spend",
+            help="Used to compute your FIRE number (25× spending, 4% SWR).",
+        )
+        fire_number = fire_spending * 25  # 4% safe withdrawal rate
+        st.caption(f"FIRE number (25× spending, 4% SWR): **{_fmt(fire_number)}**")
+
+    with st.expander("Retirement income & pension pot", expanded=False):
+        retirement_age = st.number_input(
+            "Target retirement age", 50, 80, 65, 1, key="ret_age",
+        )
+        pension_income = st.number_input(
+            "Target annual pension income (£)", 0, 200_000, 20_000, 1_000,
+            format="%d", key="pen_income",
+        )
+        # 2026/27 full new State Pension: £12,548/yr (£241.30/wk, +4.8% triple lock)
+        state_pension = st.number_input(
+            "Expected state pension (£/yr)", 0, 20_000, 12_548, 100,
+            format="%d", key="state_pension",
+            help="Full new State Pension 2025/26: £11,973/yr; "
+                 "2026/27: £12,548/yr (£241.30/wk, +4.8% triple lock).",
+        )
+        if retirement_age and pension_income:
+            private_needed = max(0, pension_income - state_pension)
+            # Annuity rate: gilt-linked rates ~6.5% at age 65 in late 2024/25
+            annuity_rate = 0.065 + (retirement_age - 65) * 0.0025
+            pot_needed   = private_needed / max(annuity_rate, 0.02)
+            st.caption(
+                f"Private pension pot needed: **{_fmt(pot_needed)}** "
+                f"(for £{private_needed:,}/yr net of state pension, "
+                f"~{annuity_rate*100:.1f}% annuity rate at age {retirement_age}). "
+                f"Single-life level annuity assumption — drawdown can be more flexible."
+            )
+
+    with st.expander("Savings rate calculator", expanded=False):
+        st.caption("How much of your income do you need to save to hit each target? "
+                   "(Now works here — it couldn't compute in the old sidebar location.)")
+        annual_income = st.number_input(
+            "Annual gross income (£)", 0, 1_000_000, 50_000, 1_000,
+            format="%d", key="annual_income",
+        )
+        if annual_income > 0 and latest_nw is not None and latest_nw > 0:
+            sorted_pdf2 = personal_plot_df.sort_values("age") if personal_plot_df is not None else None
+            if sorted_pdf2 is not None and len(sorted_pdf2) >= 2:
+                fs  = float(sorted_pdf2.iloc[0]["net_worth"])
+                asp = float(sorted_pdf2.iloc[-1]["age"]) - float(sorted_pdf2.iloc[0]["age"])
+                cagr_s = _safe_cagr(fs, latest_nw, asp)
+                if cagr_s is not None and cagr_s > 0:
+                    for tgt_label, tgt_val in [
+                        ("goal", goal_amount),
+                        ("FIRE number", fire_number),
+                    ]:
+                        if tgt_val > latest_nw:
+                            yrs_s = math.log(tgt_val / latest_nw) / math.log(1 + cagr_s)
+                            if 0 < yrs_s < 60:
+                                savings_needed = (tgt_val - latest_nw * (1 + cagr_s) ** yrs_s) / yrs_s
+                                savings_rate = max(0, savings_needed) / annual_income * 100
+                                st.caption(
+                                    f"To reach **{tgt_label}** ({_fmt(tgt_val)}) in "
+                                    f"~{yrs_s:.0f} yrs at {cagr_s*100:.1f}% CAGR: "
+                                    f"save **{savings_rate:.0f}%** of income "
+                                    f"(~{_fmt(annual_income * savings_rate / 100)}/yr)."
+                                )
+                else:
+                    st.caption(
+                        f"Can't project a reliable savings rate: a starting net worth below "
+                        f"£{CAGR_MIN_START:,} or flat/negative historical growth would distort "
+                        f"the compound estimate."
+                    )
+            else:
+                st.caption("Add at least 2 personal data points to enable the savings rate projection.")
+        else:
+            st.caption("Add your net worth data in the sidebar to enable this calculator.")
+
+    st.divider()
+
     # ── Retirement income summary ────────────────────────────────────────────────
-    # Ties the sidebar inputs (state pension, retirement age, target income) together
+    # Ties the planning inputs (state pension, retirement age, target income) together
     # with the user's projected net worth at retirement and shows estimated annual income.
 
     if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:

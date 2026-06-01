@@ -6,6 +6,27 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.14] — June 2026 (Session 9, part 7)
+
+Sidebar declutter: the planning calculators moved into the 🎯 Planning tab.
+
+### Changed
+- The three calculators (**Wealth goal & FIRE number**, **Retirement income &
+  pension pot**, **Savings rate**) now sit at the top of the Planning tab
+  instead of the sidebar. The sidebar keeps display + benchmark + data controls.
+- Their input values are read in the early sections from `session_state` (with
+  widget-matching defaults), so the goal/FIRE progress and weeks-to-FI in the
+  Progress tab keep working regardless of tab render order. The widgets own the
+  keys; the early sections only read them — no Session-State write warning.
+
+### Fixed
+- The **savings-rate calculator now actually computes.** In the sidebar it read
+  `latest_nw`, which is always `None` at sidebar render time, so it permanently
+  showed "add your net worth data". In the Planning tab (where `latest_nw` is
+  set) it works as intended. 297 tests, green.
+
+---
+
 ## [2.13] — June 2026 (Session 9, part 6)
 
 Liabilities everywhere: share URL + a debt-paydown line on the gains chart.
