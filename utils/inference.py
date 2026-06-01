@@ -111,6 +111,53 @@ UK_CPI = {
     2024: 133.9, 2025: 138.4, 2026: 141.9,  # 2026 estimated (~2.5% on 2025 actual)
 }
 
+# ── Regional median household total wealth (ONS WAS Wave 8) ───────────────────
+# Median household total wealth (£) by region/country of GB, April 2020 to
+# March 2022. South East (£489,800) and North East (£179,900) match the ONS
+# bulletin's headline figures exactly, which cross-checks the full set.
+# IMPORTANT: ONS publishes regional medians but NOT regional medians *by age*,
+# so the region filter applies a single multiplicative factor (region median ÷
+# GB median) uniformly across the GB age-curve. That's a first-order
+# approximation — real regional premiums vary with age (e.g. larger for older
+# homeowners) — and is labelled as such in the UI and methodology.
+GB_MEDIAN_WEALTH = 293_700
+REGION_MEDIANS = {
+    "Great Britain":             293_700,
+    "North East":                179_900,
+    "North West":                222_400,
+    "Yorkshire and The Humber":  245_600,
+    "East Midlands":             261_000,
+    "West Midlands":             260_800,
+    "East of England":           400_700,
+    "London":                    244_800,
+    "South East":                489_800,
+    "South West":                347_700,
+    "Wales":                     266_900,
+    "Scotland":                  239_500,
+}
+
+
+def region_factor(region: str) -> float:
+    """Multiplicative wealth factor for a region vs the GB median (GB = 1.0)."""
+    return REGION_MEDIANS.get(region, GB_MEDIAN_WEALTH) / GB_MEDIAN_WEALTH
+
+
+def apply_region_factor(benchmark: pd.DataFrame, region: str) -> pd.DataFrame:
+    """Scale every benchmark value by the region's median-vs-GB factor.
+
+    Uniform multiplicative shift — preserves the P25/P50/P75 IQR shape (so the
+    log-normal percentile model is unchanged in spread, only re-levelled) while
+    moving the whole curve to the region's wealth level. Returns the input
+    unchanged for Great Britain (factor 1.0).
+    """
+    factor = region_factor(region)
+    if factor == 1.0:
+        return benchmark
+    out = benchmark.copy()
+    out["value"] = out["value"] * factor
+    return out
+
+
 DATA_YEAR = 2021  # mid-point of WAS Wave 8 (April 2020 to March 2022)
 REAL_BASE_YEAR = 2026
 

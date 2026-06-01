@@ -6,6 +6,34 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.16] — June 2026 (Session 9, part 9)
+
+Region filter — scale the benchmark to a region's wealth level.
+
+### Added
+- **Region selector** in the sidebar (Benchmark group). Scales the GB benchmark
+  to a region's median household total wealth (ONS WAS Wave 8, Apr 2020–Mar
+  2022). South East (£489,800) and North East (£179,900) match the ONS
+  bulletin's headline figures exactly, which cross-checks the full 11-region
+  table; London (£244,800) correctly sits below the GB median (£293,700). The
+  user's percentile becomes relative to the chosen region.
+- A region banner under the chart and a full regional table + method note in the
+  Methodology panel.
+- `REGION_MEDIANS`, `region_factor`, `apply_region_factor` in `utils/inference.py`.
+
+### Notes
+- ONS publishes regional medians but **not** regional medians *by age*, so the
+  filter applies a single multiplicative factor (region median ÷ GB median)
+  uniformly across the age-curve — a first-order approximation, clearly labelled.
+  It preserves the P25/P50/P75 IQR shape (log-normal sigma unchanged), only
+  re-levelling to the region.
+
+### Tests
+- +5 inference tests (region coverage + ONS-anchor match, factor ordering, value
+  scaling, GB identity, IQR-shape preservation). 302 tests, green.
+
+---
+
 ## [2.15] — June 2026 (Session 9, part 8)
 
 Scenario A/B compare.

@@ -59,7 +59,8 @@ charts/                   All chart builders (extraction complete — see __init
 utils/
   inference.py            All maths: interpolation, individual/gender conversion, CPI,
                           log-normal percentile model, tail derivation, asset class series,
-                          decile table, build_percentile_trajectory
+                          decile table, build_percentile_trajectory, region filter
+                          (REGION_MEDIANS / region_factor / apply_region_factor)
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
   uk_tax.py               All UK 2025/26 tax + demographic constants and helpers:
@@ -83,7 +84,8 @@ scripts/
   update_was_data.py      Rebuilds was_data.csv from ONS Wave 8 published medians
   update_asset_class_data.py  Rescales was_asset_class.csv to Wave 8 aggregates
 tests/
-  test_inference.py       21 tests on inference layer (incl. CPI-series sanity)
+  test_inference.py       26 tests on inference layer (incl. CPI-series sanity,
+                          region factor + ONS-anchor cross-check)
   test_data_loader.py     30 tests on CSV parsing (incl. Excel serial dates,
                           implausible-age warnings, optional liabilities column)
                           + URL encode/decode (incl. liabilities round-trip)
@@ -119,7 +121,7 @@ tests/
   test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (297 tests total, ~28s runtime)
+                          (302 tests total, ~28s runtime)
 .github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
@@ -174,6 +176,7 @@ sidebar block so goal/savings calculator widgets can safely reference them.
 | Gender (Individual only) | All / Male / Female — WAS-derived gender gap factors |
 | Include pension wealth | Adds/removes private pension component |
 | Real terms (2026 £) | CPI-adjusts benchmark AND personal data to 2026 prices |
+| Region | Scales benchmark to a region's median wealth (ONS WAS Wave 8; uniform factor) |
 | Wealth component | Total / Property / Pension / Financial / Physical — scales benchmark by WAS component shares |
 | Log scale | Log Y-axis; negative personal values hidden with warning |
 | Show P10 / P90 | Derived tails via log-normal model |
@@ -221,7 +224,7 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 297 tests, ~28s
+python -m pytest tests/ -v          # 302 tests, ~28s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
@@ -229,6 +232,15 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.16** (June 2026) — Session 9 (part 9): **Region filter**. A sidebar Region
+selector scales the GB benchmark to a region's median household total wealth (ONS
+WAS Wave 8; South East & North East match the bulletin headline figures exactly,
+cross-checking the full 11-region table; London sits below the GB median). ONS
+doesn't publish regional medians by age, so it's a uniform multiplicative factor
+(region median ÷ GB median) across the age-curve — preserves the P25/P50/P75
+shape, only re-levels — clearly labelled as an approximation. `REGION_MEDIANS` /
+`region_factor` / `apply_region_factor` in utils/inference.py. +5 tests, 302 green.
 
 **v2.15** (June 2026) — Session 9 (part 8): **Scenario A/B compare**. A
 "Plan A vs Plan B" projection at the top of the Planning tab — two parameter

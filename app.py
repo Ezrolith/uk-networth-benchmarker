@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.15)
+UK Net Worth Benchmarker (v2.16)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -38,6 +38,7 @@ from utils.inference import (
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
     build_asset_class_series, build_decile_table, apply_component_filter,
+    apply_region_factor, region_factor, REGION_MEDIANS, GB_MEDIAN_WEALTH,
     DATA_YEAR, REAL_BASE_YEAR, UK_CPI,
 )
 # Helpers and chart builders being migrated out of app.py into charts/
@@ -79,7 +80,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.15"
+APP_VERSION = "v2.16"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -337,6 +338,12 @@ with st.sidebar:
     )
     include_pension  = st.toggle("Include pension wealth", value=True)
     real_terms       = st.toggle(f"Real terms ({REAL_BASE_YEAR} £)", value=False)
+    region = st.selectbox(
+        "Region", list(REGION_MEDIANS.keys()), index=0,
+        help="Scales the GB benchmark to a region's median household wealth "
+             "(ONS WAS Wave 8). Approximate — a uniform shift across all ages, "
+             "since ONS doesn't publish regional medians by age.",
+    )
     gender = "All"
     if basis == "Individual":
         gender = st.radio("Gender adjustment", ["All", "Male", "Female"],
@@ -480,6 +487,8 @@ latest_age: float | None = None
 benchmark = _build_benchmark(basis, include_pension, real_terms, gender)
 if wealth_component != "Total":
     benchmark = apply_component_filter(benchmark, wealth_component, _load_asset_classes())
+if region != "Great Britain":
+    benchmark = apply_region_factor(benchmark, region)
 
 def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
     if df is None or len(df) == 0:
@@ -804,6 +813,17 @@ fig = build_main_figure(
     colours=COLOURS,
 )
 st.plotly_chart(fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+if region != "Great Britain":
+    _rf = region_factor(region)
+    st.info(
+        f"📍 Benchmark scaled to **{region}** — ×**{_rf:.2f}** vs the GB median "
+        f"(ONS WAS Wave 8: {region} median household wealth {_fmt(REGION_MEDIANS[region])} "
+        f"vs GB {_fmt(GB_MEDIAN_WEALTH)}). This is a **uniform shift across all ages**, an "
+        f"approximation since ONS doesn't publish regional medians by age. Your percentile is "
+        f"now relative to {region}.",
+        icon="📍",
+    )
 
 if wealth_component != "Total":
     st.info(
@@ -2889,25 +2909,40 @@ of survival** at your planning horizon for a comfortable cushion.
 All personal data lives in browser session state or URL query params only.
 No data is transmitted to or stored on any server.
 
-### Regional variation
+### Regional variation — the Region filter
 
-WAS publishes some regional figures but this tool currently shows GB-wide figures only.
-Wealth varies substantially by region. The ONS WAS Wave 8 bulletin (April 2020 to March
-2022) published these median **household total wealth** anchors:
+Wealth varies substantially by region. Use the **Region** selector in the sidebar to
+scale the benchmark to a region's median household total wealth. The figures are ONS
+WAS Wave 8 (April 2020 to March 2022) regional medians — South East and North East
+match the ONS bulletin's headline numbers exactly, which cross-checks the full set:
 
 | Region | Median household total wealth | vs GB median |
 |---|---|---|
-| South East (wealthiest region) | £489,800 | +67% |
+| South East | £489,800 | +67% |
+| East of England | £400,700 | +36% |
+| South West | £347,700 | +18% |
 | Great Britain | £293,700 | — |
-| North East (least wealthy) | £179,900 | −39% |
+| Wales | £266,900 | −9% |
+| East Midlands | £261,000 | −11% |
+| West Midlands | £260,800 | −11% |
+| Yorkshire and The Humber | £245,600 | −16% |
+| London | £244,800 | −17% |
+| Scotland | £239,500 | −18% |
+| North West | £222,400 | −24% |
+| North East | £179,900 | −39% |
 
 Counter-intuitively, **London's median sits *below* the GB median** — high house prices
 don't make the typical household wealthy when over half of London households rent and the
-population skews younger. (London's *mean* is the highest in the country, pulled up by a
-wealthy tail, but the *median* household is not.) ONS also flags extra uncertainty on the
-Round 8 London estimate (pandemic non-response), so we don't quote a precise London figure
-here. ONS did not publish a full per-region median table for Wave 8; a region filter
-remains on the roadmap pending those tables.
+population skews younger (its *mean* is the highest in the country, pulled up by a wealthy
+tail; the *median* household is not). ONS also flags extra uncertainty on the Round 8
+London estimate (pandemic non-response).
+
+**How the filter works (and its limit).** ONS publishes regional medians but *not* regional
+medians **by age**, so the filter applies a single multiplicative factor (region median ÷
+GB median) uniformly across the whole age-curve. That re-levels the benchmark to the region
+while preserving the P25/P50/P75 shape, but it's a first-order approximation — real regional
+premiums vary with age (typically larger for older homeowners). Treat a region-adjusted
+percentile as indicative.
 
 ### Known limitations
 

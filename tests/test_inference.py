@@ -26,6 +26,10 @@ from utils.inference import (  # noqa: E402
     build_percentile_trajectory,
     build_decile_table,
     apply_component_filter,
+    apply_region_factor,
+    region_factor,
+    REGION_MEDIANS,
+    GB_MEDIAN_WEALTH,
     UK_CPI,
 )
 
@@ -155,6 +159,59 @@ def test_cpi_table_is_clean_2015_base_series():
     for earlier, later in zip(years, years[1:]):
         assert UK_CPI[later] >= UK_CPI[earlier], f"UK_CPI fell from {earlier} to {later}"
     assert UK_CPI[2020] > UK_CPI[2019], "2020 must not duplicate 2019 (stalled-CPI bug)"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Region filter
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_region_medians_cover_all_gb_regions_and_match_ons_anchors():
+    expected = {
+        "Great Britain", "North East", "North West", "Yorkshire and The Humber",
+        "East Midlands", "West Midlands", "East of England", "London",
+        "South East", "South West", "Wales", "Scotland",
+    }
+    assert set(REGION_MEDIANS) == expected
+    # South East and North East match the ONS bulletin headline figures exactly.
+    assert REGION_MEDIANS["South East"] == 489_800
+    assert REGION_MEDIANS["North East"] == 179_900
+    assert REGION_MEDIANS["Great Britain"] == GB_MEDIAN_WEALTH == 293_700
+
+
+def test_region_factor_gb_is_one_and_extremes_ordered():
+    assert region_factor("Great Britain") == 1.0
+    assert region_factor("South East") > 1.0   # wealthiest region
+    assert region_factor("North East") < 1.0   # least wealthy
+    assert region_factor("London") < 1.0       # below the GB median
+    assert region_factor("Narnia") == 1.0      # unknown region falls back to GB
+
+
+def test_apply_region_factor_scales_values(benchmark):
+    factor = region_factor("South East")
+    scaled = apply_region_factor(benchmark, "South East")
+    sample = benchmark[(benchmark["age"] == 40) & (benchmark["percentile"] == "p50")]["value"].iloc[0]
+    scaled_sample = scaled[(scaled["age"] == 40) & (scaled["percentile"] == "p50")]["value"].iloc[0]
+    assert scaled_sample == pytest.approx(sample * factor)
+
+
+def test_apply_region_factor_gb_is_identity(benchmark):
+    out = apply_region_factor(benchmark, "Great Britain")
+    pd.testing.assert_series_equal(out["value"], benchmark["value"])
+
+
+def test_apply_region_factor_preserves_iqr_shape(benchmark):
+    """A uniform scale preserves P75/P25 (so the log-normal sigma is unchanged)."""
+    scaled = apply_region_factor(benchmark, "London")
+
+    def _v(df, age, p):
+        sub = df[(df["age"] == age) & (df["percentile"] == p)]["value"]
+        return sub.iloc[0] if len(sub) else None
+
+    for age in (30, 50, 70):
+        b25, b75 = _v(benchmark, age, "p25"), _v(benchmark, age, "p75")
+        s25, s75 = _v(scaled, age, "p25"), _v(scaled, age, "p75")
+        if b25 and b75 and s25 and s75:
+            assert (s75 / s25) == pytest.approx(b75 / b25)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
