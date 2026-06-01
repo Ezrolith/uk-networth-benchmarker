@@ -126,7 +126,11 @@ REVIEW_LOG.md             Session-by-session audit notes
 
 ## Key architectural decisions
 
-**Single-file app** — all UI in `app.py`, all maths in `utils/`. No separate pages or routes.
+**Single-file app** — all UI in `app.py`, all maths in `utils/`. No separate pages or
+routes. The main content area is organised into five `st.tabs` (the benchmark chart +
+headline metrics render above the tabs; methodology renders as a full-width panel below
+them). Sections still execute top-to-bottom — tabs are display grouping only, so they read
+globals from the head and define their own locals.
 
 **Caching** — `@st.cache_data` on all heavy computations with primitive-type keys:
 `_build_benchmark(basis, include_pension, real_terms, gender)`. DataFrames never used as cache keys.
@@ -223,6 +227,15 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.10** (June 2026) — Session 9 (part 3): **information architecture**. The
+benchmark chart now renders first (under the headline metrics), and the analysis
+sections are grouped into five `st.tabs` (📊 Where you stand · 📈 Your progress ·
+🎯 Planning & projections · 🏛️ Tax & estate · 📋 Share & export), with methodology
+as a reference panel below. Fixed the headline metric grid (`st.columns(5)` so
+"Gap to median" gets its own column) and added a single-data-point hint. Sidebar
+calculators deliberately left in place (they feed the metric row above the tabs —
+variable-ordering risk). 288 tests green. See CHANGELOG.md.
 
 **v2.9** (June 2026) — Session 9 (part 2): **retirement income realism**. New
 `income_tax_2025_26()` + `tax_free_lump_sum()` in utils/uk_tax.py. The

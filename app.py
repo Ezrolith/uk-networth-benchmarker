@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.9)
+UK Net Worth Benchmarker (v2.10)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -79,7 +79,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.9"
+APP_VERSION = "v2.10"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -656,7 +656,7 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         delta_val = latest_nw - float(sorted_pdf.iloc[-2]["net_worth"])
         delta_str = _fmt_delta(delta_val)
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Your latest age", f"{latest_age:.1f}")
     with col2:
@@ -693,16 +693,18 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         ab = benchmark[benchmark["age"] == min(round(latest_age), 85)]
         p50v = float(ab[ab["percentile"] == "p50"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p50"]) else None
         p75v = float(ab[ab["percentile"] == "p75"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p75"]) else None
-        if p50v and p75v:
+        if p50v and p75v and p50v > 0:
             # Age-adjusted relative wealth: net_worth / benchmark_median (index = 100 at median)
-            if p50v > 0:
-                rel_wealth = latest_nw / p50v * 100
-                st.metric(
-                    "Rel. wealth index",
-                    f"{rel_wealth:.0f}",
-                    help="Your net worth as a % of the benchmark median at your age. "
-                         "100 = exactly at median. Age-adjusted so it's comparable across ages.",
-                )
+            rel_wealth = latest_nw / p50v * 100
+            st.metric(
+                "Rel. wealth index",
+                f"{rel_wealth:.0f}",
+                help="Your net worth as a % of the benchmark median at your age. "
+                     "100 = exactly at median. Age-adjusted so it's comparable across ages.",
+            )
+    with col5:
+        # Own column so the 4-up metric grid stays aligned (was stacked under col4).
+        if p50v and p75v:
             if latest_nw < p50v:
                 st.metric("Gap to median", _fmt(p50v - latest_nw))
             elif latest_nw < p75v:
@@ -802,1081 +804,6 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                 help=f"£{total_paid:,.0f} contributed; £{fv - total_paid:,.0f} from compound returns."
             )
 
-# ── Weeks to FI ──────────────────────────────────────────────────────────────
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    # Use fire_number from sidebar goal calculator (fallback to 25x £30k)
-    try:
-        fi_target = fire_number
-    except NameError:
-        fi_target = 750_000
-
-    if fi_target > 0:
-        # At what weekly spending rate is current net worth ≥ 25× spending?
-        # If net worth ≥ fire_number: already FI
-        # Weeks of expenses covered by current net worth = nw / (annual_spending/52)
-        # Or: what spending rate would make today's nw = 25× spending?
-        implied_annual = latest_nw / 25
-        implied_weekly = implied_annual / 52
-        fi_gap = max(0, fi_target - latest_nw)
-
-        fi_cols = st.columns(3)
-        with fi_cols[0]:
-            if latest_nw >= fi_target:
-                st.metric("Financial independence", "✅ Achieved",
-                          help=f"Net worth ≥ FIRE number ({_fmt(fi_target)}).")
-            else:
-                st.metric("FIRE gap", _fmt(fi_gap),
-                          help=f"Amount needed to reach FIRE number ({_fmt(fi_target)}).")
-        with fi_cols[1]:
-            st.metric("Implied sustainable spending",
-                      f"{_fmt(implied_weekly)}/wk",
-                      help=f"£{implied_annual:,.0f}/yr — the spending level at which your net worth = 25× (4% SWR).")
-        with fi_cols[2]:
-            fi_pct = min(latest_nw / fi_target * 100, 100) if fi_target > 0 else 0
-            st.metric("FI progress", f"{fi_pct:.0f}%",
-                      help=f"{fi_pct:.1f}% of the way to your FIRE number.")
-
-# Partner summary metric
-if partner_plot_df is not None and len(partner_plot_df) > 0:
-    ps = partner_plot_df.sort_values("age")
-    partner_latest_age = float(ps.iloc[-1]["age"])
-    p_nw = float(ps.iloc[-1]["net_worth"])
-    p_pct = estimate_exact_percentile(p_nw, round(partner_latest_age), benchmark)
-    st.success(
-        f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}** · "
-        f"est. **~{p_pct:.0f}th percentile**" if p_pct else
-        f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}**"
-    )
-
-    # Combined household callout + head-to-head leaderboard
-    if personal_plot_df is not None and latest_nw is not None:
-        combined = latest_nw + p_nw
-        st.info(f"Combined household net worth: **{_fmt(combined)}**")
-
-        # Head-to-head at same interpolated benchmark age
-        you_pct = estimate_exact_percentile(latest_nw, round(latest_age or 0), benchmark)
-        if you_pct and p_pct:
-            h2h_col1, h2h_col2, h2h_col3 = st.columns(3)
-            ahead_label = "You" if you_pct >= p_pct else "Partner"
-            ahead_by    = abs(you_pct - p_pct)
-            with h2h_col1:
-                st.metric("You — percentile", f"~{you_pct:.0f}th")
-            with h2h_col2:
-                st.metric("Partner — percentile", f"~{p_pct:.0f}th")
-            with h2h_col3:
-                st.metric("Ahead by", f"{ahead_by:.0f} pct pts",
-                          help=f"{ahead_label} is ahead by {ahead_by:.0f} percentile points "
-                               f"(age-adjusted comparison).")
-
-# ── Goal / FIRE output ────────────────────────────────────────────────────────
-
-if personal_plot_df is not None and latest_nw is not None:
-    sorted_pdf = personal_plot_df.sort_values("age")
-    first_nw   = float(sorted_pdf.iloc[0]["net_worth"])
-    age_span   = latest_age - float(sorted_pdf.iloc[0]["age"])
-
-    for target_label, target_val in [
-        ("your goal", goal_amount),
-        ("FIRE number", fire_number),
-    ]:
-        if target_val > 0 and latest_nw < target_val:
-            gap = target_val - latest_nw
-            pct_there = min(latest_nw / target_val * 100, 100)
-            cols = st.columns([2, 1])
-            with cols[0]:
-                st.caption(f"Progress toward {target_label} ({_fmt(target_val)}): {pct_there:.0f}%")
-                st.progress(pct_there / 100)
-            with cols[1]:
-                if age_span > 0.5 and latest_nw > 0:
-                    cagr_cur = _safe_cagr(first_nw, latest_nw, age_span)
-                    if cagr_cur is not None and cagr_cur > 0.001:
-                        yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
-                        st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
-                                  help=f"At your current {cagr_cur*100:.1f}% CAGR.")
-                    else:
-                        avg_gain = (latest_nw - first_nw) / age_span
-                        if avg_gain > 0:
-                            yrs = (target_val - latest_nw) / avg_gain
-                            if 0 < yrs < 60:
-                                st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
-                                          help=f"At your average gain of {_fmt(avg_gain)}/yr. "
-                                               f"(CAGR not shown for small or zero starting balances.)")
-
-# Log scale warning
-if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
-    st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
-
-# ── Retirement income summary ────────────────────────────────────────────────
-# Ties the sidebar inputs (state pension, retirement age, target income) together
-# with the user's projected net worth at retirement and shows estimated annual income.
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    with st.expander("Retirement income forecast", expanded=False):
-        st.caption(
-            "Brings together your projected net worth at retirement with state pension "
-            "and shows estimated annual income from three sources. "
-            "All figures in **today's money (real terms)**. Indicative only — not advice."
-        )
-        if not real_terms:
-            st.caption(
-                "⚠️ The benchmark and percentile above are currently shown in **nominal** terms "
-                "(the *Real terms* sidebar toggle is off), but this projection works in today's "
-                "money. Turn on **Real terms** in the sidebar for consistent units."
-            )
-
-        ri_col1, ri_col2, ri_col3 = st.columns(3)
-        with ri_col1:
-            ri_retire_age = st.number_input("Retirement age",
-                min_value=max(int(latest_age) + 1, 50), max_value=80,
-                value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
-                step=1, key="ri_retire_age",
-                help="Defaults to your pension calculator age in the sidebar.")
-        with ri_col2:
-            ri_real_return = st.number_input("Assumed real return on NW (%)",
-                0.0, 12.0, 4.0, 0.25, key="ri_real_return",
-                help="Annual return above inflation. Long-run UK equity has been ~5% real; a balanced 60/40 portfolio nearer 3–4%.")
-        with ri_col3:
-            ri_pension_share = st.slider("% of net worth in pension wrappers", 0, 100,
-                int(personal_asset_split["Pension"] * 100) if personal_asset_split else 30,
-                step=5, key="ri_pension_share",
-                help="Used to split your projected NW into the pension portion (eligible for annuity) "
-                     "vs other wealth (drawn down at 4%).")
-
-        # Project NW to retirement age using the assumed real return
-        _ri_years = ri_retire_age - latest_age
-        _ri_nw_at_retire = latest_nw * (1 + ri_real_return / 100) ** _ri_years
-
-        # Split into pension / other
-        _ri_pension_pot = _ri_nw_at_retire * (ri_pension_share / 100)
-        _ri_other_wealth = _ri_nw_at_retire - _ri_pension_pot
-
-        # 25% tax-free pension commencement lump sum (PCLS), capped at the Lump
-        # Sum Allowance. The remaining 75% is what gets annuitised.
-        _ri_pcls       = tax_free_lump_sum(_ri_pension_pot)
-        _ri_annuitised = _ri_pension_pot - _ri_pcls
-
-        # Annuity rate at retirement age (gilt-linked single-life, recent UK levels)
-        _ri_ann_rate = 0.065 + (ri_retire_age - 65) * 0.0025
-        _ri_annuity = _ri_annuitised * max(_ri_ann_rate, 0.02)
-
-        # 4% draw from non-pension wealth (ISAs, GIAs, property income proxy)
-        _ri_drawdown = _ri_other_wealth * 0.04
-
-        # State pension (assume claimed from age 67+; tapered if user retires earlier)
-        _ri_state_pen = state_pension if ri_retire_age >= 67 else 0
-
-        _ri_total = _ri_annuity + _ri_drawdown + _ri_state_pen
-
-        # Income tax (rUK 2025/26): the annuity and state pension are taxable
-        # income; the 4% draw is assumed to come from ISAs/accessible wealth
-        # (tax-free) and the 25% PCLS is tax-free. Net = pre-tax total − tax.
-        _ri_taxable = _ri_annuity + _ri_state_pen
-        _ri_tax     = income_tax_2025_26(_ri_taxable)
-        _ri_net     = _ri_total - _ri_tax
-
-        st.markdown(
-            f"#### Projected income at age {ri_retire_age}  ·  "
-            f"net worth ≈ {_fmt(_ri_nw_at_retire)}"
-        )
-        inc_c1, inc_c2, inc_c3, inc_c4 = st.columns(4)
-        with inc_c1:
-            st.metric("Annuity from pension", f"{_fmt(_ri_annuity)}/yr",
-                      help=f"From {_fmt(_ri_annuitised)} — the 75% left after the 25% tax-free "
-                           f"lump sum — at a {_ri_ann_rate*100:.1f}% annuity rate. Taxable income; "
-                           "drawdown can be more flexible but rates vary with markets.")
-        with inc_c2:
-            st.metric("4% draw from other wealth", f"{_fmt(_ri_drawdown)}/yr",
-                      help=f"From non-pension wealth {_fmt(_ri_other_wealth)} at 4% safe-withdrawal "
-                           "rate. Assumed tax-free (ISA / accessible wrappers).")
-        with inc_c3:
-            if _ri_state_pen > 0:
-                st.metric("State pension", f"{_fmt(_ri_state_pen)}/yr",
-                          help="From state pension age (currently 66, rising to 67 by 2028). Taxable.")
-            else:
-                st.metric("State pension", "Not yet eligible",
-                          help=f"State pension age is 66–67. You'd retire {67 - ri_retire_age:.0f}+ years before that.")
-        with inc_c4:
-            st.metric("Total income (pre-tax)", f"{_fmt(_ri_total)}/yr",
-                      delta=f"~{_fmt(_ri_total/52)}/week",
-                      help="Sum of the three sources above, before income tax.")
-
-        # Net-of-tax + tax-free lump sum — the figures you can actually spend.
-        net_c1, net_c2, net_c3 = st.columns(3)
-        with net_c1:
-            st.metric("Tax-free lump sum (one-off)", _fmt(_ri_pcls),
-                      help="25% of your pension pot, taken tax-free at retirement (capped at the "
-                           f"£{PENSION_LSA:,} Lump Sum Allowance). A one-off, not annual income.")
-        with net_c2:
-            st.metric("Income tax", f"−{_fmt(_ri_tax)}/yr",
-                      help=f"rUK 2025/26 income tax on the taxable {_fmt(_ri_taxable)}/yr "
-                           "(annuity + state pension). The 4% ISA draw and the 25% lump sum are "
-                           "tax-free. Scotland differs.")
-        with net_c3:
-            st.metric("Net annual income", f"{_fmt(_ri_net)}/yr",
-                      delta=f"~{_fmt(_ri_net/52)}/week",
-                      help="Annual income after income tax — what you can actually spend.")
-
-        # Compare to target
-        try:
-            _target = float(pension_income) if pension_income else 0
-        except (NameError, ValueError):
-            _target = 0
-        if _target > 0:
-            _pct = min(_ri_net / _target * 100, 999)
-            _delta = _ri_net - _target
-            if _delta >= 0:
-                st.success(
-                    f"Your **net** income would exceed your target of {_fmt(_target)}/yr by "
-                    f"**{_fmt(_delta)}/yr** ({_pct:.0f}% of target, after income tax).",
-                    icon="✅",
-                )
-            else:
-                st.warning(
-                    f"Your **net** income would fall **{_fmt(abs(_delta))}/yr short** of your target "
-                    f"of {_fmt(_target)}/yr ({_pct:.0f}% of target, after income tax). "
-                    "Consider saving more, working longer, or accepting a lower income.",
-                    icon="⚠️",
-                )
-
-        st.caption(
-            "**Notes.** Real return assumed constant — actual returns vary year to year. "
-            "Annuity figures are level (no inflation linking) using current UK gilt-linked rates. "
-            "Drawdown uses the 4% rule (Trinity Study) — for a 30-year retirement; longer horizons "
-            "or higher equity exposure may require lower rates. Income tax is the rUK 2025/26 "
-            "estimate (England/Wales/NI — Scotland differs) and assumes the 4% draw comes from "
-            "ISAs/tax-free wrappers."
-        )
-
-# ── ISA bridge calculator (early retirement before pension access) ────────────
-# Many UK FIRE-planners face a gap: they can stop work at e.g. 50 but private
-# pension access is locked until 57 (rising to 58 in 2028). The "bridge" is
-# how much accessible (ISA / GIA) wealth they need to cover spending from FIRE
-# age until pension access age.
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    with st.expander("ISA / accessible-wealth bridge (for early retirement)"):
-        st.caption(
-            "If you want to retire **before pension access age** (currently 57, rising to 58 in 2028, "
-            "and 10 years below state pension age thereafter), you need enough **accessible** wealth "
-            "(ISA, GIA, savings — not pension) to cover spending until the pension unlocks. "
-            "This calculator sizes that bridge fund."
-        )
-        if not real_terms:
-            st.caption(
-                "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
-                "toggle is off); the figures here are in today's money. Turn on **Real terms** "
-                "for consistent units."
-            )
-
-        ib_col1, ib_col2, ib_col3 = st.columns(3)
-        with ib_col1:
-            ib_fire_age = st.number_input(
-                "FIRE age (stop working)", 35, 65,
-                value=min(int(latest_age) + 15 if latest_age else 50, 60),
-                step=1, key="ib_fire_age",
-                help="Age you intend to stop drawing employment income.",
-            )
-        with ib_col2:
-            ib_pension_age = st.number_input(
-                "Pension access age", 55, 70, 57, 1, key="ib_pension_age",
-                help="Earliest you can access private pension. 55 historically; "
-                     "57 from April 2028; will rise with state pension age (10-yr gap).",
-            )
-        with ib_col3:
-            ib_annual_spend = st.number_input(
-                "Annual spend (£, real terms)", 5_000, 500_000,
-                int(fire_spending) if fire_spending else 30_000, 1_000,
-                format="%d", key="ib_spend",
-                help="What you'll spend each year during the bridge period, in today's money.",
-            )
-
-        bridge_years = max(0, ib_pension_age - ib_fire_age)
-
-        if bridge_years == 0:
-            st.success(
-                "No bridge needed — your FIRE age is at or after pension access age. "
-                "You can draw straight from pension wrappers.",
-                icon="✅",
-            )
-        else:
-            # Bridge calculation: use 4% SWR for the bridge period too.
-            # For short horizons (< 10 yrs) it's conservative; longer horizons
-            # may need higher SWR. The 25x multiplier comes from 1/0.04.
-            #
-            # Two approaches:
-            # 1. Simple: bridge_years × annual_spend (no growth, full liquidation)
-            # 2. SWR-based: spend × 25 × (bridge_years / 30)  [partial Trinity]
-            #
-            # For honesty, show both. The SWR method assumes the bridge fund
-            # also earns ~4% real return during the bridge years.
-            bridge_simple = bridge_years * ib_annual_spend
-            # At constant 4% real return, FV-of-annuity factor for `bridge_years`:
-            #   PV = spend × (1 - (1+r)^-n) / r, with r=0.04
-            r = 0.04
-            pv_factor = (1 - (1 + r) ** -bridge_years) / r if r > 0 else bridge_years
-            bridge_swr = ib_annual_spend * pv_factor
-
-            ib_m1, ib_m2, ib_m3 = st.columns(3)
-            with ib_m1:
-                st.metric(
-                    "Bridge years",
-                    f"{bridge_years}",
-                    help=f"From FIRE age {ib_fire_age} to pension access age {ib_pension_age}.",
-                )
-            with ib_m2:
-                st.metric(
-                    "ISA pot needed (conservative)",
-                    _fmt(bridge_simple),
-                    help="Years × spend. Assumes no growth on the bridge fund "
-                         "(it all just runs down).",
-                )
-            with ib_m3:
-                st.metric(
-                    "ISA pot needed (4% real)",
-                    _fmt(bridge_swr),
-                    delta=_fmt(bridge_swr - bridge_simple),
-                    delta_color="inverse",
-                    help="PV-of-annuity at 4% real return. The bridge fund earns "
-                         "while it's being drawn down, so a smaller pot is needed.",
-                )
-
-            # ETA to bridge target (using latest_nw + CAGR if available)
-            sorted_pdf_for_eta = personal_plot_df.sort_values("age")
-            if len(sorted_pdf_for_eta) >= 2:
-                _fs = float(sorted_pdf_for_eta.iloc[0]["net_worth"])
-                _asp = float(sorted_pdf_for_eta.iloc[-1]["age"]) - float(sorted_pdf_for_eta.iloc[0]["age"])
-                _cagr = _safe_cagr(_fs, latest_nw, _asp)
-                if _cagr and _cagr > 0:
-                    # Years to grow latest_nw → bridge_swr at current CAGR
-                    if latest_nw < bridge_swr:
-                        yrs_to_bridge = math.log(bridge_swr / latest_nw) / math.log(1 + _cagr)
-                        eta_age = latest_age + yrs_to_bridge
-                        gap_yrs = ib_fire_age - latest_age
-                        if eta_age <= ib_fire_age:
-                            st.success(
-                                f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
-                                f"by age {eta_age:.0f} — **{gap_yrs - yrs_to_bridge:.0f} years of buffer** "
-                                f"before FIRE age {ib_fire_age}.",
-                                icon="✅",
-                            )
-                        else:
-                            shortfall_yrs = eta_age - ib_fire_age
-                            st.warning(
-                                f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
-                                f"by age {eta_age:.0f} — **{shortfall_yrs:.1f} years past FIRE age {ib_fire_age}**. "
-                                "Consider extending the timeline, lowering spend, or increasing savings.",
-                                icon="⚠️",
-                            )
-                    else:
-                        st.success(
-                            f"Your current net worth of {_fmt(latest_nw)} already exceeds the bridge "
-                            f"target of {_fmt(bridge_swr)}. Provided enough of it is in accessible "
-                            "wrappers (ISA / GIA, not pension), you're set.",
-                            icon="✅",
-                        )
-
-            # ── Second leg: pension access age → state pension age ──────────────
-            # Pension wealth is now accessible, but the state pension hasn't
-            # started, so you still self-fund the full spend for these years.
-            leg2_years = max(0, STATE_PENSION_AGE - ib_pension_age)
-            if leg2_years > 0:
-                leg2_factor = (1 - (1 + r) ** -leg2_years) / r if r > 0 else leg2_years
-                leg2_pot = ib_annual_spend * leg2_factor
-                st.markdown(
-                    f"**Second leg — pension access ({ib_pension_age}) to state pension "
-                    f"({STATE_PENSION_AGE})**"
-                )
-                l2c1, l2c2, l2c3 = st.columns(3)
-                with l2c1:
-                    st.metric("Leg-2 years", f"{leg2_years}",
-                              help="Years drawing your own pot before the state pension starts.")
-                with l2c2:
-                    st.metric("Leg-2 pot (4% real)", _fmt(leg2_pot),
-                              help="Self-funded from pension + accessible wealth, since the state "
-                                   "pension isn't in payment yet. PV-of-annuity at 4% real.")
-                with l2c3:
-                    st.metric("Both legs combined", _fmt(bridge_swr + leg2_pot),
-                              help=f"Leg 1 (accessible-only, to age {ib_pension_age}) + Leg 2 "
-                                   f"(to state pension age {STATE_PENSION_AGE}). From the state "
-                                   "pension age onward, the state pension reduces your annual need.")
-
-            st.caption(
-                "**Assumes 4% real return during drawdown.** Leg 1 (to pension access age) must be "
-                "in accessible wrappers (ISA / GIA, not pension) — this tool doesn't verify that, so "
-                "check your ISA + GIA balance covers it. Leg 2 (pension access to state pension age) "
-                "can also draw on pension. From state pension age, the state pension reduces the "
-                "annual need."
-            )
-
-
-# ── Drawdown / pot longevity simulator ───────────────────────────────────────
-# How long does your pot last in retirement under various withdrawal rates?
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    with st.expander("Retirement drawdown — pot longevity", expanded=False):
-        st.caption(
-            "How long will your money last in retirement? Simulates drawdown from a starting "
-            "pot, with annual withdrawals inflation-adjusted, against a chosen real return. "
-            "Shows the age your pot is depleted — and how that compares to UK life expectancy. "
-            "**All figures in today's money (real terms).** Indicative only — not advice."
-        )
-        if not real_terms:
-            st.caption(
-                "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
-                "toggle is off); the figures here are in today's money. Turn on **Real terms** "
-                "for consistent units."
-            )
-
-        dd_col1, dd_col2, dd_col3, dd_col4 = st.columns(4)
-        with dd_col1:
-            dd_start_age = st.number_input("Retirement age",
-                min_value=max(int(latest_age) + 1, 50), max_value=80,
-                value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
-                step=1, key="dd_start_age")
-        with dd_col2:
-            # Project NW to start age at user-chosen real return
-            _dd_default_pot = int(latest_nw * 1.04 ** max(0, dd_start_age - latest_age))
-            dd_start_pot = st.number_input("Starting pot at retirement (£)",
-                min_value=10_000, max_value=20_000_000,
-                value=max(10_000, _dd_default_pot), step=10_000, format="%d", key="dd_start_pot",
-                help="Pre-filled with your latest NW projected at 4% real return to your retirement age. "
-                     "Edit if you want a different starting amount.")
-        with dd_col3:
-            dd_annual_spend = st.number_input("Annual spend (£, today's money)",
-                min_value=5_000, max_value=500_000,
-                value=int(fire_spending) if fire_spending else 30_000, step=1_000, format="%d", key="dd_spend",
-                help="Annual withdrawal in today's money. Will be inflation-adjusted each year.")
-        with dd_col4:
-            dd_real_return = st.number_input("Real return (%)",
-                -2.0, 10.0, 4.0, 0.25, key="dd_return",
-                help="Return above inflation on the pot during retirement. "
-                     "Common assumptions: 3% for cautious, 4% balanced, 5% equity-heavy.")
-
-        # Optional: include state pension reducing the withdrawal need
-        dd_include_sp = st.checkbox("Include state pension (reduces drawdown need)",
-            value=True, key="dd_sp",
-            help="If checked, state pension income (from age 66/67) is subtracted from the annual "
-                 "spend, so less is drawn from the pot once you qualify.")
-        if dd_include_sp:
-            st.caption(
-                "State pension is subtracted £-for-£ from the annual spend — a simplification that "
-                "assumes it falls within your Personal Allowance and isn't itself taxed. Drawdown "
-                "figures are pre-tax; tax on withdrawals depends on your wrapper mix (ISA "
-                "withdrawals are tax-free, pension income is taxable above the allowance)."
-            )
-
-        # Simulate
-        _dd_pot = float(dd_start_pot)
-        _dd_r = dd_real_return / 100
-        _dd_ages = [dd_start_age]
-        _dd_pots = [_dd_pot]
-        _dd_runout_age = None
-        _max_sim_age = 100
-        _state_pen_age = STATE_PENSION_AGE  # imported from utils/uk_tax.py
-
-        for age in range(dd_start_age, _max_sim_age):
-            # Annual withdrawal in real terms (already adjusted because we work in real £)
-            # Reduce by state pension from state pension age onward, if opted in
-            sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
-            net_withdrawal = max(0, dd_annual_spend - sp)
-            # End-of-year balance: grow first, then withdraw (mid-year would be more accurate
-            # but ordering doesn't change pot longevity much for small SWRs)
-            _dd_pot = _dd_pot * (1 + _dd_r) - net_withdrawal
-            _dd_ages.append(age + 1)
-            _dd_pots.append(max(0, _dd_pot))
-            if _dd_pot <= 0 and _dd_runout_age is None:
-                _dd_runout_age = age + 1
-                break
-
-        # Headline metric row
-        dd_m1, dd_m2, dd_m3, dd_m4 = st.columns(4)
-        with dd_m1:
-            st.metric("Years in retirement covered",
-                      f"{(_dd_runout_age - dd_start_age) if _dd_runout_age else f'≥{_max_sim_age - dd_start_age}'}")
-        with dd_m2:
-            if _dd_runout_age:
-                st.metric("Pot depleted at age", f"{_dd_runout_age}",
-                          help="Age your pot reaches zero given the spend and real return.")
-            else:
-                st.metric("Pot survives to", f"≥ age {_max_sim_age}",
-                          delta="Sustainable", help="Pot still has funds at age 100.")
-        with dd_m3:
-            # UK ONS cohort life expectancy at this retirement age (utils/uk_tax.py)
-            _le_at_retire = life_expectancy_at(dd_start_age)
-            st.metric("Avg life expectancy", f"~{_le_at_retire}",
-                      help="ONS cohort life expectancy at this retirement age (mixed-sex). "
-                           "Many will live longer — plan for ~10 years beyond average.")
-        with dd_m4:
-            # Implied SWR
-            _swr_implied = dd_annual_spend / dd_start_pot * 100
-            st.metric("Implied withdrawal rate", f"{_swr_implied:.1f}%",
-                      help="Annual spend ÷ starting pot. <4% is generally considered safe over 30+ years.")
-
-        # Verdict
-        if _dd_runout_age is None:
-            st.success(f"Your pot sustains the chosen spend indefinitely at {dd_real_return:.1f}% real return.",
-                       icon="✅")
-        else:
-            yrs_covered = _dd_runout_age - dd_start_age
-            if _dd_runout_age >= _le_at_retire + 5:
-                st.info(
-                    f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
-                    f"That's comfortably beyond UK average life expectancy at this age (~{_le_at_retire}).",
-                    icon="✅",
-                )
-            elif _dd_runout_age >= _le_at_retire:
-                st.warning(
-                    f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
-                    f"Just covers average life expectancy (~{_le_at_retire}) — half of people will outlive this. "
-                    "Consider lower spend, higher return assumption, or planning longer.",
-                    icon="⚠️",
-                )
-            else:
-                st.error(
-                    f"Pot lasts only ~{yrs_covered} years, depleting at age {_dd_runout_age} — "
-                    f"well before average life expectancy (~{_le_at_retire}). "
-                    "Reduce spend, retire later, or save more.",
-                    icon="🚨",
-                )
-
-        # Drawdown chart
-        _dd_fig = go.Figure()
-        _dd_fig.add_trace(go.Scatter(
-            x=_dd_ages, y=_dd_pots,
-            mode="lines", line=dict(color=COLOURS["person"], width=2.5),
-            fill="tozeroy", fillcolor="rgba(249,115,22,0.10)",
-            name="Pot balance",
-            hovertemplate="Age %{x}<br>£%{y:,.0f}<extra></extra>",
-        ))
-        _dd_fig.add_hline(y=0, line=dict(color=NEUTRAL_GREY, width=1))
-        # Life expectancy marker
-        _dd_fig.add_vline(x=_le_at_retire,
-            line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
-            annotation_text=f"Avg life exp ~{_le_at_retire}",
-            annotation_position="top right",
-            annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)),
-        )
-        if _dd_runout_age:
-            _dd_fig.add_vline(x=_dd_runout_age,
-                line=dict(color="#ef4444", width=1.5, dash="dot"),
-                annotation_text=f"Depleted age {_dd_runout_age}",
-                annotation_position="bottom right",
-                annotation=dict(font=dict(size=10, color="#ef4444")),
-            )
-        _dd_fig.update_layout(
-            title=dict(text="Pot balance over retirement (real terms)",
-                       font=dict(size=14, color=TITLE_COLOUR), x=0),
-            xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
-            yaxis=dict(title="Pot value (£, today's money)", tickprefix="£", tickformat=",.0f",
-                       gridcolor=GRID_COLOUR),
-            plot_bgcolor="white", paper_bgcolor="white",
-            height=300, margin=dict(l=70, r=40, t=50, b=50), hovermode="x unified",
-        )
-        st.plotly_chart(_dd_fig, use_container_width=True, config=PLOTLY_CONFIG)
-
-        # Sensitivity table: how does longevity change with different real returns?
-        st.markdown("**Sensitivity: how long does the pot last at different return assumptions?**")
-        sens_rows = []
-        for _r_test in [1, 2, 3, 4, 5, 6]:
-            _r = _r_test / 100
-            _pot = float(dd_start_pot)
-            _runout = None
-            for age in range(dd_start_age, _max_sim_age + 1):
-                sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
-                net_w = max(0, dd_annual_spend - sp)
-                _pot = _pot * (1 + _r) - net_w
-                if _pot <= 0 and _runout is None:
-                    _runout = age + 1
-                    break
-            sens_rows.append({
-                "Real return": f"{_r_test}%",
-                "Pot lasts until": (f"age {_runout}" if _runout
-                                     else f"≥ age {_max_sim_age} (sustainable)"),
-                "Years covered": (f"{_runout - dd_start_age}" if _runout
-                                   else f"≥ {_max_sim_age - dd_start_age}"),
-            })
-        st.dataframe(pd.DataFrame(sens_rows), use_container_width=True, hide_index=True)
-        st.caption(
-            "Sensitivity is one of the most important things to check — small changes in assumed "
-            "real return swing the depletion age by years."
-        )
-
-        # ── Stochastic drawdown ───────────────────────────────────────────────
-        st.markdown("---")
-        st.markdown("**Stochastic stress test (sequence-of-returns risk)**")
-        st.caption(
-            "Same setup, but with **random year-to-year returns** instead of the fixed real "
-            "return. Runs 1,000 simulations to compute the probability that your pot survives "
-            "to each age. A bad first decade — even with the same long-run average — can deplete "
-            "much faster than the deterministic model suggests."
-        )
-
-        sd_col1, sd_col2 = st.columns(2)
-        with sd_col1:
-            sd_sigma = st.number_input(
-                "Annual volatility (%)", 0.0, 25.0, 10.0, 0.5, key="sd_sigma",
-                help="Volatility of the retirement portfolio. Conservative 60/40 ≈ 9-10%, "
-                     "balanced ≈ 11-13%, equity-heavy ≈ 14-18%.",
-            )
-        with sd_col2:
-            sd_horizon_age = st.number_input(
-                "Plan to age", _le_at_retire, 100, max(_le_at_retire + 5, 90), 1, key="sd_horizon",
-                help="Age you want your pot to last to. The success rate is computed at this age.",
-            )
-
-        # Build simulation: withdrawals = -annual_contribution
-        # Each year's net withdrawal varies if state pension kicks in mid-horizon,
-        # so we run it ourselves rather than calling run_monte_carlo directly.
-        sd_years = sd_horizon_age - dd_start_age
-        if sd_years > 0:
-            sd_rng = np.random.default_rng(seed=42)
-            sd_n_sims = 1_000
-            sd_returns = sd_rng.normal(
-                loc=dd_real_return / 100,
-                scale=sd_sigma / 100,
-                size=(sd_n_sims, sd_years),
-            )
-            sd_paths = np.zeros((sd_n_sims, sd_years + 1), dtype=float)
-            sd_paths[:, 0] = float(dd_start_pot)
-            for t in range(sd_years):
-                age_t = dd_start_age + t
-                sp = state_pension if (dd_include_sp and age_t >= _state_pen_age) else 0
-                net_w = max(0, dd_annual_spend - sp)
-                sd_paths[:, t + 1] = np.maximum(0, sd_paths[:, t] * (1 + sd_returns[:, t]) - net_w)
-                # Once a path hits zero it stays zero (no further negative draw)
-
-            # Survival probability over time
-            sd_alive = (sd_paths > 0).mean(axis=0)
-            sd_ages_arr = np.arange(dd_start_age, dd_start_age + sd_years + 1)
-
-            survival_at_horizon = float(sd_alive[-1])
-            survival_at_le = float(sd_alive[_le_at_retire - dd_start_age]) \
-                if _le_at_retire - dd_start_age <= sd_years else 1.0
-
-            sd_m1, sd_m2 = st.columns(2)
-            with sd_m1:
-                st.metric(
-                    f"Survive to avg life expectancy (~{_le_at_retire})",
-                    f"{survival_at_le*100:.0f}%",
-                    help=f"Probability the pot still has funds at age {_le_at_retire}.",
-                )
-            with sd_m2:
-                st.metric(
-                    f"Survive to age {sd_horizon_age}",
-                    f"{survival_at_horizon*100:.0f}%",
-                    help=f"Probability the pot still has funds at age {sd_horizon_age}.",
-                )
-
-            # Verdict colour for the headline
-            if survival_at_horizon >= 0.85:
-                st.success(
-                    f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
-                    f"age {sd_horizon_age} under the chosen volatility — comfortable cushion.",
-                    icon="✅",
-                )
-            elif survival_at_horizon >= 0.6:
-                st.warning(
-                    f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
-                    f"age {sd_horizon_age}. Reasonable but not safe — consider a lower spend or "
-                    "more cautious assumptions.",
-                    icon="⚠️",
-                )
-            else:
-                st.error(
-                    f"Pot has only a **{survival_at_horizon*100:.0f}% probability** of surviving "
-                    f"to age {sd_horizon_age}. High risk of running out — reduce spend, retire later, "
-                    "or save more.",
-                    icon="🚨",
-                )
-
-            # Survival probability chart
-            sd_fig = go.Figure()
-            sd_fig.add_trace(go.Scatter(
-                x=sd_ages_arr, y=sd_alive * 100,
-                mode="lines",
-                line=dict(color=COLOURS["p50"], width=3),
-                fill="tozeroy", fillcolor="rgba(29,78,216,0.10)",
-                name="Survival probability",
-                hovertemplate="Age %{x}<br>%{y:.0f}% chance pot survives<extra></extra>",
-            ))
-            sd_fig.add_hline(y=50, line=dict(color=NEUTRAL_GREY, width=1, dash="dot"),
-                             annotation_text="50%", annotation_position="right",
-                             annotation=dict(font=dict(size=10, color=NEUTRAL_GREY)))
-            sd_fig.add_vline(x=_le_at_retire,
-                             line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
-                             annotation_text=f"Avg life exp ~{_le_at_retire}",
-                             annotation_position="top left",
-                             annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)))
-            sd_fig.update_layout(
-                title=dict(text="Probability the pot survives to each age",
-                           font=dict(size=13, color=TITLE_COLOUR), x=0),
-                xaxis=dict(title="Age", gridcolor=GRID_COLOUR),
-                yaxis=dict(title="Survival probability (%)", ticksuffix="%",
-                           range=[0, 105], gridcolor=GRID_COLOUR),
-                plot_bgcolor="white", paper_bgcolor="white",
-                height=260, margin=dict(l=60, r=40, t=50, b=50),
-                showlegend=False, hovermode="x unified",
-            )
-            st.plotly_chart(sd_fig, use_container_width=True, config=PLOTLY_CONFIG)
-
-
-# ── UK tax wrapper utilisation tracker ────────────────────────────────────────
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    with st.expander("UK tax wrapper utilisation (ISA · LISA · Pension)"):
-        st.caption(
-            "Track how much of each year's UK tax-advantaged wrapper allowance you're using. "
-            "Pension annual allowance includes 3-year carryforward of unused capacity. "
-            "**Allowances as of 2025/26.** Indicative — not tax advice."
-        )
-        st.caption(
-            "📅 From **6 April 2027** the cash-ISA limit drops to **£12,000/yr** for under-65s "
-            "(within the unchanged £20,000 overall ISA allowance); over-65s keep the full "
-            "£20,000 in cash."
-        )
-
-        # Allowance constants imported from utils/uk_tax.py (tested in test_uk_tax.py).
-        # Aliased here so the existing UI code reads naturally.
-        TAPER_THRESHOLD_INCOME = TAPER_THRESHOLD
-
-        tw_col1, tw_col2, tw_col3 = st.columns(3)
-        with tw_col1:
-            tw_isa = st.number_input(
-                "ISA contributed this year (£)", 0, 20_000, 0, 500, format="%d", key="tw_isa",
-                help="Cash, S&S, Innovative Finance and LISA combined — max £20k.",
-            )
-        with tw_col2:
-            tw_lisa = st.number_input(
-                "Of which LISA (£)", 0, 4_000, 0, 500, format="%d", key="tw_lisa",
-                help="LISA: max £4,000/yr, counts against ISA allowance. Only available "
-                     "if you're 18-50 and opened before age 40. Government 25% bonus.",
-            )
-            # The 40-50 gap: you can only contribute if you already have a LISA.
-            # Default to True (permissive) when age is below 40 or above 50 since
-            # the answer is determined by age alone in those bands.
-            _show_has_lisa = (latest_age is not None and 40 <= latest_age <= 50)
-            tw_has_lisa = st.checkbox(
-                "I already have an open LISA",
-                value=True,
-                key="tw_has_lisa",
-                help="LISA contributions between age 40 and 50 are only allowed if you "
-                     "opened a LISA before age 40. Untick if you don't already have one.",
-                disabled=not _show_has_lisa,
-            ) if _show_has_lisa else True
-        with tw_col3:
-            tw_pension = st.number_input(
-                "Pension contributions this year (£)", 0, 200_000, 0, 1_000,
-                format="%d", key="tw_pension",
-                help="All gross pension contributions across employer + personal pensions, "
-                     "salary sacrifice, and tax-relievable personal contributions.",
-            )
-
-        # ── High-earner taper inputs ──────────────────────────────────────────
-        st.markdown("**Pension taper** (for high earners)")
-        tp_cols = st.columns([2, 1])
-        with tp_cols[0]:
-            tw_adjusted_income = st.number_input(
-                "Adjusted income (£/yr)", 0, 2_000_000, 0, 5_000,
-                format="%d", key="tw_adjusted_income",
-                help="UK 'adjusted income' is broadly taxable income + employer pension contributions. "
-                     f"For income over £{TAPER_THRESHOLD_INCOME:,}, the £{PENSION_AA:,} annual allowance "
-                     "reduces by £1 for every £2 over the threshold, floored at £10,000.",
-            )
-        # Compute tapered AA via the unit-tested helper
-        tapered_aa, taper_reduction = tapered_pension_allowance(tw_adjusted_income)
-        with tp_cols[1]:
-            if taper_reduction > 0:
-                st.metric(
-                    "Tapered AA",
-                    f"£{tapered_aa:,.0f}",
-                    delta=f"-£{taper_reduction:,.0f}",
-                    delta_color="inverse",
-                    help=f"Reduced from £{PENSION_AA:,} due to adjusted income above £{TAPER_THRESHOLD_INCOME:,}.",
-                )
-            else:
-                st.metric("Tapered AA", f"£{PENSION_AA:,}", delta="No taper applied")
-
-        st.markdown("**Pension carryforward** (use unused allowance from the previous 3 years)")
-        cf_cols = st.columns(3)
-        with cf_cols[0]:
-            cf_3 = st.number_input("Unused 3 years ago (£)", 0, 60_000, 0, 1_000,
-                                   format="%d", key="cf_3")
-        with cf_cols[1]:
-            cf_2 = st.number_input("Unused 2 years ago (£)", 0, 60_000, 0, 1_000,
-                                   format="%d", key="cf_2")
-        with cf_cols[2]:
-            cf_1 = st.number_input("Unused 1 year ago (£)", 0, 60_000, 0, 1_000,
-                                   format="%d", key="cf_1")
-        carryforward = cf_1 + cf_2 + cf_3
-        # Use tapered_aa for this year, full PENSION_AA for carryforward calculation
-        # (carryforward years use that year's allowance — user can input what they had)
-        effective_pension_allowance = tapered_aa + carryforward
-
-        # Calculations — use the tested utility functions
-        isa_rem     = isa_remaining(tw_isa)
-        lisa_rem    = lisa_remaining(
-            tw_lisa,
-            age=int(latest_age) if latest_age is not None else None,
-            has_existing_lisa=tw_has_lisa,
-        )
-        pension_rem = max(0.0, effective_pension_allowance - tw_pension)
-
-        # LISA contribution rules at the user's age
-        lisa_closed_over_50 = latest_age is not None and latest_age > 50
-        lisa_blocked_no_existing = (
-            latest_age is not None and 40 <= latest_age <= 50 and not tw_has_lisa
-        )
-        if lisa_closed_over_50 and tw_lisa > 0:
-            st.warning(
-                f"You're over 50, so LISA contributions are no longer allowed. "
-                f"Existing LISA balances continue to grow, but new pay-ins stopped at 50.",
-                icon="⚠️",
-            )
-        elif lisa_blocked_no_existing and tw_lisa > 0:
-            st.warning(
-                f"At age {int(latest_age)}, you can only contribute to a LISA if you "
-                f"already had one open (you can't open a new one after 39). The £"
-                f"{tw_lisa:,} you entered won't be eligible for the 25% bonus.",
-                icon="⚠️",
-            )
-
-        isa_pct     = tw_isa / ISA_ALLOWANCE * 100
-        lisa_pct    = tw_lisa / LISA_ALLOWANCE * 100
-        pension_pct = tw_pension / max(effective_pension_allowance, 1) * 100
-
-        # Headline metrics
-        st.markdown("")
-        st.markdown("**Utilisation this year**")
-        u_col1, u_col2, u_col3 = st.columns(3)
-        with u_col1:
-            st.metric(
-                "ISA",
-                f"{isa_pct:.0f}%",
-                delta=f"£{tw_isa:,} / £{ISA_ALLOWANCE:,}",
-                delta_color="off",
-                help=f"£{isa_rem:,.0f} remaining before 5 April.",
-            )
-            st.progress(min(tw_isa / ISA_ALLOWANCE, 1.0))
-        with u_col2:
-            st.metric(
-                "LISA (of ISA)",
-                f"{lisa_pct:.0f}%",
-                delta=f"£{tw_lisa:,} / £{LISA_ALLOWANCE:,}",
-                delta_color="off",
-                help=f"£{lisa_rem:,.0f} remaining. Government tops up 25% (up to £1k/yr).",
-            )
-            st.progress(min(tw_lisa / LISA_ALLOWANCE, 1.0))
-        with u_col3:
-            st.metric(
-                "Pension",
-                f"{pension_pct:.0f}%",
-                delta=f"£{tw_pension:,} / £{effective_pension_allowance:,.0f}",
-                delta_color="off",
-                help=f"£{pension_rem:,.0f} remaining (includes £{carryforward:,} carryforward).",
-            )
-            st.progress(min(tw_pension / max(effective_pension_allowance, 1), 1.0))
-
-        # Smart recommendation banner — uses the tested pension_relief_estimate helper
-        recs = []
-        if pension_rem >= 5_000:
-            relief_higher = pension_relief_estimate(pension_rem, 0.40)
-            relief_basic  = pension_relief_estimate(pension_rem, 0.20)
-            recs.append(
-                f"£{pension_rem:,.0f} pension headroom — adding it could save "
-                f"up to £{relief_higher:,.0f} in tax relief at 40% "
-                f"(or £{relief_basic:,.0f} at basic rate)."
-            )
-        if isa_rem >= 1_000:
-            recs.append(
-                f"£{isa_rem:,.0f} ISA headroom — sheltered from CGT and dividend tax. "
-                f"Use it or lose it (no carryforward)."
-            )
-        if 0 < tw_lisa < LISA_ALLOWANCE:
-            bonus_remaining = lisa_bonus(lisa_rem)
-            recs.append(
-                f"£{lisa_rem:,.0f} LISA headroom — government adds 25% on top "
-                f"(up to £{bonus_remaining:,.0f} this year)."
-            )
-
-        if recs:
-            st.info("**Suggestions:**\n\n" + "\n\n".join(f"- {r}" for r in recs), icon="💡")
-        elif tw_isa > 0 or tw_pension > 0 or tw_lisa > 0:
-            st.success(
-                "You've used all your immediate wrapper allowances for this tax year. "
-                "Consider building up carryforward for next year if you're earning above £60k.",
-                icon="✅",
-            )
-
-        # Summary table
-        st.markdown("**Annual allowance reference (2025/26)**")
-        pension_aa_note = (
-            f"Tapered to £{tapered_aa:,.0f} at adjusted income £{tw_adjusted_income:,}"
-            if taper_reduction > 0
-            else f"Standard £{PENSION_AA:,} (no taper at £{tw_adjusted_income:,} adjusted income)"
-        )
-        ref = pd.DataFrame({
-            "Wrapper": ["ISA (total)", "  └─ Lifetime ISA", "Pension AA",
-                        "Pension AA + carryforward"],
-            "2025/26 limit": [
-                f"£{ISA_ALLOWANCE:,}",
-                f"£{LISA_ALLOWANCE:,}",
-                f"£{tapered_aa:,.0f}",
-                f"£{effective_pension_allowance:,.0f}",
-            ],
-            "Notes": [
-                "Cash + S&S + IF + LISA combined",
-                "Max age 50; 25% government bonus",
-                pension_aa_note,
-                f"Includes £{carryforward:,} from prior 3 yrs",
-            ],
-        })
-        st.dataframe(ref, use_container_width=True, hide_index=True)
-
-
-# ── IHT / estate tax calculator ───────────────────────────────────────────────
-
-if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
-    with st.expander("Estate / inheritance tax (IHT) exposure"):
-        st.caption(
-            "Estimates your approximate UK inheritance tax (IHT) liability based on your current "
-            "net worth. Indicative only — not tax advice. Rules as of 2025/26 "
-            "(nil-rate bands frozen until April 2030)."
-        )
-        iht_cols = st.columns(3)
-        with iht_cols[0]:
-            iht_threshold = st.selectbox(
-                "NRB threshold",
-                [
-                    "Single — £325k NRB",
-                    "Single + RNRB — £500k (residence to descendants)",
-                    "Married / civil partner — £650k (2× NRB, no RNRB)",
-                    "Married + RNRB — £1m (2× NRB + 2× RNRB)",
-                ],
-                help="Nil-rate band (NRB): £325k per person. "
-                     "Residence nil-rate band (RNRB): up to £175k extra if leaving a main residence to direct descendants. "
-                     "Spouse exemption allows unused NRB to transfer on first death.",
-                key="iht_threshold",
-            )
-        with iht_cols[1]:
-            iht_deductions = st.number_input(
-                "Additional deductions (£)",
-                min_value=0, max_value=5_000_000, value=0, step=10_000, format="%d",
-                help="Business property relief, agricultural relief, charitable gifts, outstanding debts, "
-                     "or any other amounts that reduce the taxable estate.",
-                key="iht_deductions",
-            )
-        with iht_cols[2]:
-            iht_rate_pct = st.number_input(
-                "Rate (%)", min_value=0, max_value=40, value=40, step=1, format="%d",
-                help="Standard rate: 40%. Reduced to 36% if 10%+ of net estate is left to charity.",
-                key="iht_rate",
-            )
-
-        # Map UI labels to scenario keys for the tested utility
-        _iht_band = {
-            "Single — £325k NRB":                                    IHT_BANDS["single"],
-            "Single + RNRB — £500k (residence to descendants)":      IHT_BANDS["single_with_rnrb"],
-            "Married / civil partner — £650k (2× NRB, no RNRB)":     IHT_BANDS["married"],
-            "Married + RNRB — £1m (2× NRB + 2× RNRB)":               IHT_BANDS["married_with_rnrb"],
-        }[iht_threshold]
-
-        # If a married threshold is selected AND partner data is loaded, offer to
-        # use the combined household estate. The married thresholds (£650k or £1m)
-        # are the COMBINED exemption, so applying them to just one spouse's wealth
-        # would understate the available headroom.
-        _is_married_threshold = "Married" in iht_threshold
-        _has_partner = partner_plot_df is not None and len(partner_plot_df) > 0
-        gross_estate = latest_nw
-        if _is_married_threshold and _has_partner:
-            _partner_latest_nw = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"])
-            _use_combined = st.checkbox(
-                f"Use combined household estate ({_fmt(latest_nw)} + {_fmt(_partner_latest_nw)} = "
-                f"{_fmt(latest_nw + _partner_latest_nw)})",
-                value=True, key="iht_use_combined",
-                help=(
-                    "The £650k/£1m married thresholds apply to the COMBINED estate at the "
-                    "second death (the first spouse passes everything to the second tax-free, "
-                    "and unused NRB transfers). So the right comparison is your joint estate, "
-                    "not just yours."
-                ),
-            )
-            if _use_combined:
-                gross_estate = latest_nw + _partner_latest_nw
-
-        exempt_amount = _iht_band + iht_deductions
-        # Use the tested utility — same math, but now centralised + tested
-        taxable_estate, iht_due, after_iht = iht_payable(
-            gross_estate, threshold=_iht_band, deductions=iht_deductions,
-            rate=iht_rate_pct / 100,
-        )
-        pct_lost = iht_due / gross_estate * 100 if gross_estate > 0 else 0
-
-        iht_m1, iht_m2, iht_m3, iht_m4 = st.columns(4)
-        with iht_m1:
-            st.metric("Gross estate", _fmt(gross_estate))
-        with iht_m2:
-            st.metric("IHT-exempt", _fmt(exempt_amount),
-                      help=f"Threshold ({_fmt(_iht_band)}) + deductions ({_fmt(iht_deductions)})")
-        with iht_m3:
-            st.metric("IHT payable", _fmt(iht_due),
-                      help=f"{_fmt(taxable_estate)} taxable @ {iht_rate_pct}%")
-        with iht_m4:
-            st.metric("After-IHT estate", _fmt(after_iht),
-                      delta=f"−{pct_lost:.1f}% of estate",
-                      delta_color="inverse",
-                      help="Net amount heirs would receive (excluding admin costs, probate fees, etc.)")
-
-        if taxable_estate == 0:
-            st.success("Your estate is within the IHT threshold - no IHT payable under this scenario.")
-        else:
-            st.caption(
-                f"Taxable estate: {_fmt(taxable_estate)} (estate above threshold). "
-                f"Possible mitigation: gifts out of income, seven-year gifting rules, "
-                f"life insurance in trust, charitable giving."
-            )
-            st.caption(
-                "⚠️ From **6 April 2027** most unused pension funds fall **inside** the estate "
-                "for IHT (transfers to a spouse or charity stay exempt) — pensions will no "
-                "longer sit outside it."
-            )
-        st.caption(
-            "Simplified estimate — does not account for taper relief, business/agricultural property relief, "
-            "in-trust assets, lifetime gifts, or other exemptions. Consult a qualified advisor."
-        )
-
-# ── Summary statistics ────────────────────────────────────────────────────────
-
-if personal_plot_df is not None and len(personal_plot_df) >= 2:
-    with st.expander("Summary statistics"):
-        frames = [build_summary_stats(personal_plot_df, benchmark, "You")]
-        if partner_plot_df is not None and len(partner_plot_df) >= 2:
-            frames.append(build_summary_stats(partner_plot_df, benchmark, "Partner"))
-        st.dataframe(pd.concat(frames, ignore_index=True), use_container_width=True, hide_index=True)
-
-        # Data quality score
-        dq = compute_data_quality(personal_plot_df)
-        st.markdown(f"**Data quality score: {dq['score']}/100**")
-        st.progress(dq["score"] / 100)
-        for note in dq["notes"]:
-            st.caption(note)
-        st.caption("Higher score = more reliable estimates. Add annual updates and extend your history to improve.")
-
-        # Downloadable percentile history
-        st.markdown("**Percentile history download**")
-        traj_dl = build_percentile_trajectory(personal_plot_df, benchmark)
-        if len(traj_dl):
-            traj_dl_out = traj_dl.rename(columns={
-                "age": "age", "year": "year",
-                "net_worth": "net_worth_gbp", "percentile": "est_percentile",
-            })
-            st.download_button(
-                "Download your percentile history (CSV)",
-                traj_dl_out.to_csv(index=False).encode(),
-                "my_percentile_history.csv", "text/csv",
-                use_container_width=True,
-                help="Each data point with its estimated percentile at that age.",
-            )
 
 # ── Main chart ────────────────────────────────────────────────────────────────
 
@@ -1913,549 +840,1660 @@ else:
         "Lines are PCHIP-interpolated. Dotted verticals = age-band boundaries."
     )
 
-# ── Percentile heatmap ───────────────────────────────────────────────────────
 
-with st.expander("Percentile landscape heatmap"):
-    hm_price = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
-    hm_fig = build_heatmap(
-        benchmark,
-        personal_plot_df=personal_plot_df,
-        partner_plot_df=partner_plot_df,
-        person_colour=COLOURS["person"],
-        partner_colour=COLOURS["partner"],
-        price_label=hm_price,
-    )
-    st.plotly_chart(hm_fig, use_container_width=True, config=PLOTLY_CONFIG)
+if personal_plot_df is not None and len(personal_plot_df) == 1:
     st.caption(
-        "Shaded bands show which percentile tier each wealth level belongs to at each age. "
-        "P10 and P90 are derived from the log-normal model; P25/P50/P75 are from WAS. "
-        "Your trajectory is overlaid in orange."
+        "👉 You've entered one data point — enough for your percentile and benchmark position. "
+        "Add a **second year** to unlock growth rate, percentile trajectory, annual gains, "
+        "milestones and the Monte Carlo projection in the tabs below."
     )
 
-# ── Share / export your data ──────────────────────────────────────────────────
 
-if personal_plot_df is not None and len(personal_plot_df) > 0:
-    with st.expander("Share / export your data"):
-        # Two columns: shareable URL on the left, CSV download on the right
-        share_col1, share_col2 = st.columns([3, 2])
+# ── Analysis tabs ────────────────────────────────────────────────
+tab_stand, tab_prog, tab_plan, tab_tax, tab_share = st.tabs(["📊 Where you stand", "📈 Your progress", "🎯 Planning & projections", "🏛️ Tax & estate", "📋 Share & export"])
 
-        with share_col1:
-            st.markdown("**Shareable link**")
-            try:
-                token = encode_personal_data(personal_plot_df)
-                share_url = f"{PUBLIC_APP_URL}/?d={token}"
-                # If partner data is loaded, encode it under ?p= so the receiving
-                # browser picks it up as the partner pane.
-                if partner_plot_df is not None and len(partner_plot_df) > 0:
-                    p_token = encode_personal_data(partner_plot_df)
-                    share_url = f"{share_url}&p={p_token}"
-                st.text_input(
-                    "Data is encoded in the URL — nothing is stored on any server:",
-                    value=share_url, key="share_url_box",
-                )
-                _share_note = (
-                    "Anyone with this link sees your figures"
-                    + (" plus your partner's" if partner_plot_df is not None
-                       and len(partner_plot_df) > 0 else "")
-                    + ". Share only with people you trust."
-                )
-                st.caption(_share_note)
-            except Exception:
-                st.info("Share link unavailable — data may be too large to encode.")
+with tab_stand:
+    # ── Percentile heatmap ───────────────────────────────────────────────────────
 
-        with share_col2:
-            st.markdown("**Download as CSV**")
-            export_df = personal_plot_df[["year", "age", "net_worth"]].copy()
-            if "note" in personal_plot_df.columns:
-                export_df["note"] = personal_plot_df["note"]
-            csv_bytes = export_df.to_csv(index=False).encode("utf-8")
-            from datetime import datetime as _dt
-            fname = f"my_net_worth_{_dt.now():%Y-%m-%d}.csv"
-            st.download_button(
-                "Download my net worth history",
-                csv_bytes, fname, "text/csv",
-                use_container_width=True,
-                help="Save what you've entered (manual entries or merged CSV) "
-                     "for backup or to re-upload later.",
-            )
-            if partner_plot_df is not None and len(partner_plot_df) > 0:
-                p_export = partner_plot_df[["year", "age", "net_worth"]].copy()
-                if "note" in partner_plot_df.columns:
-                    p_export["note"] = partner_plot_df["note"]
-                p_csv = p_export.to_csv(index=False).encode("utf-8")
-                p_fname = f"partner_net_worth_{_dt.now():%Y-%m-%d}.csv"
-                st.download_button(
-                    "Download partner's history",
-                    p_csv, p_fname, "text/csv",
-                    use_container_width=True,
-                )
-
-# ── Decile table ─────────────────────────────────────────────────────────────
-
-if latest_age is not None:
-    with st.expander(f"Full decile table at age {latest_age:.0f}"):
-        decile_df = build_decile_table(round(latest_age), benchmark)
-        if len(decile_df):
-            # Format £ values
-            decile_display = decile_df.copy()
-            decile_display["Net worth (£)"] = decile_display["Net worth (£)"].apply(
-                lambda v: f"£{v:,.0f}"
-            )
-            decile_display["Source"] = decile_display["Modelled"].map(
-                {True: "Log-normal model", False: "WAS published"}
-            )
-            decile_display = decile_display.drop(columns=["Modelled"])
-
-            # Highlight the user's row if we know their net worth
-            st.dataframe(decile_display, use_container_width=True, hide_index=True)
-            if latest_nw:
-                exact_pct_here = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
-                if exact_pct_here:
-                    st.caption(
-                        f"Your net worth of **{_fmt(latest_nw)}** sits at approximately "
-                        f"**~{exact_pct_here:.0f}th percentile** at age {latest_age:.0f}."
-                    )
-            price_label_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
-            st.caption(f"All values in {price_label_note}. Rows marked 'Log-normal model' are derived estimates.")
-
-# ── Distribution curve at user's age ─────────────────────────────────────────
-
-with st.expander(f"Wealth distribution curve — explore by age"):
-    dist_age_default = round(latest_age) if latest_age else 40
-    dist_age = st.slider("Age to show distribution for", 16, 85, dist_age_default,
-                         key="dist_age_slider")
-    p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
-        if partner_plot_df is not None and len(partner_plot_df) > 0 else None
-    dist_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
-    dist_fig = build_distribution_chart(
-        dist_age, benchmark,
-        user_nw=latest_nw if dist_age == dist_age_default else None,
-        partner_nw=p_nw_for_dist if dist_age == dist_age_default else None,
-        price_label=dist_price,
-        person_colour=COLOURS["person"],
-        partner_colour=COLOURS["partner"],
-    )
-    if dist_fig:
-        st.plotly_chart(dist_fig, use_container_width=True, config=PLOTLY_CONFIG)
+    with st.expander("Percentile landscape heatmap"):
+        hm_price = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
+        hm_fig = build_heatmap(
+            benchmark,
+            personal_plot_df=personal_plot_df,
+            partner_plot_df=partner_plot_df,
+            person_colour=COLOURS["person"],
+            partner_colour=COLOURS["partner"],
+            price_label=hm_price,
+        )
+        st.plotly_chart(hm_fig, use_container_width=True, config=PLOTLY_CONFIG)
         st.caption(
-            "Slide to explore the distribution at any age. "
-            "Your net worth is shown only at your latest recorded age. "
-            "Distribution simulated from log-normal model fitted to P25/P50/P75 — "
-            "tails above P90 are extrapolated."
+            "Shaded bands show which percentile tier each wealth level belongs to at each age. "
+            "P10 and P90 are derived from the log-normal model; P25/P50/P75 are from WAS. "
+            "Your trajectory is overlaid in orange."
         )
 
-# ── Percentile trajectory chart ───────────────────────────────────────────────
 
-if personal_plot_df is not None and len(personal_plot_df) >= 2:
-    traj_you = build_percentile_trajectory(personal_plot_df, benchmark)
-    traj_partner = None
-    if partner_plot_df is not None and len(partner_plot_df) >= 2:
-        traj_partner = build_percentile_trajectory(partner_plot_df, benchmark)
-    if len(traj_you) >= 2:
-        st.plotly_chart(
-            build_percentile_chart(
-                traj_you,
-                traj_partner=traj_partner,
-                smooth=smooth_traj,
-                person_colour=COLOURS["person"],
-                partner_colour=COLOURS["partner"],
-            ),
-            use_container_width=True, config=PLOTLY_CONFIG,
-        )
-        st.caption(
-            "Percentile via log-normal fit to P25/P50/P75 — indicative, not authoritative. "
-            "Annotation shows total percentile change over the recorded period."
-            + (" Rolling average applied." if smooth_traj else "")
-        )
+    # ── Decile table ─────────────────────────────────────────────────────────────
 
-# ── Annual gain chart ────────────────────────────────────────────────────────
-
-if personal_plot_df is not None and len(personal_plot_df) >= 2:
-    with st.expander("Milestone tracker"):
-        MILESTONES = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
-        s_ms = personal_plot_df.sort_values("age")
-        milestone_rows = []
-        for m in MILESTONES:
-            # Find first row where net_worth >= m
-            crossed = s_ms[s_ms["net_worth"] >= m]
-            if len(crossed):
-                row = crossed.iloc[0]
-                milestone_rows.append({
-                    "Milestone":    _fmt(m),
-                    "Age reached":  f"{float(row['age']):.1f}",
-                    "Year":         str(int(row["year"])) if "year" in row else "—",
-                    "Net worth then": _fmt(float(row["net_worth"])),
-                })
-            else:
-                # Not yet reached — project from current trajectory
-                first_nw_ms = float(s_ms.iloc[0]["net_worth"])
-                last_nw_ms  = float(s_ms.iloc[-1]["net_worth"])
-                asp_ms = float(s_ms.iloc[-1]["age"]) - float(s_ms.iloc[0]["age"])
-                if asp_ms > 0.5 and last_nw_ms > 0 and last_nw_ms < m:
-                    yrs_ms = None
-                    if first_nw_ms > 0:
-                        cagr_ms = (last_nw_ms / first_nw_ms) ** (1 / asp_ms) - 1
-                        if cagr_ms > 0:
-                            yrs_ms = math.log(m / last_nw_ms) / math.log(1 + cagr_ms)
-                    else:
-                        avg_gain_ms = (last_nw_ms - first_nw_ms) / asp_ms
-                        if avg_gain_ms > 0:
-                            yrs_ms = (m - last_nw_ms) / avg_gain_ms
-                    if yrs_ms is not None:
-                        eta_ms = float(s_ms.iloc[-1]["age"]) + yrs_ms
-                        if eta_ms <= 100:
-                            milestone_rows.append({
-                                "Milestone":    _fmt(m),
-                                "Age reached":  f"~{eta_ms:.0f} (projected)",
-                                "Year":         "—",
-                                "Net worth then": _fmt(m),
-                            })
-        if milestone_rows:
-            st.dataframe(pd.DataFrame(milestone_rows), use_container_width=True, hide_index=True)
-            st.caption("Projected ages use your current CAGR — treat as illustrative.")
-        else:
-            st.info("Add more data points to see milestone tracking.")
-
-if personal_plot_df is not None and len(personal_plot_df) >= 2:
-    with st.expander("Annual gains breakdown"):
-        gc_you = build_gains_chart(personal_plot_df, colour=COLOURS["person"], name="Your net worth")
-        if gc_you:
-            st.plotly_chart(gc_you, use_container_width=True, config=PLOTLY_CONFIG)
-        if partner_plot_df is not None and len(partner_plot_df) >= 2:
-            gc_p = build_gains_chart(partner_plot_df, colour=COLOURS["partner"], name="Partner")
-            if gc_p:
-                st.plotly_chart(gc_p, use_container_width=True, config=PLOTLY_CONFIG)
-        st.caption("Red bars = net worth fell that period. Each bar spans the gap between consecutive data points.")
-
-        # Velocity (% rate) chart
-        vel = build_velocity_chart(personal_plot_df, colour=COLOURS["person"])
-        if vel:
-            st.plotly_chart(vel, use_container_width=True, config=PLOTLY_CONFIG)
-        if partner_plot_df is not None and len(partner_plot_df) >= 3:
-            vel_p = build_velocity_chart(partner_plot_df, colour=COLOURS["partner"])
-            if vel_p:
-                st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
-
-        # Cumulative view
-        cum_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
-        st.plotly_chart(
-            build_cumulative_chart(
-                personal_plot_df,
-                colour=COLOURS["person"], name="You",
-                partner_pdf=partner_plot_df,
-                partner_colour=COLOURS["partner"],
-                price_label=cum_price,
-            ),
-            use_container_width=True, config=PLOTLY_CONFIG,
-        )
-
-        # Growth attribution
-        st.markdown("**Growth attribution (rough estimate)**")
-        assumed_return = st.slider("Assumed annual investment return (%)", 0.0, 12.0, 5.0, 0.5,
-                                   key="attr_return",
-                                   help="What % would a passive investment have returned? ~5% is a common real-return assumption.")
-        s_attr = personal_plot_df.sort_values("age")
-        # Mirror gains/velocity/summary aggregation: with monthly snapshots
-        # the per-row attribution would otherwise be ~23 micro-periods at ~1
-        # month each — unreadable and the assumed-return slider value would
-        # be effectively pro-rated to a sliver per row.
-        #
-        # Guard: only aggregate when data spans 2+ years. For a user with one
-        # year of monthly data there's no annual aggregation to do — collapsing
-        # 12 rows to 1 would silently skip the whole table (len < 2 guard
-        # below). Better to render the raw monthly rows than nothing.
-        if ("year" in s_attr.columns
-                and s_attr["year"].nunique() > 1
-                and len(s_attr) > s_attr["year"].nunique()):
-            s_attr = (s_attr.groupby("year", as_index=False).last()
-                            .sort_values("year").reset_index(drop=True))
-        if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
-            attr_rows = []
-            for i in range(1, len(s_attr)):
-                prev = s_attr.iloc[i-1]
-                curr = s_attr.iloc[i]
-                age_gap = float(curr["age"]) - float(prev["age"])
-                nw_prev = float(prev["net_worth"])
-                nw_curr = float(curr["net_worth"])
-                if nw_prev > 0 and age_gap > 0:
-                    investment_component = nw_prev * ((1 + assumed_return/100) ** age_gap - 1)
-                    total_gain = nw_curr - nw_prev
-                    saving_component = total_gain - investment_component
-                    attr_rows.append({
-                        "Period": f"Age {float(prev['age']):.1f}–{float(curr['age']):.1f}",
-                        "Total gain": _fmt_delta(total_gain),
-                        "Est. from returns": _fmt(max(0, investment_component)),
-                        "Est. from saving": _fmt_delta(saving_component),
-                    })
-            if attr_rows:
-                st.dataframe(pd.DataFrame(attr_rows), use_container_width=True, hide_index=True)
-                st.caption(
-                    f"'Returns' = what your opening balance at {assumed_return}% p.a. would earn each period. "
-                    "'Saving' = residual (total gain minus estimated returns). "
-                    "Negative saving = drawdown or assets underperformed the assumption."
+    if latest_age is not None:
+        with st.expander(f"Full decile table at age {latest_age:.0f}"):
+            decile_df = build_decile_table(round(latest_age), benchmark)
+            if len(decile_df):
+                # Format £ values
+                decile_display = decile_df.copy()
+                decile_display["Net worth (£)"] = decile_display["Net worth (£)"].apply(
+                    lambda v: f"£{v:,.0f}"
                 )
+                decile_display["Source"] = decile_display["Modelled"].map(
+                    {True: "Log-normal model", False: "WAS published"}
+                )
+                decile_display = decile_display.drop(columns=["Modelled"])
 
-# ── What-if projection ────────────────────────────────────────────────────────
+                # Highlight the user's row if we know their net worth
+                st.dataframe(decile_display, use_container_width=True, hide_index=True)
+                if latest_nw:
+                    exact_pct_here = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+                    if exact_pct_here:
+                        st.caption(
+                            f"Your net worth of **{_fmt(latest_nw)}** sits at approximately "
+                            f"**~{exact_pct_here:.0f}th percentile** at age {latest_age:.0f}."
+                        )
+                price_label_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
+                st.caption(f"All values in {price_label_note}. Rows marked 'Log-normal model' are derived estimates.")
 
-if personal_plot_df is not None and len(personal_plot_df) >= 1:
-    with st.expander("What-if projection"):
-        st.caption(
-            "Forward-project your net worth from the latest data point. "
-            "**By default this is a pure investment-growth projection — no further savings or contributions** "
-            "(your starting balance grows by the chosen CAGR). "
-            "Use the **Monthly contributions** field below to layer in ongoing saving. "
-            "Illustrative only — not financial advice."
+
+    # ── Distribution curve at user's age ─────────────────────────────────────────
+
+    with st.expander(f"Wealth distribution curve — explore by age"):
+        dist_age_default = round(latest_age) if latest_age else 40
+        dist_age = st.slider("Age to show distribution for", 16, 85, dist_age_default,
+                             key="dist_age_slider")
+        p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
+            if partner_plot_df is not None and len(partner_plot_df) > 0 else None
+        dist_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
+        dist_fig = build_distribution_chart(
+            dist_age, benchmark,
+            user_nw=latest_nw if dist_age == dist_age_default else None,
+            partner_nw=p_nw_for_dist if dist_age == dist_age_default else None,
+            price_label=dist_price,
+            person_colour=COLOURS["person"],
+            partner_colour=COLOURS["partner"],
         )
-        wcol1, wcol2, wcol3, wcol4 = st.columns(4)
-        with wcol1:
-            wi_cagr1 = st.number_input("Scenario 1 (%)", -5.0, 25.0, 3.0, 0.5, key="wi1",
-                                       help="Bear case / conservative")
-        with wcol2:
-            wi_cagr2 = st.number_input("Scenario 2 (%)", -5.0, 25.0, 6.0, 0.5, key="wi2",
-                                       help="Base case")
-        with wcol3:
-            wi_cagr3 = st.number_input("Scenario 3 (%)", -5.0, 25.0, 10.0, 0.5, key="wi3",
-                                       help="Bull case / optimistic")
-        with wcol4:
-            wi_age = st.slider(
-                "Project to age",
-                min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
-                max_value=85, value=min(70, 85), key="whatif_age",
-            )
-        wi_monthly = st.number_input(
-            "Monthly contributions (£)", 0, 50_000, 0, 100, format="%d", key="wi_monthly",
-            help="Optional ongoing savings, added on top of investment returns. "
-                 "Applied equally to all three scenarios. Leave at 0 for a pure-growth projection.",
-        )
-        if wi_monthly == 0:
-            st.caption("ℹ️ Projection assumes **no further contributions** — only investment growth at the CAGR above.")
-        else:
+        if dist_fig:
+            st.plotly_chart(dist_fig, use_container_width=True, config=PLOTLY_CONFIG)
             st.caption(
-                f"ℹ️ Projection includes **£{wi_monthly:,}/month** ongoing contributions "
-                f"(£{wi_monthly*12:,}/year) on top of investment growth."
+                "Slide to explore the distribution at any age. "
+                "Your net worth is shown only at your latest recorded age. "
+                "Distribution simulated from log-normal model fitted to P25/P50/P75 — "
+                "tails above P90 are extrapolated."
             )
 
-        scenarios = [
-            (wi_cagr1 / 100, f"Scenario 1 ({wi_cagr1:+.1f}%)"),
-            (wi_cagr2 / 100, f"Scenario 2 ({wi_cagr2:+.1f}%)"),
-            (wi_cagr3 / 100, f"Scenario 3 ({wi_cagr3:+.1f}%)"),
-        ]
-        st.plotly_chart(
-            build_whatif_figure(
-                personal_plot_df, benchmark, scenarios,
-                project_to_age=wi_age,
-                monthly_savings=wi_monthly,
-                actual_colour=COLOURS["person"],
-                price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"),
-            ),
-            use_container_width=True, config=PLOTLY_CONFIG,
-        )
 
-        # Projected percentiles at target age for each scenario
-        if latest_nw and latest_nw > 0:
-            sc_cols = st.columns(3)
-            for i, (cagr, sc_label) in enumerate(scenarios):
-                t = wi_age - (latest_age or 0)
-                annual_wi = wi_monthly * 12
-                if abs(cagr) < 1e-10:
-                    proj_nw_at = latest_nw + annual_wi * t
-                else:
-                    proj_nw_at = (latest_nw * (1 + cagr) ** t
-                                  + annual_wi * ((1 + cagr) ** t - 1) / cagr)
-                proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark)
-                with sc_cols[i]:
-                    st.metric(
-                        sc_label,
-                        _fmt(proj_nw_at),
-                        delta=f"~{proj_pct:.0f}th pct" if proj_pct else "n/a",
-                        help=(f"Projected net worth at age {wi_age} with £{wi_monthly:,}/mo "
-                              "ongoing contributions on top of investment growth."
-                              if wi_monthly else
-                              f"Projected net worth at age {wi_age} from pure investment growth "
-                              "(no further contributions)."),
+    # ── Asset class breakdown chart ───────────────────────────────────────────────
+
+    if show_asset_class:
+        asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
+        if len(asset_series):
+            ac_price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR}"
+            ac_fig = build_asset_class_chart(asset_series, price_label=ac_price_label)
+
+            # Overlay user's own composition as annotation lines if latest net worth known
+            if personal_asset_split and latest_nw and latest_nw > 0:
+                cumulative = 0.0
+                stacked_base = 0.0
+                for component in ["Physical", "Financial", "Pension", "Property"]:
+                    share = personal_asset_split[component]
+                    component_val = latest_nw * share
+                    stacked_base += component_val
+                    ac_fig.add_hline(
+                        y=stacked_base,
+                        line=dict(color=ASSET_COLOURS[component], width=2, dash="solid"),
+                        annotation_text=f"You: {component} ({share*100:.0f}%)",
+                        annotation_position="left",
+                        annotation=dict(font=dict(color=ASSET_COLOURS[component], size=10)),
                     )
 
-# ── Monte Carlo projection ────────────────────────────────────────────────────
-
-if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and latest_nw > 0:
-    with st.expander("Monte Carlo projection (stochastic returns)"):
-        st.caption(
-            "Forward-project with **random returns** rather than a fixed CAGR. "
-            "Each simulation samples annual returns from a normal distribution; "
-            "the shaded bands show the range of likely outcomes. "
-            "This captures sequence-of-returns risk that the deterministic what-if can't show."
-        )
-
-        # Mode toggle: fixed allocation vs glide path
-        mc_mode = st.radio(
-            "Allocation",
-            ["Fixed return assumption", "Equity/bond glide path"],
-            key="mc_mode", horizontal=True,
-            help="Glide path uses real asset-class assumptions (equity ~5.5%/18%, "
-                 "bond ~1.5%/6%) and lets you de-risk over time.",
-        )
-
-        mc_glide_path: tuple[float, float] | None = None
-
-        if mc_mode == "Fixed return assumption":
-            mc1, mc2 = st.columns(2)
-            with mc1:
-                mc_mean = st.number_input(
-                    "Expected real return (%)", -5.0, 15.0, 5.0, 0.5, key="mc_mean",
-                    help="60/40 portfolio ≈ 4-5%, 100% equity ≈ 5-7%.",
-                )
-            with mc2:
-                mc_sigma = st.number_input(
-                    "Annual volatility (%)", 0.0, 30.0, 12.0, 1.0, key="mc_sigma",
-                    help="60/40 portfolio ≈ 9-11%, 100% global equity ≈ 16-18%.",
-                )
-        else:
-            g1, g2 = st.columns(2)
-            with g1:
-                gp_start = st.slider(
-                    "Equity allocation now (%)", 0, 100, 90, 5, key="mc_gp_start",
-                )
-            with g2:
-                gp_end = st.slider(
-                    "Equity allocation at target age (%)", 0, 100, 40, 5, key="mc_gp_end",
-                )
-            mc_glide_path = (gp_start / 100, gp_end / 100)
-            # mc_mean / mc_sigma not used when glide path active
-            mc_mean = mc_sigma = 0  # placeholder for downstream caption logic
-
-        mc3, mc4 = st.columns(2)
-        with mc3:
-            mc_target_age = st.slider(
-                "Project to age",
-                min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
-                max_value=85,
-                value=min(int(latest_age) + 25 if latest_age else 65, 85),
-                key="mc_target_age",
-            )
-        with mc4:
-            mc_monthly = st.number_input(
-                "Monthly contributions (£)", 0, 50_000, 0, 100,
-                format="%d", key="mc_monthly",
+            st.plotly_chart(ac_fig, use_container_width=True, config=PLOTLY_CONFIG)
+            st.caption(
+                "Component shares anchored to ONS Wave 8 aggregates (property 40%, pension 35%, financial 14%, physical 10%). "
+                "Your composition (if entered) shown as horizontal lines. "
+                "Property = net of mortgage · Pension = private (DB PV + DC) · "
+                "Financial = savings/investments net of non-mortgage debt · Physical = vehicles/contents/valuables."
             )
 
-        mc_target_nw = st.number_input(
-            "Target net worth (£) — optional",
-            0, 10_000_000, int(goal_amount) if "goal_amount" in dir() and goal_amount else 500_000,
-            10_000, format="%d", key="mc_target",
-            help="Probability of finishing above this value will be shown below.",
+
+with tab_prog:
+    # ── Summary statistics ────────────────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 2:
+        with st.expander("Summary statistics"):
+            frames = [build_summary_stats(personal_plot_df, benchmark, "You")]
+            if partner_plot_df is not None and len(partner_plot_df) >= 2:
+                frames.append(build_summary_stats(partner_plot_df, benchmark, "Partner"))
+            st.dataframe(pd.concat(frames, ignore_index=True), use_container_width=True, hide_index=True)
+
+            # Data quality score
+            dq = compute_data_quality(personal_plot_df)
+            st.markdown(f"**Data quality score: {dq['score']}/100**")
+            st.progress(dq["score"] / 100)
+            for note in dq["notes"]:
+                st.caption(note)
+            st.caption("Higher score = more reliable estimates. Add annual updates and extend your history to improve.")
+
+            # Downloadable percentile history
+            st.markdown("**Percentile history download**")
+            traj_dl = build_percentile_trajectory(personal_plot_df, benchmark)
+            if len(traj_dl):
+                traj_dl_out = traj_dl.rename(columns={
+                    "age": "age", "year": "year",
+                    "net_worth": "net_worth_gbp", "percentile": "est_percentile",
+                })
+                st.download_button(
+                    "Download your percentile history (CSV)",
+                    traj_dl_out.to_csv(index=False).encode(),
+                    "my_percentile_history.csv", "text/csv",
+                    use_container_width=True,
+                    help="Each data point with its estimated percentile at that age.",
+                )
+
+
+    # ── Percentile trajectory chart ───────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 2:
+        traj_you = build_percentile_trajectory(personal_plot_df, benchmark)
+        traj_partner = None
+        if partner_plot_df is not None and len(partner_plot_df) >= 2:
+            traj_partner = build_percentile_trajectory(partner_plot_df, benchmark)
+        if len(traj_you) >= 2:
+            st.plotly_chart(
+                build_percentile_chart(
+                    traj_you,
+                    traj_partner=traj_partner,
+                    smooth=smooth_traj,
+                    person_colour=COLOURS["person"],
+                    partner_colour=COLOURS["partner"],
+                ),
+                use_container_width=True, config=PLOTLY_CONFIG,
+            )
+            st.caption(
+                "Percentile via log-normal fit to P25/P50/P75 — indicative, not authoritative. "
+                "Annotation shows total percentile change over the recorded period."
+                + (" Rolling average applied." if smooth_traj else "")
+            )
+
+
+    # ── Annual gain chart ────────────────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 2:
+        with st.expander("Milestone tracker"):
+            MILESTONES = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
+            s_ms = personal_plot_df.sort_values("age")
+            milestone_rows = []
+            for m in MILESTONES:
+                # Find first row where net_worth >= m
+                crossed = s_ms[s_ms["net_worth"] >= m]
+                if len(crossed):
+                    row = crossed.iloc[0]
+                    milestone_rows.append({
+                        "Milestone":    _fmt(m),
+                        "Age reached":  f"{float(row['age']):.1f}",
+                        "Year":         str(int(row["year"])) if "year" in row else "—",
+                        "Net worth then": _fmt(float(row["net_worth"])),
+                    })
+                else:
+                    # Not yet reached — project from current trajectory
+                    first_nw_ms = float(s_ms.iloc[0]["net_worth"])
+                    last_nw_ms  = float(s_ms.iloc[-1]["net_worth"])
+                    asp_ms = float(s_ms.iloc[-1]["age"]) - float(s_ms.iloc[0]["age"])
+                    if asp_ms > 0.5 and last_nw_ms > 0 and last_nw_ms < m:
+                        yrs_ms = None
+                        if first_nw_ms > 0:
+                            cagr_ms = (last_nw_ms / first_nw_ms) ** (1 / asp_ms) - 1
+                            if cagr_ms > 0:
+                                yrs_ms = math.log(m / last_nw_ms) / math.log(1 + cagr_ms)
+                        else:
+                            avg_gain_ms = (last_nw_ms - first_nw_ms) / asp_ms
+                            if avg_gain_ms > 0:
+                                yrs_ms = (m - last_nw_ms) / avg_gain_ms
+                        if yrs_ms is not None:
+                            eta_ms = float(s_ms.iloc[-1]["age"]) + yrs_ms
+                            if eta_ms <= 100:
+                                milestone_rows.append({
+                                    "Milestone":    _fmt(m),
+                                    "Age reached":  f"~{eta_ms:.0f} (projected)",
+                                    "Year":         "—",
+                                    "Net worth then": _fmt(m),
+                                })
+            if milestone_rows:
+                st.dataframe(pd.DataFrame(milestone_rows), use_container_width=True, hide_index=True)
+                st.caption("Projected ages use your current CAGR — treat as illustrative.")
+            else:
+                st.info("Add more data points to see milestone tracking.")
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 2:
+        with st.expander("Annual gains breakdown"):
+            gc_you = build_gains_chart(personal_plot_df, colour=COLOURS["person"], name="Your net worth")
+            if gc_you:
+                st.plotly_chart(gc_you, use_container_width=True, config=PLOTLY_CONFIG)
+            if partner_plot_df is not None and len(partner_plot_df) >= 2:
+                gc_p = build_gains_chart(partner_plot_df, colour=COLOURS["partner"], name="Partner")
+                if gc_p:
+                    st.plotly_chart(gc_p, use_container_width=True, config=PLOTLY_CONFIG)
+            st.caption("Red bars = net worth fell that period. Each bar spans the gap between consecutive data points.")
+
+            # Velocity (% rate) chart
+            vel = build_velocity_chart(personal_plot_df, colour=COLOURS["person"])
+            if vel:
+                st.plotly_chart(vel, use_container_width=True, config=PLOTLY_CONFIG)
+            if partner_plot_df is not None and len(partner_plot_df) >= 3:
+                vel_p = build_velocity_chart(partner_plot_df, colour=COLOURS["partner"])
+                if vel_p:
+                    st.plotly_chart(vel_p, use_container_width=True, config=PLOTLY_CONFIG)
+
+            # Cumulative view
+            cum_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
+            st.plotly_chart(
+                build_cumulative_chart(
+                    personal_plot_df,
+                    colour=COLOURS["person"], name="You",
+                    partner_pdf=partner_plot_df,
+                    partner_colour=COLOURS["partner"],
+                    price_label=cum_price,
+                ),
+                use_container_width=True, config=PLOTLY_CONFIG,
+            )
+
+            # Growth attribution
+            st.markdown("**Growth attribution (rough estimate)**")
+            assumed_return = st.slider("Assumed annual investment return (%)", 0.0, 12.0, 5.0, 0.5,
+                                       key="attr_return",
+                                       help="What % would a passive investment have returned? ~5% is a common real-return assumption.")
+            s_attr = personal_plot_df.sort_values("age")
+            # Mirror gains/velocity/summary aggregation: with monthly snapshots
+            # the per-row attribution would otherwise be ~23 micro-periods at ~1
+            # month each — unreadable and the assumed-return slider value would
+            # be effectively pro-rated to a sliver per row.
+            #
+            # Guard: only aggregate when data spans 2+ years. For a user with one
+            # year of monthly data there's no annual aggregation to do — collapsing
+            # 12 rows to 1 would silently skip the whole table (len < 2 guard
+            # below). Better to render the raw monthly rows than nothing.
+            if ("year" in s_attr.columns
+                    and s_attr["year"].nunique() > 1
+                    and len(s_attr) > s_attr["year"].nunique()):
+                s_attr = (s_attr.groupby("year", as_index=False).last()
+                                .sort_values("year").reset_index(drop=True))
+            if len(s_attr) >= 2 and float(s_attr.iloc[0]["net_worth"]) > 0:
+                attr_rows = []
+                for i in range(1, len(s_attr)):
+                    prev = s_attr.iloc[i-1]
+                    curr = s_attr.iloc[i]
+                    age_gap = float(curr["age"]) - float(prev["age"])
+                    nw_prev = float(prev["net_worth"])
+                    nw_curr = float(curr["net_worth"])
+                    if nw_prev > 0 and age_gap > 0:
+                        investment_component = nw_prev * ((1 + assumed_return/100) ** age_gap - 1)
+                        total_gain = nw_curr - nw_prev
+                        saving_component = total_gain - investment_component
+                        attr_rows.append({
+                            "Period": f"Age {float(prev['age']):.1f}–{float(curr['age']):.1f}",
+                            "Total gain": _fmt_delta(total_gain),
+                            "Est. from returns": _fmt(max(0, investment_component)),
+                            "Est. from saving": _fmt_delta(saving_component),
+                        })
+                if attr_rows:
+                    st.dataframe(pd.DataFrame(attr_rows), use_container_width=True, hide_index=True)
+                    st.caption(
+                        f"'Returns' = what your opening balance at {assumed_return}% p.a. would earn each period. "
+                        "'Saving' = residual (total gain minus estimated returns). "
+                        "Negative saving = drawdown or assets underperformed the assumption."
+                    )
+
+
+    # ── Weeks to FI ──────────────────────────────────────────────────────────────
+
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        # Use fire_number from sidebar goal calculator (fallback to 25x £30k)
+        try:
+            fi_target = fire_number
+        except NameError:
+            fi_target = 750_000
+
+        if fi_target > 0:
+            # At what weekly spending rate is current net worth ≥ 25× spending?
+            # If net worth ≥ fire_number: already FI
+            # Weeks of expenses covered by current net worth = nw / (annual_spending/52)
+            # Or: what spending rate would make today's nw = 25× spending?
+            implied_annual = latest_nw / 25
+            implied_weekly = implied_annual / 52
+            fi_gap = max(0, fi_target - latest_nw)
+
+            fi_cols = st.columns(3)
+            with fi_cols[0]:
+                if latest_nw >= fi_target:
+                    st.metric("Financial independence", "✅ Achieved",
+                              help=f"Net worth ≥ FIRE number ({_fmt(fi_target)}).")
+                else:
+                    st.metric("FIRE gap", _fmt(fi_gap),
+                              help=f"Amount needed to reach FIRE number ({_fmt(fi_target)}).")
+            with fi_cols[1]:
+                st.metric("Implied sustainable spending",
+                          f"{_fmt(implied_weekly)}/wk",
+                          help=f"£{implied_annual:,.0f}/yr — the spending level at which your net worth = 25× (4% SWR).")
+            with fi_cols[2]:
+                fi_pct = min(latest_nw / fi_target * 100, 100) if fi_target > 0 else 0
+                st.metric("FI progress", f"{fi_pct:.0f}%",
+                          help=f"{fi_pct:.1f}% of the way to your FIRE number.")
+
+    # Partner summary metric
+    if partner_plot_df is not None and len(partner_plot_df) > 0:
+        ps = partner_plot_df.sort_values("age")
+        partner_latest_age = float(ps.iloc[-1]["age"])
+        p_nw = float(ps.iloc[-1]["net_worth"])
+        p_pct = estimate_exact_percentile(p_nw, round(partner_latest_age), benchmark)
+        st.success(
+            f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}** · "
+            f"est. **~{p_pct:.0f}th percentile**" if p_pct else
+            f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}**"
         )
-        mc_show_paths = st.slider(
-            "Show sample paths", 0, 100, 30, 5, key="mc_show_paths",
-            help="Number of individual simulation paths to overlay (0 = bands only).",
-        )
 
-        # Reroll button: lets the user see how the bands shift under a different
-        # random draw. Seed defaults to 42 (deterministic UX so the chart doesn't
-        # jitter on slider change), but the user can advance it to peek at
-        # alternative draws — useful for understanding how much the chart shape
-        # depends on the specific random sample.
-        mc_seed_col1, mc_seed_col2 = st.columns([1, 4])
-        with mc_seed_col1:
-            if st.button("🎲 Reroll", key="mc_reroll",
-                         help="Generate a different random draw with the same assumptions."):
-                st.session_state["mc_seed"] = st.session_state.get("mc_seed", 42) + 1
-        with mc_seed_col2:
-            _mc_seed = st.session_state.get("mc_seed", 42)
-            if _mc_seed != 42:
-                st.caption(f"Seed: {_mc_seed} (rerolled). Reset by refreshing the page.")
+        # Combined household callout + head-to-head leaderboard
+        if personal_plot_df is not None and latest_nw is not None:
+            combined = latest_nw + p_nw
+            st.info(f"Combined household net worth: **{_fmt(combined)}**")
 
-        mc_years = max(1, mc_target_age - int(latest_age or 30))
-        mc_paths = run_monte_carlo(
-            start_nw=float(latest_nw),
-            years=mc_years,
-            mean_return=mc_mean / 100 if mc_glide_path is None else 0.05,
-            std_return=mc_sigma / 100 if mc_glide_path is None else 0.12,
-            n_sims=1_000,
-            annual_contribution=mc_monthly * 12,
-            seed=st.session_state.get("mc_seed", 42),
-            glide_path=mc_glide_path,
-        )
+            # Head-to-head at same interpolated benchmark age
+            you_pct = estimate_exact_percentile(latest_nw, round(latest_age or 0), benchmark)
+            if you_pct and p_pct:
+                h2h_col1, h2h_col2, h2h_col3 = st.columns(3)
+                ahead_label = "You" if you_pct >= p_pct else "Partner"
+                ahead_by    = abs(you_pct - p_pct)
+                with h2h_col1:
+                    st.metric("You — percentile", f"~{you_pct:.0f}th")
+                with h2h_col2:
+                    st.metric("Partner — percentile", f"~{p_pct:.0f}th")
+                with h2h_col3:
+                    st.metric("Ahead by", f"{ahead_by:.0f} pct pts",
+                              help=f"{ahead_label} is ahead by {ahead_by:.0f} percentile points "
+                                   f"(age-adjusted comparison).")
 
-        mc_fig = build_monte_carlo_chart(
-            mc_paths,
-            start_age=float(latest_age or 30),
-            target=mc_target_nw if mc_target_nw > 0 else None,
-            show_sample_paths=mc_show_paths,
-            median_colour=COLOURS["p50"],
-            target_colour=COLOURS["person"],
-            price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms
-                         else f"nominal ({DATA_YEAR} prices)"),
-        )
-        st.plotly_chart(mc_fig, use_container_width=True, config=PLOTLY_CONFIG)
 
-        # Outcome summary
-        final_values = mc_paths[:, -1]
-        p10, p50, p90 = (float(v) for v in
-                         (final_values.min() if len(final_values) < 1 else
-                          (np.percentile(final_values, 10),
-                           np.percentile(final_values, 50),
-                           np.percentile(final_values, 90))))
-        prob_target = probability_of_reaching(mc_paths, mc_target_nw) if mc_target_nw > 0 else None
+    # ── Goal / FIRE output ────────────────────────────────────────────────────────
 
-        col_p10, col_p50, col_p90, col_pt = st.columns(4)
-        with col_p10:
-            st.metric(f"Pessimistic (P10) at age {mc_target_age}", _fmt(p10))
-        with col_p50:
-            st.metric(f"Median (P50) at age {mc_target_age}", _fmt(p50))
-        with col_p90:
-            st.metric(f"Optimistic (P90) at age {mc_target_age}", _fmt(p90))
-        with col_pt:
-            if prob_target is not None:
+    if personal_plot_df is not None and latest_nw is not None:
+        sorted_pdf = personal_plot_df.sort_values("age")
+        first_nw   = float(sorted_pdf.iloc[0]["net_worth"])
+        age_span   = latest_age - float(sorted_pdf.iloc[0]["age"])
+
+        for target_label, target_val in [
+            ("your goal", goal_amount),
+            ("FIRE number", fire_number),
+        ]:
+            if target_val > 0 and latest_nw < target_val:
+                gap = target_val - latest_nw
+                pct_there = min(latest_nw / target_val * 100, 100)
+                cols = st.columns([2, 1])
+                with cols[0]:
+                    st.caption(f"Progress toward {target_label} ({_fmt(target_val)}): {pct_there:.0f}%")
+                    st.progress(pct_there / 100)
+                with cols[1]:
+                    if age_span > 0.5 and latest_nw > 0:
+                        cagr_cur = _safe_cagr(first_nw, latest_nw, age_span)
+                        if cagr_cur is not None and cagr_cur > 0.001:
+                            yrs = math.log(target_val / latest_nw) / math.log(1 + cagr_cur)
+                            st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                      help=f"At your current {cagr_cur*100:.1f}% CAGR.")
+                        else:
+                            avg_gain = (latest_nw - first_nw) / age_span
+                            if avg_gain > 0:
+                                yrs = (target_val - latest_nw) / avg_gain
+                                if 0 < yrs < 60:
+                                    st.metric(f"ETA ({_fmt(target_val)})", f"~{yrs:.0f} yrs",
+                                              help=f"At your average gain of {_fmt(avg_gain)}/yr. "
+                                                   f"(CAGR not shown for small or zero starting balances.)")
+
+    # Log scale warning
+    if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
+        st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
+
+
+with tab_plan:
+    # ── Retirement income summary ────────────────────────────────────────────────
+    # Ties the sidebar inputs (state pension, retirement age, target income) together
+    # with the user's projected net worth at retirement and shows estimated annual income.
+
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        with st.expander("Retirement income forecast", expanded=False):
+            st.caption(
+                "Brings together your projected net worth at retirement with state pension "
+                "and shows estimated annual income from three sources. "
+                "All figures in **today's money (real terms)**. Indicative only — not advice."
+            )
+            if not real_terms:
+                st.caption(
+                    "⚠️ The benchmark and percentile above are currently shown in **nominal** terms "
+                    "(the *Real terms* sidebar toggle is off), but this projection works in today's "
+                    "money. Turn on **Real terms** in the sidebar for consistent units."
+                )
+
+            ri_col1, ri_col2, ri_col3 = st.columns(3)
+            with ri_col1:
+                ri_retire_age = st.number_input("Retirement age",
+                    min_value=max(int(latest_age) + 1, 50), max_value=80,
+                    value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
+                    step=1, key="ri_retire_age",
+                    help="Defaults to your pension calculator age in the sidebar.")
+            with ri_col2:
+                ri_real_return = st.number_input("Assumed real return on NW (%)",
+                    0.0, 12.0, 4.0, 0.25, key="ri_real_return",
+                    help="Annual return above inflation. Long-run UK equity has been ~5% real; a balanced 60/40 portfolio nearer 3–4%.")
+            with ri_col3:
+                ri_pension_share = st.slider("% of net worth in pension wrappers", 0, 100,
+                    int(personal_asset_split["Pension"] * 100) if personal_asset_split else 30,
+                    step=5, key="ri_pension_share",
+                    help="Used to split your projected NW into the pension portion (eligible for annuity) "
+                         "vs other wealth (drawn down at 4%).")
+
+            # Project NW to retirement age using the assumed real return
+            _ri_years = ri_retire_age - latest_age
+            _ri_nw_at_retire = latest_nw * (1 + ri_real_return / 100) ** _ri_years
+
+            # Split into pension / other
+            _ri_pension_pot = _ri_nw_at_retire * (ri_pension_share / 100)
+            _ri_other_wealth = _ri_nw_at_retire - _ri_pension_pot
+
+            # 25% tax-free pension commencement lump sum (PCLS), capped at the Lump
+            # Sum Allowance. The remaining 75% is what gets annuitised.
+            _ri_pcls       = tax_free_lump_sum(_ri_pension_pot)
+            _ri_annuitised = _ri_pension_pot - _ri_pcls
+
+            # Annuity rate at retirement age (gilt-linked single-life, recent UK levels)
+            _ri_ann_rate = 0.065 + (ri_retire_age - 65) * 0.0025
+            _ri_annuity = _ri_annuitised * max(_ri_ann_rate, 0.02)
+
+            # 4% draw from non-pension wealth (ISAs, GIAs, property income proxy)
+            _ri_drawdown = _ri_other_wealth * 0.04
+
+            # State pension (assume claimed from age 67+; tapered if user retires earlier)
+            _ri_state_pen = state_pension if ri_retire_age >= 67 else 0
+
+            _ri_total = _ri_annuity + _ri_drawdown + _ri_state_pen
+
+            # Income tax (rUK 2025/26): the annuity and state pension are taxable
+            # income; the 4% draw is assumed to come from ISAs/accessible wealth
+            # (tax-free) and the 25% PCLS is tax-free. Net = pre-tax total − tax.
+            _ri_taxable = _ri_annuity + _ri_state_pen
+            _ri_tax     = income_tax_2025_26(_ri_taxable)
+            _ri_net     = _ri_total - _ri_tax
+
+            st.markdown(
+                f"#### Projected income at age {ri_retire_age}  ·  "
+                f"net worth ≈ {_fmt(_ri_nw_at_retire)}"
+            )
+            inc_c1, inc_c2, inc_c3, inc_c4 = st.columns(4)
+            with inc_c1:
+                st.metric("Annuity from pension", f"{_fmt(_ri_annuity)}/yr",
+                          help=f"From {_fmt(_ri_annuitised)} — the 75% left after the 25% tax-free "
+                               f"lump sum — at a {_ri_ann_rate*100:.1f}% annuity rate. Taxable income; "
+                               "drawdown can be more flexible but rates vary with markets.")
+            with inc_c2:
+                st.metric("4% draw from other wealth", f"{_fmt(_ri_drawdown)}/yr",
+                          help=f"From non-pension wealth {_fmt(_ri_other_wealth)} at 4% safe-withdrawal "
+                               "rate. Assumed tax-free (ISA / accessible wrappers).")
+            with inc_c3:
+                if _ri_state_pen > 0:
+                    st.metric("State pension", f"{_fmt(_ri_state_pen)}/yr",
+                              help="From state pension age (currently 66, rising to 67 by 2028). Taxable.")
+                else:
+                    st.metric("State pension", "Not yet eligible",
+                              help=f"State pension age is 66–67. You'd retire {67 - ri_retire_age:.0f}+ years before that.")
+            with inc_c4:
+                st.metric("Total income (pre-tax)", f"{_fmt(_ri_total)}/yr",
+                          delta=f"~{_fmt(_ri_total/52)}/week",
+                          help="Sum of the three sources above, before income tax.")
+
+            # Net-of-tax + tax-free lump sum — the figures you can actually spend.
+            net_c1, net_c2, net_c3 = st.columns(3)
+            with net_c1:
+                st.metric("Tax-free lump sum (one-off)", _fmt(_ri_pcls),
+                          help="25% of your pension pot, taken tax-free at retirement (capped at the "
+                               f"£{PENSION_LSA:,} Lump Sum Allowance). A one-off, not annual income.")
+            with net_c2:
+                st.metric("Income tax", f"−{_fmt(_ri_tax)}/yr",
+                          help=f"rUK 2025/26 income tax on the taxable {_fmt(_ri_taxable)}/yr "
+                               "(annuity + state pension). The 4% ISA draw and the 25% lump sum are "
+                               "tax-free. Scotland differs.")
+            with net_c3:
+                st.metric("Net annual income", f"{_fmt(_ri_net)}/yr",
+                          delta=f"~{_fmt(_ri_net/52)}/week",
+                          help="Annual income after income tax — what you can actually spend.")
+
+            # Compare to target
+            try:
+                _target = float(pension_income) if pension_income else 0
+            except (NameError, ValueError):
+                _target = 0
+            if _target > 0:
+                _pct = min(_ri_net / _target * 100, 999)
+                _delta = _ri_net - _target
+                if _delta >= 0:
+                    st.success(
+                        f"Your **net** income would exceed your target of {_fmt(_target)}/yr by "
+                        f"**{_fmt(_delta)}/yr** ({_pct:.0f}% of target, after income tax).",
+                        icon="✅",
+                    )
+                else:
+                    st.warning(
+                        f"Your **net** income would fall **{_fmt(abs(_delta))}/yr short** of your target "
+                        f"of {_fmt(_target)}/yr ({_pct:.0f}% of target, after income tax). "
+                        "Consider saving more, working longer, or accepting a lower income.",
+                        icon="⚠️",
+                    )
+
+            st.caption(
+                "**Notes.** Real return assumed constant — actual returns vary year to year. "
+                "Annuity figures are level (no inflation linking) using current UK gilt-linked rates. "
+                "Drawdown uses the 4% rule (Trinity Study) — for a 30-year retirement; longer horizons "
+                "or higher equity exposure may require lower rates. Income tax is the rUK 2025/26 "
+                "estimate (England/Wales/NI — Scotland differs) and assumes the 4% draw comes from "
+                "ISAs/tax-free wrappers."
+            )
+
+
+    # ── ISA bridge calculator (early retirement before pension access) ────────────
+    # Many UK FIRE-planners face a gap: they can stop work at e.g. 50 but private
+    # pension access is locked until 57 (rising to 58 in 2028). The "bridge" is
+    # how much accessible (ISA / GIA) wealth they need to cover spending from FIRE
+    # age until pension access age.
+
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        with st.expander("ISA / accessible-wealth bridge (for early retirement)"):
+            st.caption(
+                "If you want to retire **before pension access age** (currently 57, rising to 58 in 2028, "
+                "and 10 years below state pension age thereafter), you need enough **accessible** wealth "
+                "(ISA, GIA, savings — not pension) to cover spending until the pension unlocks. "
+                "This calculator sizes that bridge fund."
+            )
+            if not real_terms:
+                st.caption(
+                    "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
+                    "toggle is off); the figures here are in today's money. Turn on **Real terms** "
+                    "for consistent units."
+                )
+
+            ib_col1, ib_col2, ib_col3 = st.columns(3)
+            with ib_col1:
+                ib_fire_age = st.number_input(
+                    "FIRE age (stop working)", 35, 65,
+                    value=min(int(latest_age) + 15 if latest_age else 50, 60),
+                    step=1, key="ib_fire_age",
+                    help="Age you intend to stop drawing employment income.",
+                )
+            with ib_col2:
+                ib_pension_age = st.number_input(
+                    "Pension access age", 55, 70, 57, 1, key="ib_pension_age",
+                    help="Earliest you can access private pension. 55 historically; "
+                         "57 from April 2028; will rise with state pension age (10-yr gap).",
+                )
+            with ib_col3:
+                ib_annual_spend = st.number_input(
+                    "Annual spend (£, real terms)", 5_000, 500_000,
+                    int(fire_spending) if fire_spending else 30_000, 1_000,
+                    format="%d", key="ib_spend",
+                    help="What you'll spend each year during the bridge period, in today's money.",
+                )
+
+            bridge_years = max(0, ib_pension_age - ib_fire_age)
+
+            if bridge_years == 0:
+                st.success(
+                    "No bridge needed — your FIRE age is at or after pension access age. "
+                    "You can draw straight from pension wrappers.",
+                    icon="✅",
+                )
+            else:
+                # Bridge calculation: use 4% SWR for the bridge period too.
+                # For short horizons (< 10 yrs) it's conservative; longer horizons
+                # may need higher SWR. The 25x multiplier comes from 1/0.04.
+                #
+                # Two approaches:
+                # 1. Simple: bridge_years × annual_spend (no growth, full liquidation)
+                # 2. SWR-based: spend × 25 × (bridge_years / 30)  [partial Trinity]
+                #
+                # For honesty, show both. The SWR method assumes the bridge fund
+                # also earns ~4% real return during the bridge years.
+                bridge_simple = bridge_years * ib_annual_spend
+                # At constant 4% real return, FV-of-annuity factor for `bridge_years`:
+                #   PV = spend × (1 - (1+r)^-n) / r, with r=0.04
+                r = 0.04
+                pv_factor = (1 - (1 + r) ** -bridge_years) / r if r > 0 else bridge_years
+                bridge_swr = ib_annual_spend * pv_factor
+
+                ib_m1, ib_m2, ib_m3 = st.columns(3)
+                with ib_m1:
+                    st.metric(
+                        "Bridge years",
+                        f"{bridge_years}",
+                        help=f"From FIRE age {ib_fire_age} to pension access age {ib_pension_age}.",
+                    )
+                with ib_m2:
+                    st.metric(
+                        "ISA pot needed (conservative)",
+                        _fmt(bridge_simple),
+                        help="Years × spend. Assumes no growth on the bridge fund "
+                             "(it all just runs down).",
+                    )
+                with ib_m3:
+                    st.metric(
+                        "ISA pot needed (4% real)",
+                        _fmt(bridge_swr),
+                        delta=_fmt(bridge_swr - bridge_simple),
+                        delta_color="inverse",
+                        help="PV-of-annuity at 4% real return. The bridge fund earns "
+                             "while it's being drawn down, so a smaller pot is needed.",
+                    )
+
+                # ETA to bridge target (using latest_nw + CAGR if available)
+                sorted_pdf_for_eta = personal_plot_df.sort_values("age")
+                if len(sorted_pdf_for_eta) >= 2:
+                    _fs = float(sorted_pdf_for_eta.iloc[0]["net_worth"])
+                    _asp = float(sorted_pdf_for_eta.iloc[-1]["age"]) - float(sorted_pdf_for_eta.iloc[0]["age"])
+                    _cagr = _safe_cagr(_fs, latest_nw, _asp)
+                    if _cagr and _cagr > 0:
+                        # Years to grow latest_nw → bridge_swr at current CAGR
+                        if latest_nw < bridge_swr:
+                            yrs_to_bridge = math.log(bridge_swr / latest_nw) / math.log(1 + _cagr)
+                            eta_age = latest_age + yrs_to_bridge
+                            gap_yrs = ib_fire_age - latest_age
+                            if eta_age <= ib_fire_age:
+                                st.success(
+                                    f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
+                                    f"by age {eta_age:.0f} — **{gap_yrs - yrs_to_bridge:.0f} years of buffer** "
+                                    f"before FIRE age {ib_fire_age}.",
+                                    icon="✅",
+                                )
+                            else:
+                                shortfall_yrs = eta_age - ib_fire_age
+                                st.warning(
+                                    f"At your current {_cagr*100:.1f}% CAGR you'd reach the bridge target "
+                                    f"by age {eta_age:.0f} — **{shortfall_yrs:.1f} years past FIRE age {ib_fire_age}**. "
+                                    "Consider extending the timeline, lowering spend, or increasing savings.",
+                                    icon="⚠️",
+                                )
+                        else:
+                            st.success(
+                                f"Your current net worth of {_fmt(latest_nw)} already exceeds the bridge "
+                                f"target of {_fmt(bridge_swr)}. Provided enough of it is in accessible "
+                                "wrappers (ISA / GIA, not pension), you're set.",
+                                icon="✅",
+                            )
+
+                # ── Second leg: pension access age → state pension age ──────────────
+                # Pension wealth is now accessible, but the state pension hasn't
+                # started, so you still self-fund the full spend for these years.
+                leg2_years = max(0, STATE_PENSION_AGE - ib_pension_age)
+                if leg2_years > 0:
+                    leg2_factor = (1 - (1 + r) ** -leg2_years) / r if r > 0 else leg2_years
+                    leg2_pot = ib_annual_spend * leg2_factor
+                    st.markdown(
+                        f"**Second leg — pension access ({ib_pension_age}) to state pension "
+                        f"({STATE_PENSION_AGE})**"
+                    )
+                    l2c1, l2c2, l2c3 = st.columns(3)
+                    with l2c1:
+                        st.metric("Leg-2 years", f"{leg2_years}",
+                                  help="Years drawing your own pot before the state pension starts.")
+                    with l2c2:
+                        st.metric("Leg-2 pot (4% real)", _fmt(leg2_pot),
+                                  help="Self-funded from pension + accessible wealth, since the state "
+                                       "pension isn't in payment yet. PV-of-annuity at 4% real.")
+                    with l2c3:
+                        st.metric("Both legs combined", _fmt(bridge_swr + leg2_pot),
+                                  help=f"Leg 1 (accessible-only, to age {ib_pension_age}) + Leg 2 "
+                                       f"(to state pension age {STATE_PENSION_AGE}). From the state "
+                                       "pension age onward, the state pension reduces your annual need.")
+
+                st.caption(
+                    "**Assumes 4% real return during drawdown.** Leg 1 (to pension access age) must be "
+                    "in accessible wrappers (ISA / GIA, not pension) — this tool doesn't verify that, so "
+                    "check your ISA + GIA balance covers it. Leg 2 (pension access to state pension age) "
+                    "can also draw on pension. From state pension age, the state pension reduces the "
+                    "annual need."
+                )
+
+
+
+    # ── Drawdown / pot longevity simulator ───────────────────────────────────────
+    # How long does your pot last in retirement under various withdrawal rates?
+
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        with st.expander("Retirement drawdown — pot longevity", expanded=False):
+            st.caption(
+                "How long will your money last in retirement? Simulates drawdown from a starting "
+                "pot, with annual withdrawals inflation-adjusted, against a chosen real return. "
+                "Shows the age your pot is depleted — and how that compares to UK life expectancy. "
+                "**All figures in today's money (real terms).** Indicative only — not advice."
+            )
+            if not real_terms:
+                st.caption(
+                    "⚠️ The benchmark/percentile above are **nominal** (the *Real terms* sidebar "
+                    "toggle is off); the figures here are in today's money. Turn on **Real terms** "
+                    "for consistent units."
+                )
+
+            dd_col1, dd_col2, dd_col3, dd_col4 = st.columns(4)
+            with dd_col1:
+                dd_start_age = st.number_input("Retirement age",
+                    min_value=max(int(latest_age) + 1, 50), max_value=80,
+                    value=int(retirement_age) if retirement_age and retirement_age > int(latest_age) else 65,
+                    step=1, key="dd_start_age")
+            with dd_col2:
+                # Project NW to start age at user-chosen real return
+                _dd_default_pot = int(latest_nw * 1.04 ** max(0, dd_start_age - latest_age))
+                dd_start_pot = st.number_input("Starting pot at retirement (£)",
+                    min_value=10_000, max_value=20_000_000,
+                    value=max(10_000, _dd_default_pot), step=10_000, format="%d", key="dd_start_pot",
+                    help="Pre-filled with your latest NW projected at 4% real return to your retirement age. "
+                         "Edit if you want a different starting amount.")
+            with dd_col3:
+                dd_annual_spend = st.number_input("Annual spend (£, today's money)",
+                    min_value=5_000, max_value=500_000,
+                    value=int(fire_spending) if fire_spending else 30_000, step=1_000, format="%d", key="dd_spend",
+                    help="Annual withdrawal in today's money. Will be inflation-adjusted each year.")
+            with dd_col4:
+                dd_real_return = st.number_input("Real return (%)",
+                    -2.0, 10.0, 4.0, 0.25, key="dd_return",
+                    help="Return above inflation on the pot during retirement. "
+                         "Common assumptions: 3% for cautious, 4% balanced, 5% equity-heavy.")
+
+            # Optional: include state pension reducing the withdrawal need
+            dd_include_sp = st.checkbox("Include state pension (reduces drawdown need)",
+                value=True, key="dd_sp",
+                help="If checked, state pension income (from age 66/67) is subtracted from the annual "
+                     "spend, so less is drawn from the pot once you qualify.")
+            if dd_include_sp:
+                st.caption(
+                    "State pension is subtracted £-for-£ from the annual spend — a simplification that "
+                    "assumes it falls within your Personal Allowance and isn't itself taxed. Drawdown "
+                    "figures are pre-tax; tax on withdrawals depends on your wrapper mix (ISA "
+                    "withdrawals are tax-free, pension income is taxable above the allowance)."
+                )
+
+            # Simulate
+            _dd_pot = float(dd_start_pot)
+            _dd_r = dd_real_return / 100
+            _dd_ages = [dd_start_age]
+            _dd_pots = [_dd_pot]
+            _dd_runout_age = None
+            _max_sim_age = 100
+            _state_pen_age = STATE_PENSION_AGE  # imported from utils/uk_tax.py
+
+            for age in range(dd_start_age, _max_sim_age):
+                # Annual withdrawal in real terms (already adjusted because we work in real £)
+                # Reduce by state pension from state pension age onward, if opted in
+                sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
+                net_withdrawal = max(0, dd_annual_spend - sp)
+                # End-of-year balance: grow first, then withdraw (mid-year would be more accurate
+                # but ordering doesn't change pot longevity much for small SWRs)
+                _dd_pot = _dd_pot * (1 + _dd_r) - net_withdrawal
+                _dd_ages.append(age + 1)
+                _dd_pots.append(max(0, _dd_pot))
+                if _dd_pot <= 0 and _dd_runout_age is None:
+                    _dd_runout_age = age + 1
+                    break
+
+            # Headline metric row
+            dd_m1, dd_m2, dd_m3, dd_m4 = st.columns(4)
+            with dd_m1:
+                st.metric("Years in retirement covered",
+                          f"{(_dd_runout_age - dd_start_age) if _dd_runout_age else f'≥{_max_sim_age - dd_start_age}'}")
+            with dd_m2:
+                if _dd_runout_age:
+                    st.metric("Pot depleted at age", f"{_dd_runout_age}",
+                              help="Age your pot reaches zero given the spend and real return.")
+                else:
+                    st.metric("Pot survives to", f"≥ age {_max_sim_age}",
+                              delta="Sustainable", help="Pot still has funds at age 100.")
+            with dd_m3:
+                # UK ONS cohort life expectancy at this retirement age (utils/uk_tax.py)
+                _le_at_retire = life_expectancy_at(dd_start_age)
+                st.metric("Avg life expectancy", f"~{_le_at_retire}",
+                          help="ONS cohort life expectancy at this retirement age (mixed-sex). "
+                               "Many will live longer — plan for ~10 years beyond average.")
+            with dd_m4:
+                # Implied SWR
+                _swr_implied = dd_annual_spend / dd_start_pot * 100
+                st.metric("Implied withdrawal rate", f"{_swr_implied:.1f}%",
+                          help="Annual spend ÷ starting pot. <4% is generally considered safe over 30+ years.")
+
+            # Verdict
+            if _dd_runout_age is None:
+                st.success(f"Your pot sustains the chosen spend indefinitely at {dd_real_return:.1f}% real return.",
+                           icon="✅")
+            else:
+                yrs_covered = _dd_runout_age - dd_start_age
+                if _dd_runout_age >= _le_at_retire + 5:
+                    st.info(
+                        f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
+                        f"That's comfortably beyond UK average life expectancy at this age (~{_le_at_retire}).",
+                        icon="✅",
+                    )
+                elif _dd_runout_age >= _le_at_retire:
+                    st.warning(
+                        f"Pot lasts ~{yrs_covered} years, until age {_dd_runout_age}. "
+                        f"Just covers average life expectancy (~{_le_at_retire}) — half of people will outlive this. "
+                        "Consider lower spend, higher return assumption, or planning longer.",
+                        icon="⚠️",
+                    )
+                else:
+                    st.error(
+                        f"Pot lasts only ~{yrs_covered} years, depleting at age {_dd_runout_age} — "
+                        f"well before average life expectancy (~{_le_at_retire}). "
+                        "Reduce spend, retire later, or save more.",
+                        icon="🚨",
+                    )
+
+            # Drawdown chart
+            _dd_fig = go.Figure()
+            _dd_fig.add_trace(go.Scatter(
+                x=_dd_ages, y=_dd_pots,
+                mode="lines", line=dict(color=COLOURS["person"], width=2.5),
+                fill="tozeroy", fillcolor="rgba(249,115,22,0.10)",
+                name="Pot balance",
+                hovertemplate="Age %{x}<br>£%{y:,.0f}<extra></extra>",
+            ))
+            _dd_fig.add_hline(y=0, line=dict(color=NEUTRAL_GREY, width=1))
+            # Life expectancy marker
+            _dd_fig.add_vline(x=_le_at_retire,
+                line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
+                annotation_text=f"Avg life exp ~{_le_at_retire}",
+                annotation_position="top right",
+                annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)),
+            )
+            if _dd_runout_age:
+                _dd_fig.add_vline(x=_dd_runout_age,
+                    line=dict(color="#ef4444", width=1.5, dash="dot"),
+                    annotation_text=f"Depleted age {_dd_runout_age}",
+                    annotation_position="bottom right",
+                    annotation=dict(font=dict(size=10, color="#ef4444")),
+                )
+            _dd_fig.update_layout(
+                title=dict(text="Pot balance over retirement (real terms)",
+                           font=dict(size=14, color=TITLE_COLOUR), x=0),
+                xaxis=dict(title="Age", gridcolor=GRID_COLOUR, zeroline=False),
+                yaxis=dict(title="Pot value (£, today's money)", tickprefix="£", tickformat=",.0f",
+                           gridcolor=GRID_COLOUR),
+                plot_bgcolor="white", paper_bgcolor="white",
+                height=300, margin=dict(l=70, r=40, t=50, b=50), hovermode="x unified",
+            )
+            st.plotly_chart(_dd_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+            # Sensitivity table: how does longevity change with different real returns?
+            st.markdown("**Sensitivity: how long does the pot last at different return assumptions?**")
+            sens_rows = []
+            for _r_test in [1, 2, 3, 4, 5, 6]:
+                _r = _r_test / 100
+                _pot = float(dd_start_pot)
+                _runout = None
+                for age in range(dd_start_age, _max_sim_age + 1):
+                    sp = state_pension if (dd_include_sp and age >= _state_pen_age) else 0
+                    net_w = max(0, dd_annual_spend - sp)
+                    _pot = _pot * (1 + _r) - net_w
+                    if _pot <= 0 and _runout is None:
+                        _runout = age + 1
+                        break
+                sens_rows.append({
+                    "Real return": f"{_r_test}%",
+                    "Pot lasts until": (f"age {_runout}" if _runout
+                                         else f"≥ age {_max_sim_age} (sustainable)"),
+                    "Years covered": (f"{_runout - dd_start_age}" if _runout
+                                       else f"≥ {_max_sim_age - dd_start_age}"),
+                })
+            st.dataframe(pd.DataFrame(sens_rows), use_container_width=True, hide_index=True)
+            st.caption(
+                "Sensitivity is one of the most important things to check — small changes in assumed "
+                "real return swing the depletion age by years."
+            )
+
+            # ── Stochastic drawdown ───────────────────────────────────────────────
+            st.markdown("---")
+            st.markdown("**Stochastic stress test (sequence-of-returns risk)**")
+            st.caption(
+                "Same setup, but with **random year-to-year returns** instead of the fixed real "
+                "return. Runs 1,000 simulations to compute the probability that your pot survives "
+                "to each age. A bad first decade — even with the same long-run average — can deplete "
+                "much faster than the deterministic model suggests."
+            )
+
+            sd_col1, sd_col2 = st.columns(2)
+            with sd_col1:
+                sd_sigma = st.number_input(
+                    "Annual volatility (%)", 0.0, 25.0, 10.0, 0.5, key="sd_sigma",
+                    help="Volatility of the retirement portfolio. Conservative 60/40 ≈ 9-10%, "
+                         "balanced ≈ 11-13%, equity-heavy ≈ 14-18%.",
+                )
+            with sd_col2:
+                sd_horizon_age = st.number_input(
+                    "Plan to age", _le_at_retire, 100, max(_le_at_retire + 5, 90), 1, key="sd_horizon",
+                    help="Age you want your pot to last to. The success rate is computed at this age.",
+                )
+
+            # Build simulation: withdrawals = -annual_contribution
+            # Each year's net withdrawal varies if state pension kicks in mid-horizon,
+            # so we run it ourselves rather than calling run_monte_carlo directly.
+            sd_years = sd_horizon_age - dd_start_age
+            if sd_years > 0:
+                sd_rng = np.random.default_rng(seed=42)
+                sd_n_sims = 1_000
+                sd_returns = sd_rng.normal(
+                    loc=dd_real_return / 100,
+                    scale=sd_sigma / 100,
+                    size=(sd_n_sims, sd_years),
+                )
+                sd_paths = np.zeros((sd_n_sims, sd_years + 1), dtype=float)
+                sd_paths[:, 0] = float(dd_start_pot)
+                for t in range(sd_years):
+                    age_t = dd_start_age + t
+                    sp = state_pension if (dd_include_sp and age_t >= _state_pen_age) else 0
+                    net_w = max(0, dd_annual_spend - sp)
+                    sd_paths[:, t + 1] = np.maximum(0, sd_paths[:, t] * (1 + sd_returns[:, t]) - net_w)
+                    # Once a path hits zero it stays zero (no further negative draw)
+
+                # Survival probability over time
+                sd_alive = (sd_paths > 0).mean(axis=0)
+                sd_ages_arr = np.arange(dd_start_age, dd_start_age + sd_years + 1)
+
+                survival_at_horizon = float(sd_alive[-1])
+                survival_at_le = float(sd_alive[_le_at_retire - dd_start_age]) \
+                    if _le_at_retire - dd_start_age <= sd_years else 1.0
+
+                sd_m1, sd_m2 = st.columns(2)
+                with sd_m1:
+                    st.metric(
+                        f"Survive to avg life expectancy (~{_le_at_retire})",
+                        f"{survival_at_le*100:.0f}%",
+                        help=f"Probability the pot still has funds at age {_le_at_retire}.",
+                    )
+                with sd_m2:
+                    st.metric(
+                        f"Survive to age {sd_horizon_age}",
+                        f"{survival_at_horizon*100:.0f}%",
+                        help=f"Probability the pot still has funds at age {sd_horizon_age}.",
+                    )
+
+                # Verdict colour for the headline
+                if survival_at_horizon >= 0.85:
+                    st.success(
+                        f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
+                        f"age {sd_horizon_age} under the chosen volatility — comfortable cushion.",
+                        icon="✅",
+                    )
+                elif survival_at_horizon >= 0.6:
+                    st.warning(
+                        f"Pot has a **{survival_at_horizon*100:.0f}% probability** of surviving to "
+                        f"age {sd_horizon_age}. Reasonable but not safe — consider a lower spend or "
+                        "more cautious assumptions.",
+                        icon="⚠️",
+                    )
+                else:
+                    st.error(
+                        f"Pot has only a **{survival_at_horizon*100:.0f}% probability** of surviving "
+                        f"to age {sd_horizon_age}. High risk of running out — reduce spend, retire later, "
+                        "or save more.",
+                        icon="🚨",
+                    )
+
+                # Survival probability chart
+                sd_fig = go.Figure()
+                sd_fig.add_trace(go.Scatter(
+                    x=sd_ages_arr, y=sd_alive * 100,
+                    mode="lines",
+                    line=dict(color=COLOURS["p50"], width=3),
+                    fill="tozeroy", fillcolor="rgba(29,78,216,0.10)",
+                    name="Survival probability",
+                    hovertemplate="Age %{x}<br>%{y:.0f}% chance pot survives<extra></extra>",
+                ))
+                sd_fig.add_hline(y=50, line=dict(color=NEUTRAL_GREY, width=1, dash="dot"),
+                                 annotation_text="50%", annotation_position="right",
+                                 annotation=dict(font=dict(size=10, color=NEUTRAL_GREY)))
+                sd_fig.add_vline(x=_le_at_retire,
+                                 line=dict(color=AXIS_LABEL_COLOUR, width=1, dash="dash"),
+                                 annotation_text=f"Avg life exp ~{_le_at_retire}",
+                                 annotation_position="top left",
+                                 annotation=dict(font=dict(size=10, color=AXIS_LABEL_COLOUR)))
+                sd_fig.update_layout(
+                    title=dict(text="Probability the pot survives to each age",
+                               font=dict(size=13, color=TITLE_COLOUR), x=0),
+                    xaxis=dict(title="Age", gridcolor=GRID_COLOUR),
+                    yaxis=dict(title="Survival probability (%)", ticksuffix="%",
+                               range=[0, 105], gridcolor=GRID_COLOUR),
+                    plot_bgcolor="white", paper_bgcolor="white",
+                    height=260, margin=dict(l=60, r=40, t=50, b=50),
+                    showlegend=False, hovermode="x unified",
+                )
+                st.plotly_chart(sd_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+
+
+    # ── What-if projection ────────────────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 1:
+        with st.expander("What-if projection"):
+            st.caption(
+                "Forward-project your net worth from the latest data point. "
+                "**By default this is a pure investment-growth projection — no further savings or contributions** "
+                "(your starting balance grows by the chosen CAGR). "
+                "Use the **Monthly contributions** field below to layer in ongoing saving. "
+                "Illustrative only — not financial advice."
+            )
+            wcol1, wcol2, wcol3, wcol4 = st.columns(4)
+            with wcol1:
+                wi_cagr1 = st.number_input("Scenario 1 (%)", -5.0, 25.0, 3.0, 0.5, key="wi1",
+                                           help="Bear case / conservative")
+            with wcol2:
+                wi_cagr2 = st.number_input("Scenario 2 (%)", -5.0, 25.0, 6.0, 0.5, key="wi2",
+                                           help="Base case")
+            with wcol3:
+                wi_cagr3 = st.number_input("Scenario 3 (%)", -5.0, 25.0, 10.0, 0.5, key="wi3",
+                                           help="Bull case / optimistic")
+            with wcol4:
+                wi_age = st.slider(
+                    "Project to age",
+                    min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
+                    max_value=85, value=min(70, 85), key="whatif_age",
+                )
+            wi_monthly = st.number_input(
+                "Monthly contributions (£)", 0, 50_000, 0, 100, format="%d", key="wi_monthly",
+                help="Optional ongoing savings, added on top of investment returns. "
+                     "Applied equally to all three scenarios. Leave at 0 for a pure-growth projection.",
+            )
+            if wi_monthly == 0:
+                st.caption("ℹ️ Projection assumes **no further contributions** — only investment growth at the CAGR above.")
+            else:
+                st.caption(
+                    f"ℹ️ Projection includes **£{wi_monthly:,}/month** ongoing contributions "
+                    f"(£{wi_monthly*12:,}/year) on top of investment growth."
+                )
+
+            scenarios = [
+                (wi_cagr1 / 100, f"Scenario 1 ({wi_cagr1:+.1f}%)"),
+                (wi_cagr2 / 100, f"Scenario 2 ({wi_cagr2:+.1f}%)"),
+                (wi_cagr3 / 100, f"Scenario 3 ({wi_cagr3:+.1f}%)"),
+            ]
+            st.plotly_chart(
+                build_whatif_figure(
+                    personal_plot_df, benchmark, scenarios,
+                    project_to_age=wi_age,
+                    monthly_savings=wi_monthly,
+                    actual_colour=COLOURS["person"],
+                    price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR} prices)"),
+                ),
+                use_container_width=True, config=PLOTLY_CONFIG,
+            )
+
+            # Projected percentiles at target age for each scenario
+            if latest_nw and latest_nw > 0:
+                sc_cols = st.columns(3)
+                for i, (cagr, sc_label) in enumerate(scenarios):
+                    t = wi_age - (latest_age or 0)
+                    annual_wi = wi_monthly * 12
+                    if abs(cagr) < 1e-10:
+                        proj_nw_at = latest_nw + annual_wi * t
+                    else:
+                        proj_nw_at = (latest_nw * (1 + cagr) ** t
+                                      + annual_wi * ((1 + cagr) ** t - 1) / cagr)
+                    proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark)
+                    with sc_cols[i]:
+                        st.metric(
+                            sc_label,
+                            _fmt(proj_nw_at),
+                            delta=f"~{proj_pct:.0f}th pct" if proj_pct else "n/a",
+                            help=(f"Projected net worth at age {wi_age} with £{wi_monthly:,}/mo "
+                                  "ongoing contributions on top of investment growth."
+                                  if wi_monthly else
+                                  f"Projected net worth at age {wi_age} from pure investment growth "
+                                  "(no further contributions)."),
+                        )
+
+
+    # ── Monte Carlo projection ────────────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) >= 1 and latest_nw and latest_nw > 0:
+        with st.expander("Monte Carlo projection (stochastic returns)"):
+            st.caption(
+                "Forward-project with **random returns** rather than a fixed CAGR. "
+                "Each simulation samples annual returns from a normal distribution; "
+                "the shaded bands show the range of likely outcomes. "
+                "This captures sequence-of-returns risk that the deterministic what-if can't show."
+            )
+
+            # Mode toggle: fixed allocation vs glide path
+            mc_mode = st.radio(
+                "Allocation",
+                ["Fixed return assumption", "Equity/bond glide path"],
+                key="mc_mode", horizontal=True,
+                help="Glide path uses real asset-class assumptions (equity ~5.5%/18%, "
+                     "bond ~1.5%/6%) and lets you de-risk over time.",
+            )
+
+            mc_glide_path: tuple[float, float] | None = None
+
+            if mc_mode == "Fixed return assumption":
+                mc1, mc2 = st.columns(2)
+                with mc1:
+                    mc_mean = st.number_input(
+                        "Expected real return (%)", -5.0, 15.0, 5.0, 0.5, key="mc_mean",
+                        help="60/40 portfolio ≈ 4-5%, 100% equity ≈ 5-7%.",
+                    )
+                with mc2:
+                    mc_sigma = st.number_input(
+                        "Annual volatility (%)", 0.0, 30.0, 12.0, 1.0, key="mc_sigma",
+                        help="60/40 portfolio ≈ 9-11%, 100% global equity ≈ 16-18%.",
+                    )
+            else:
+                g1, g2 = st.columns(2)
+                with g1:
+                    gp_start = st.slider(
+                        "Equity allocation now (%)", 0, 100, 90, 5, key="mc_gp_start",
+                    )
+                with g2:
+                    gp_end = st.slider(
+                        "Equity allocation at target age (%)", 0, 100, 40, 5, key="mc_gp_end",
+                    )
+                mc_glide_path = (gp_start / 100, gp_end / 100)
+                # mc_mean / mc_sigma not used when glide path active
+                mc_mean = mc_sigma = 0  # placeholder for downstream caption logic
+
+            mc3, mc4 = st.columns(2)
+            with mc3:
+                mc_target_age = st.slider(
+                    "Project to age",
+                    min_value=max(int(latest_age) + 1 if latest_age else 31, 30),
+                    max_value=85,
+                    value=min(int(latest_age) + 25 if latest_age else 65, 85),
+                    key="mc_target_age",
+                )
+            with mc4:
+                mc_monthly = st.number_input(
+                    "Monthly contributions (£)", 0, 50_000, 0, 100,
+                    format="%d", key="mc_monthly",
+                )
+
+            mc_target_nw = st.number_input(
+                "Target net worth (£) — optional",
+                0, 10_000_000, int(goal_amount) if "goal_amount" in dir() and goal_amount else 500_000,
+                10_000, format="%d", key="mc_target",
+                help="Probability of finishing above this value will be shown below.",
+            )
+            mc_show_paths = st.slider(
+                "Show sample paths", 0, 100, 30, 5, key="mc_show_paths",
+                help="Number of individual simulation paths to overlay (0 = bands only).",
+            )
+
+            # Reroll button: lets the user see how the bands shift under a different
+            # random draw. Seed defaults to 42 (deterministic UX so the chart doesn't
+            # jitter on slider change), but the user can advance it to peek at
+            # alternative draws — useful for understanding how much the chart shape
+            # depends on the specific random sample.
+            mc_seed_col1, mc_seed_col2 = st.columns([1, 4])
+            with mc_seed_col1:
+                if st.button("🎲 Reroll", key="mc_reroll",
+                             help="Generate a different random draw with the same assumptions."):
+                    st.session_state["mc_seed"] = st.session_state.get("mc_seed", 42) + 1
+            with mc_seed_col2:
+                _mc_seed = st.session_state.get("mc_seed", 42)
+                if _mc_seed != 42:
+                    st.caption(f"Seed: {_mc_seed} (rerolled). Reset by refreshing the page.")
+
+            mc_years = max(1, mc_target_age - int(latest_age or 30))
+            mc_paths = run_monte_carlo(
+                start_nw=float(latest_nw),
+                years=mc_years,
+                mean_return=mc_mean / 100 if mc_glide_path is None else 0.05,
+                std_return=mc_sigma / 100 if mc_glide_path is None else 0.12,
+                n_sims=1_000,
+                annual_contribution=mc_monthly * 12,
+                seed=st.session_state.get("mc_seed", 42),
+                glide_path=mc_glide_path,
+            )
+
+            mc_fig = build_monte_carlo_chart(
+                mc_paths,
+                start_age=float(latest_age or 30),
+                target=mc_target_nw if mc_target_nw > 0 else None,
+                show_sample_paths=mc_show_paths,
+                median_colour=COLOURS["p50"],
+                target_colour=COLOURS["person"],
+                price_label=(f"{REAL_BASE_YEAR} real terms" if real_terms
+                             else f"nominal ({DATA_YEAR} prices)"),
+            )
+            st.plotly_chart(mc_fig, use_container_width=True, config=PLOTLY_CONFIG)
+
+            # Outcome summary
+            final_values = mc_paths[:, -1]
+            p10, p50, p90 = (float(v) for v in
+                             (final_values.min() if len(final_values) < 1 else
+                              (np.percentile(final_values, 10),
+                               np.percentile(final_values, 50),
+                               np.percentile(final_values, 90))))
+            prob_target = probability_of_reaching(mc_paths, mc_target_nw) if mc_target_nw > 0 else None
+
+            col_p10, col_p50, col_p90, col_pt = st.columns(4)
+            with col_p10:
+                st.metric(f"Pessimistic (P10) at age {mc_target_age}", _fmt(p10))
+            with col_p50:
+                st.metric(f"Median (P50) at age {mc_target_age}", _fmt(p50))
+            with col_p90:
+                st.metric(f"Optimistic (P90) at age {mc_target_age}", _fmt(p90))
+            with col_pt:
+                if prob_target is not None:
+                    st.metric(
+                        "Reach target",
+                        f"{prob_target*100:.0f}%",
+                        help=f"Fraction of simulations that finish at or above £{mc_target_nw:,}.",
+                    )
+
+            if mc_glide_path is None:
+                assumption_text = f"N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) fixed each year"
+            else:
+                assumption_text = (
+                    f"glide from {mc_glide_path[0]*100:.0f}% equity to {mc_glide_path[1]*100:.0f}% over "
+                    f"{mc_years} yrs; portfolio mean/sigma blended from equity (5.5%/18%) and bonds (1.5%/6%)"
+                )
+            st.caption(
+                f"1,000 simulations · {assumption_text} · random seed fixed for reproducibility. "
+                "Real markets show mean reversion and fat tails — treat as a planning aid, not a forecast."
+            )
+
+
+
+with tab_tax:
+    # ── UK tax wrapper utilisation tracker ────────────────────────────────────────
+
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        with st.expander("UK tax wrapper utilisation (ISA · LISA · Pension)"):
+            st.caption(
+                "Track how much of each year's UK tax-advantaged wrapper allowance you're using. "
+                "Pension annual allowance includes 3-year carryforward of unused capacity. "
+                "**Allowances as of 2025/26.** Indicative — not tax advice."
+            )
+            st.caption(
+                "📅 From **6 April 2027** the cash-ISA limit drops to **£12,000/yr** for under-65s "
+                "(within the unchanged £20,000 overall ISA allowance); over-65s keep the full "
+                "£20,000 in cash."
+            )
+
+            # Allowance constants imported from utils/uk_tax.py (tested in test_uk_tax.py).
+            # Aliased here so the existing UI code reads naturally.
+            TAPER_THRESHOLD_INCOME = TAPER_THRESHOLD
+
+            tw_col1, tw_col2, tw_col3 = st.columns(3)
+            with tw_col1:
+                tw_isa = st.number_input(
+                    "ISA contributed this year (£)", 0, 20_000, 0, 500, format="%d", key="tw_isa",
+                    help="Cash, S&S, Innovative Finance and LISA combined — max £20k.",
+                )
+            with tw_col2:
+                tw_lisa = st.number_input(
+                    "Of which LISA (£)", 0, 4_000, 0, 500, format="%d", key="tw_lisa",
+                    help="LISA: max £4,000/yr, counts against ISA allowance. Only available "
+                         "if you're 18-50 and opened before age 40. Government 25% bonus.",
+                )
+                # The 40-50 gap: you can only contribute if you already have a LISA.
+                # Default to True (permissive) when age is below 40 or above 50 since
+                # the answer is determined by age alone in those bands.
+                _show_has_lisa = (latest_age is not None and 40 <= latest_age <= 50)
+                tw_has_lisa = st.checkbox(
+                    "I already have an open LISA",
+                    value=True,
+                    key="tw_has_lisa",
+                    help="LISA contributions between age 40 and 50 are only allowed if you "
+                         "opened a LISA before age 40. Untick if you don't already have one.",
+                    disabled=not _show_has_lisa,
+                ) if _show_has_lisa else True
+            with tw_col3:
+                tw_pension = st.number_input(
+                    "Pension contributions this year (£)", 0, 200_000, 0, 1_000,
+                    format="%d", key="tw_pension",
+                    help="All gross pension contributions across employer + personal pensions, "
+                         "salary sacrifice, and tax-relievable personal contributions.",
+                )
+
+            # ── High-earner taper inputs ──────────────────────────────────────────
+            st.markdown("**Pension taper** (for high earners)")
+            tp_cols = st.columns([2, 1])
+            with tp_cols[0]:
+                tw_adjusted_income = st.number_input(
+                    "Adjusted income (£/yr)", 0, 2_000_000, 0, 5_000,
+                    format="%d", key="tw_adjusted_income",
+                    help="UK 'adjusted income' is broadly taxable income + employer pension contributions. "
+                         f"For income over £{TAPER_THRESHOLD_INCOME:,}, the £{PENSION_AA:,} annual allowance "
+                         "reduces by £1 for every £2 over the threshold, floored at £10,000.",
+                )
+            # Compute tapered AA via the unit-tested helper
+            tapered_aa, taper_reduction = tapered_pension_allowance(tw_adjusted_income)
+            with tp_cols[1]:
+                if taper_reduction > 0:
+                    st.metric(
+                        "Tapered AA",
+                        f"£{tapered_aa:,.0f}",
+                        delta=f"-£{taper_reduction:,.0f}",
+                        delta_color="inverse",
+                        help=f"Reduced from £{PENSION_AA:,} due to adjusted income above £{TAPER_THRESHOLD_INCOME:,}.",
+                    )
+                else:
+                    st.metric("Tapered AA", f"£{PENSION_AA:,}", delta="No taper applied")
+
+            st.markdown("**Pension carryforward** (use unused allowance from the previous 3 years)")
+            cf_cols = st.columns(3)
+            with cf_cols[0]:
+                cf_3 = st.number_input("Unused 3 years ago (£)", 0, 60_000, 0, 1_000,
+                                       format="%d", key="cf_3")
+            with cf_cols[1]:
+                cf_2 = st.number_input("Unused 2 years ago (£)", 0, 60_000, 0, 1_000,
+                                       format="%d", key="cf_2")
+            with cf_cols[2]:
+                cf_1 = st.number_input("Unused 1 year ago (£)", 0, 60_000, 0, 1_000,
+                                       format="%d", key="cf_1")
+            carryforward = cf_1 + cf_2 + cf_3
+            # Use tapered_aa for this year, full PENSION_AA for carryforward calculation
+            # (carryforward years use that year's allowance — user can input what they had)
+            effective_pension_allowance = tapered_aa + carryforward
+
+            # Calculations — use the tested utility functions
+            isa_rem     = isa_remaining(tw_isa)
+            lisa_rem    = lisa_remaining(
+                tw_lisa,
+                age=int(latest_age) if latest_age is not None else None,
+                has_existing_lisa=tw_has_lisa,
+            )
+            pension_rem = max(0.0, effective_pension_allowance - tw_pension)
+
+            # LISA contribution rules at the user's age
+            lisa_closed_over_50 = latest_age is not None and latest_age > 50
+            lisa_blocked_no_existing = (
+                latest_age is not None and 40 <= latest_age <= 50 and not tw_has_lisa
+            )
+            if lisa_closed_over_50 and tw_lisa > 0:
+                st.warning(
+                    f"You're over 50, so LISA contributions are no longer allowed. "
+                    f"Existing LISA balances continue to grow, but new pay-ins stopped at 50.",
+                    icon="⚠️",
+                )
+            elif lisa_blocked_no_existing and tw_lisa > 0:
+                st.warning(
+                    f"At age {int(latest_age)}, you can only contribute to a LISA if you "
+                    f"already had one open (you can't open a new one after 39). The £"
+                    f"{tw_lisa:,} you entered won't be eligible for the 25% bonus.",
+                    icon="⚠️",
+                )
+
+            isa_pct     = tw_isa / ISA_ALLOWANCE * 100
+            lisa_pct    = tw_lisa / LISA_ALLOWANCE * 100
+            pension_pct = tw_pension / max(effective_pension_allowance, 1) * 100
+
+            # Headline metrics
+            st.markdown("")
+            st.markdown("**Utilisation this year**")
+            u_col1, u_col2, u_col3 = st.columns(3)
+            with u_col1:
                 st.metric(
-                    "Reach target",
-                    f"{prob_target*100:.0f}%",
-                    help=f"Fraction of simulations that finish at or above £{mc_target_nw:,}.",
+                    "ISA",
+                    f"{isa_pct:.0f}%",
+                    delta=f"£{tw_isa:,} / £{ISA_ALLOWANCE:,}",
+                    delta_color="off",
+                    help=f"£{isa_rem:,.0f} remaining before 5 April.",
+                )
+                st.progress(min(tw_isa / ISA_ALLOWANCE, 1.0))
+            with u_col2:
+                st.metric(
+                    "LISA (of ISA)",
+                    f"{lisa_pct:.0f}%",
+                    delta=f"£{tw_lisa:,} / £{LISA_ALLOWANCE:,}",
+                    delta_color="off",
+                    help=f"£{lisa_rem:,.0f} remaining. Government tops up 25% (up to £1k/yr).",
+                )
+                st.progress(min(tw_lisa / LISA_ALLOWANCE, 1.0))
+            with u_col3:
+                st.metric(
+                    "Pension",
+                    f"{pension_pct:.0f}%",
+                    delta=f"£{tw_pension:,} / £{effective_pension_allowance:,.0f}",
+                    delta_color="off",
+                    help=f"£{pension_rem:,.0f} remaining (includes £{carryforward:,} carryforward).",
+                )
+                st.progress(min(tw_pension / max(effective_pension_allowance, 1), 1.0))
+
+            # Smart recommendation banner — uses the tested pension_relief_estimate helper
+            recs = []
+            if pension_rem >= 5_000:
+                relief_higher = pension_relief_estimate(pension_rem, 0.40)
+                relief_basic  = pension_relief_estimate(pension_rem, 0.20)
+                recs.append(
+                    f"£{pension_rem:,.0f} pension headroom — adding it could save "
+                    f"up to £{relief_higher:,.0f} in tax relief at 40% "
+                    f"(or £{relief_basic:,.0f} at basic rate)."
+                )
+            if isa_rem >= 1_000:
+                recs.append(
+                    f"£{isa_rem:,.0f} ISA headroom — sheltered from CGT and dividend tax. "
+                    f"Use it or lose it (no carryforward)."
+                )
+            if 0 < tw_lisa < LISA_ALLOWANCE:
+                bonus_remaining = lisa_bonus(lisa_rem)
+                recs.append(
+                    f"£{lisa_rem:,.0f} LISA headroom — government adds 25% on top "
+                    f"(up to £{bonus_remaining:,.0f} this year)."
                 )
 
-        if mc_glide_path is None:
-            assumption_text = f"N(μ={mc_mean:.1f}%, σ={mc_sigma:.1f}%) fixed each year"
-        else:
-            assumption_text = (
-                f"glide from {mc_glide_path[0]*100:.0f}% equity to {mc_glide_path[1]*100:.0f}% over "
-                f"{mc_years} yrs; portfolio mean/sigma blended from equity (5.5%/18%) and bonds (1.5%/6%)"
+            if recs:
+                st.info("**Suggestions:**\n\n" + "\n\n".join(f"- {r}" for r in recs), icon="💡")
+            elif tw_isa > 0 or tw_pension > 0 or tw_lisa > 0:
+                st.success(
+                    "You've used all your immediate wrapper allowances for this tax year. "
+                    "Consider building up carryforward for next year if you're earning above £60k.",
+                    icon="✅",
+                )
+
+            # Summary table
+            st.markdown("**Annual allowance reference (2025/26)**")
+            pension_aa_note = (
+                f"Tapered to £{tapered_aa:,.0f} at adjusted income £{tw_adjusted_income:,}"
+                if taper_reduction > 0
+                else f"Standard £{PENSION_AA:,} (no taper at £{tw_adjusted_income:,} adjusted income)"
             )
-        st.caption(
-            f"1,000 simulations · {assumption_text} · random seed fixed for reproducibility. "
-            "Real markets show mean reversion and fat tails — treat as a planning aid, not a forecast."
-        )
+            ref = pd.DataFrame({
+                "Wrapper": ["ISA (total)", "  └─ Lifetime ISA", "Pension AA",
+                            "Pension AA + carryforward"],
+                "2025/26 limit": [
+                    f"£{ISA_ALLOWANCE:,}",
+                    f"£{LISA_ALLOWANCE:,}",
+                    f"£{tapered_aa:,.0f}",
+                    f"£{effective_pension_allowance:,.0f}",
+                ],
+                "Notes": [
+                    "Cash + S&S + IF + LISA combined",
+                    "Max age 50; 25% government bonus",
+                    pension_aa_note,
+                    f"Includes £{carryforward:,} from prior 3 yrs",
+                ],
+            })
+            st.dataframe(ref, use_container_width=True, hide_index=True)
 
 
-# ── Asset class breakdown chart ───────────────────────────────────────────────
 
-if show_asset_class:
-    asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
-    if len(asset_series):
-        ac_price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR}"
-        ac_fig = build_asset_class_chart(asset_series, price_label=ac_price_label)
+    # ── IHT / estate tax calculator ───────────────────────────────────────────────
 
-        # Overlay user's own composition as annotation lines if latest net worth known
-        if personal_asset_split and latest_nw and latest_nw > 0:
-            cumulative = 0.0
-            stacked_base = 0.0
-            for component in ["Physical", "Financial", "Pension", "Property"]:
-                share = personal_asset_split[component]
-                component_val = latest_nw * share
-                stacked_base += component_val
-                ac_fig.add_hline(
-                    y=stacked_base,
-                    line=dict(color=ASSET_COLOURS[component], width=2, dash="solid"),
-                    annotation_text=f"You: {component} ({share*100:.0f}%)",
-                    annotation_position="left",
-                    annotation=dict(font=dict(color=ASSET_COLOURS[component], size=10)),
+    if personal_plot_df is not None and latest_nw is not None and latest_nw > 0:
+        with st.expander("Estate / inheritance tax (IHT) exposure"):
+            st.caption(
+                "Estimates your approximate UK inheritance tax (IHT) liability based on your current "
+                "net worth. Indicative only — not tax advice. Rules as of 2025/26 "
+                "(nil-rate bands frozen until April 2030)."
+            )
+            iht_cols = st.columns(3)
+            with iht_cols[0]:
+                iht_threshold = st.selectbox(
+                    "NRB threshold",
+                    [
+                        "Single — £325k NRB",
+                        "Single + RNRB — £500k (residence to descendants)",
+                        "Married / civil partner — £650k (2× NRB, no RNRB)",
+                        "Married + RNRB — £1m (2× NRB + 2× RNRB)",
+                    ],
+                    help="Nil-rate band (NRB): £325k per person. "
+                         "Residence nil-rate band (RNRB): up to £175k extra if leaving a main residence to direct descendants. "
+                         "Spouse exemption allows unused NRB to transfer on first death.",
+                    key="iht_threshold",
+                )
+            with iht_cols[1]:
+                iht_deductions = st.number_input(
+                    "Additional deductions (£)",
+                    min_value=0, max_value=5_000_000, value=0, step=10_000, format="%d",
+                    help="Business property relief, agricultural relief, charitable gifts, outstanding debts, "
+                         "or any other amounts that reduce the taxable estate.",
+                    key="iht_deductions",
+                )
+            with iht_cols[2]:
+                iht_rate_pct = st.number_input(
+                    "Rate (%)", min_value=0, max_value=40, value=40, step=1, format="%d",
+                    help="Standard rate: 40%. Reduced to 36% if 10%+ of net estate is left to charity.",
+                    key="iht_rate",
                 )
 
-        st.plotly_chart(ac_fig, use_container_width=True, config=PLOTLY_CONFIG)
-        st.caption(
-            "Component shares anchored to ONS Wave 8 aggregates (property 40%, pension 35%, financial 14%, physical 10%). "
-            "Your composition (if entered) shown as horizontal lines. "
-            "Property = net of mortgage · Pension = private (DB PV + DC) · "
-            "Financial = savings/investments net of non-mortgage debt · Physical = vehicles/contents/valuables."
-        )
+            # Map UI labels to scenario keys for the tested utility
+            _iht_band = {
+                "Single — £325k NRB":                                    IHT_BANDS["single"],
+                "Single + RNRB — £500k (residence to descendants)":      IHT_BANDS["single_with_rnrb"],
+                "Married / civil partner — £650k (2× NRB, no RNRB)":     IHT_BANDS["married"],
+                "Married + RNRB — £1m (2× NRB + 2× RNRB)":               IHT_BANDS["married_with_rnrb"],
+            }[iht_threshold]
+
+            # If a married threshold is selected AND partner data is loaded, offer to
+            # use the combined household estate. The married thresholds (£650k or £1m)
+            # are the COMBINED exemption, so applying them to just one spouse's wealth
+            # would understate the available headroom.
+            _is_married_threshold = "Married" in iht_threshold
+            _has_partner = partner_plot_df is not None and len(partner_plot_df) > 0
+            gross_estate = latest_nw
+            if _is_married_threshold and _has_partner:
+                _partner_latest_nw = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"])
+                _use_combined = st.checkbox(
+                    f"Use combined household estate ({_fmt(latest_nw)} + {_fmt(_partner_latest_nw)} = "
+                    f"{_fmt(latest_nw + _partner_latest_nw)})",
+                    value=True, key="iht_use_combined",
+                    help=(
+                        "The £650k/£1m married thresholds apply to the COMBINED estate at the "
+                        "second death (the first spouse passes everything to the second tax-free, "
+                        "and unused NRB transfers). So the right comparison is your joint estate, "
+                        "not just yours."
+                    ),
+                )
+                if _use_combined:
+                    gross_estate = latest_nw + _partner_latest_nw
+
+            exempt_amount = _iht_band + iht_deductions
+            # Use the tested utility — same math, but now centralised + tested
+            taxable_estate, iht_due, after_iht = iht_payable(
+                gross_estate, threshold=_iht_band, deductions=iht_deductions,
+                rate=iht_rate_pct / 100,
+            )
+            pct_lost = iht_due / gross_estate * 100 if gross_estate > 0 else 0
+
+            iht_m1, iht_m2, iht_m3, iht_m4 = st.columns(4)
+            with iht_m1:
+                st.metric("Gross estate", _fmt(gross_estate))
+            with iht_m2:
+                st.metric("IHT-exempt", _fmt(exempt_amount),
+                          help=f"Threshold ({_fmt(_iht_band)}) + deductions ({_fmt(iht_deductions)})")
+            with iht_m3:
+                st.metric("IHT payable", _fmt(iht_due),
+                          help=f"{_fmt(taxable_estate)} taxable @ {iht_rate_pct}%")
+            with iht_m4:
+                st.metric("After-IHT estate", _fmt(after_iht),
+                          delta=f"−{pct_lost:.1f}% of estate",
+                          delta_color="inverse",
+                          help="Net amount heirs would receive (excluding admin costs, probate fees, etc.)")
+
+            if taxable_estate == 0:
+                st.success("Your estate is within the IHT threshold - no IHT payable under this scenario.")
+            else:
+                st.caption(
+                    f"Taxable estate: {_fmt(taxable_estate)} (estate above threshold). "
+                    f"Possible mitigation: gifts out of income, seven-year gifting rules, "
+                    f"life insurance in trust, charitable giving."
+                )
+                st.caption(
+                    "⚠️ From **6 April 2027** most unused pension funds fall **inside** the estate "
+                    "for IHT (transfers to a spouse or charity stay exempt) — pensions will no "
+                    "longer sit outside it."
+                )
+            st.caption(
+                "Simplified estimate — does not account for taper relief, business/agricultural property relief, "
+                "in-trust assets, lifetime gifts, or other exemptions. Consult a qualified advisor."
+            )
+
+
+with tab_share:
+    # ── Share / export your data ──────────────────────────────────────────────────
+
+    if personal_plot_df is not None and len(personal_plot_df) > 0:
+        with st.expander("Share / export your data"):
+            # Two columns: shareable URL on the left, CSV download on the right
+            share_col1, share_col2 = st.columns([3, 2])
+
+            with share_col1:
+                st.markdown("**Shareable link**")
+                try:
+                    token = encode_personal_data(personal_plot_df)
+                    share_url = f"{PUBLIC_APP_URL}/?d={token}"
+                    # If partner data is loaded, encode it under ?p= so the receiving
+                    # browser picks it up as the partner pane.
+                    if partner_plot_df is not None and len(partner_plot_df) > 0:
+                        p_token = encode_personal_data(partner_plot_df)
+                        share_url = f"{share_url}&p={p_token}"
+                    st.text_input(
+                        "Data is encoded in the URL — nothing is stored on any server:",
+                        value=share_url, key="share_url_box",
+                    )
+                    _share_note = (
+                        "Anyone with this link sees your figures"
+                        + (" plus your partner's" if partner_plot_df is not None
+                           and len(partner_plot_df) > 0 else "")
+                        + ". Share only with people you trust."
+                    )
+                    st.caption(_share_note)
+                except Exception:
+                    st.info("Share link unavailable — data may be too large to encode.")
+
+            with share_col2:
+                st.markdown("**Download as CSV**")
+                export_df = personal_plot_df[["year", "age", "net_worth"]].copy()
+                if "note" in personal_plot_df.columns:
+                    export_df["note"] = personal_plot_df["note"]
+                csv_bytes = export_df.to_csv(index=False).encode("utf-8")
+                from datetime import datetime as _dt
+                fname = f"my_net_worth_{_dt.now():%Y-%m-%d}.csv"
+                st.download_button(
+                    "Download my net worth history",
+                    csv_bytes, fname, "text/csv",
+                    use_container_width=True,
+                    help="Save what you've entered (manual entries or merged CSV) "
+                         "for backup or to re-upload later.",
+                )
+                if partner_plot_df is not None and len(partner_plot_df) > 0:
+                    p_export = partner_plot_df[["year", "age", "net_worth"]].copy()
+                    if "note" in partner_plot_df.columns:
+                        p_export["note"] = partner_plot_df["note"]
+                    p_csv = p_export.to_csv(index=False).encode("utf-8")
+                    p_fname = f"partner_net_worth_{_dt.now():%Y-%m-%d}.csv"
+                    st.download_button(
+                        "Download partner's history",
+                        p_csv, p_fname, "text/csv",
+                        use_container_width=True,
+                    )
+
+
 
 # ── Methodology panel ─────────────────────────────────────────────────────────
 

@@ -6,6 +6,42 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.10] — June 2026 (Session 9, part 3)
+
+Information architecture: the main content is reorganised into tabs with the
+benchmark chart shown first.
+
+### Changed
+- **Chart-first.** The benchmark + personal-overlay chart now renders directly
+  under the headline metrics, instead of below ~1,000 lines of calculators (it
+  previously sat in the middle of the page at ~line 1880).
+- **Tabbed main content.** The analysis sections are grouped into five
+  `st.tabs`: *Where you stand* (heatmap, decile table, distribution curve,
+  asset-class breakdown), *Your progress* (summary stats, percentile trajectory,
+  annual gains, weeks-to-FI, goal/FIRE), *Planning & projections* (retirement
+  income, ISA bridge, drawdown, what-if, Monte Carlo), *Tax & estate* (wrapper
+  utilisation, IHT) and *Share & export*. Tabs lazy-render, cutting initial
+  load. Methodology stays as a full-width reference panel below the tabs.
+- **Headline metric grid fixed**: the "Gap to median / P75" metric now has its
+  own column (`st.columns(5)`) instead of stacking under the relative-wealth
+  index and breaking the 4-up alignment.
+
+### Added
+- Single-data-point hint under the chart: a one-row user is told that a second
+  year unlocks growth, trajectory, gains, milestones and Monte Carlo.
+
+### Notes
+- Sidebar calculators (goal/FIRE, retirement pot, savings rate) were
+  deliberately left in the sidebar — they define variables consumed by the
+  metric row *above* the tabs, so moving them risks variable-ordering bugs;
+  deferred to a focused follow-up.
+- Restructure performed via a one-shot transform with boundary assertions and
+  validated by the full suite (288 tests, incl. the AppTest render /
+  duplicate-key integration checks). Execution order preserved; the only
+  multi-line markdown block (methodology) was never re-indented.
+
+---
+
 ## [2.9] — June 2026 (Session 9, part 2)
 
 Retirement income realism — the audit's #1-ranked feature. Turns the
