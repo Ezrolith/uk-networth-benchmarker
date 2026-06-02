@@ -26,6 +26,8 @@ from utils.inference import (  # noqa: E402
     build_percentile_trajectory,
     build_decile_table,
     apply_component_filter,
+    personal_component_values,
+    PERSONAL_COMPONENT_COLS,
     apply_region_factor,
     region_factor,
     REGION_MEDIANS,
@@ -144,6 +146,21 @@ def test_personal_cpi_adjustment_per_row():
     # 2019 entry should scale up; 2026 entry should be unchanged
     assert out.iloc[0]["net_worth"] == pytest.approx(50_000 * UK_CPI[2026] / UK_CPI[2019], rel=1e-6)
     assert out.iloc[1]["net_worth"] == pytest.approx(50_000, rel=1e-6)
+
+
+def test_personal_cpi_adjustment_scales_component_columns():
+    """Component columns must rescale by the same per-row factor as net_worth, and
+    blank (NaN) component cells must stay NaN."""
+    personal = pd.DataFrame({
+        "year":      [2019, 2026],
+        "age":       [30.0, 37.0],
+        "net_worth": [50_000.0, 60_000.0],
+        "property":  [30_000.0, float("nan")],
+    })
+    out = cpi_adjust_personal(personal, to_year=2026)
+    factor = UK_CPI[2026] / UK_CPI[2019]
+    assert out.iloc[0]["property"] == pytest.approx(30_000 * factor, rel=1e-6)
+    assert pd.isna(out.iloc[1]["property"])  # blank stays blank
 
 
 def test_cpi_table_is_clean_2015_base_series():
@@ -324,3 +341,80 @@ def test_component_filter_error_lists_valid_options(benchmark):
         msg = str(exc)
         for valid in ("Total", "Property", "Pension", "Financial", "Physical"):
             assert valid in msg, f"valid component {valid!r} not listed in error"
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# personal_component_values — overlay the user's own wealth in one component
+# ──────────────────────────────────────────────────────────────────────────────
+
+_SPLIT = {"Property": 0.40, "Pension": 0.30, "Financial": 0.20, "Physical": 0.10}
+
+
+def test_personal_component_uses_entered_value():
+    """When the component column is filled, net_worth is replaced by it."""
+    pdf = pd.DataFrame({
+        "year": [2024], "age": [32.0], "net_worth": [52_000.0], "property": [30_000.0],
+    })
+    out = personal_component_values(pdf, "Property", _SPLIT)
+    assert out.iloc[0]["net_worth"] == 30_000.0
+
+
+def test_personal_component_falls_back_to_split_when_blank():
+    """A blank component cell falls back to net_worth × the slider proportion."""
+    pdf = pd.DataFrame({
+        "year": [2024], "age": [32.0], "net_worth": [52_000.0], "property": [float("nan")],
+    })
+    out = personal_component_values(pdf, "Property", _SPLIT)
+    assert out.iloc[0]["net_worth"] == pytest.approx(52_000 * 0.40)
+
+
+def test_personal_component_falls_back_when_column_absent():
+    """No component columns at all → every row uses the split fallback."""
+    pdf = pd.DataFrame({"year": [2024], "age": [32.0], "net_worth": [52_000.0]})
+    out = personal_component_values(pdf, "Pension", _SPLIT)
+    assert out.iloc[0]["net_worth"] == pytest.approx(52_000 * 0.30)
+
+
+def test_personal_component_mixed_rows():
+    """Per-row: entered value where present, split fallback where blank."""
+    pdf = pd.DataFrame({
+        "year": [2022, 2024], "age": [30.0, 32.0],
+        "net_worth": [27_000.0, 52_000.0], "property": [float("nan"), 30_000.0],
+    }).sort_values("age").reset_index(drop=True)
+    out = personal_component_values(pdf, "Property", _SPLIT)
+    assert out.iloc[0]["net_worth"] == pytest.approx(27_000 * 0.40)  # blank → fallback
+    assert out.iloc[1]["net_worth"] == 30_000.0                      # entered
+
+
+def test_personal_component_zero_is_kept_not_fallback():
+    """An explicit £0 means zero in that component — not a missing value."""
+    pdf = pd.DataFrame({
+        "year": [2024], "age": [32.0], "net_worth": [52_000.0], "pension": [0.0],
+    })
+    out = personal_component_values(pdf, "Pension", _SPLIT)
+    assert out.iloc[0]["net_worth"] == 0.0
+
+
+def test_personal_component_total_is_passthrough():
+    pdf = pd.DataFrame({"year": [2024], "age": [32.0], "net_worth": [52_000.0]})
+    out = personal_component_values(pdf, "Total", _SPLIT)
+    assert out.iloc[0]["net_worth"] == 52_000.0
+
+
+def test_personal_component_rejects_unknown():
+    pdf = pd.DataFrame({"year": [2024], "age": [32.0], "net_worth": [52_000.0]})
+    with pytest.raises(ValueError, match="Unknown component"):
+        personal_component_values(pdf, "Crypto", _SPLIT)
+
+
+def test_personal_component_missing_split_contributes_zero():
+    """With no split provided, the fallback is 0 (no spurious wealth invented)."""
+    pdf = pd.DataFrame({"year": [2024], "age": [32.0], "net_worth": [52_000.0]})
+    out = personal_component_values(pdf, "Property", None)
+    assert out.iloc[0]["net_worth"] == 0.0
+
+
+def test_personal_component_col_mapping_is_lowercase_label():
+    """The dataframe column for each component is its lowercased label."""
+    for label, col in PERSONAL_COMPONENT_COLS.items():
+        assert col == label.lower()

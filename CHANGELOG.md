@@ -6,6 +6,60 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.18] — June 2026 (Session 9, part 11)
+
+Per-component personal wealth, so the **Wealth component** lens compares
+like-for-like (user feedback: picking "Property" still plotted *total* net worth
+against the property-only benchmark, because the upload never asked for wealth by
+component).
+
+### Added
+- Optional **`property` / `pension` / `financial` / `physical`** (£) columns in
+  the upload CSV, the downloadable template, and the manual-entry editor. Each is
+  your wealth in that component for that year. Blank cells stay blank (they do
+  **not** count as £0).
+- `personal_component_values(pdf, component, split)` in `utils/inference.py` —
+  returns the personal frame with `net_worth` swapped for the wealth in one
+  component: the entered column where present, else `net_worth × the wealth-mix
+  slider proportion` (the user-chosen fallback).
+- `PERSONAL_COMPONENT_COLS` exported from `utils/inference.py` and
+  `utils/data_loader.py`.
+
+### Changed
+- **Two-benchmark model.** The pipeline now builds `benchmark` (component **+**
+  region scaled) for the position views and `benchmark_total` (region only) for
+  whole-wealth surfaces. When a single **Wealth component** is selected, the
+  personal/partner **overlay**, the **headline metrics** (value, percentile,
+  rel-wealth, gap, CAGR, progress), the **Where-you-stand** views (heatmap,
+  decile, distribution) and — in **Your progress** — the percentile trajectory,
+  summary stats **and the partner percentile + head-to-head** all use *your wealth
+  in that component*. The 🎯 Planning and 🏛️ Tax tabs, the asset-class composition
+  chart, and the **PDF / .md reports** stay on **total** net worth vs
+  `benchmark_total` (FIRE/IHT/Monte-Carlo unaffected; the PDF flags that the
+  on-screen component lens doesn't apply to the report). Milestone/gains panels
+  carry a caption noting they remain whole-wealth.
+- `cpi_adjust_personal` now rescales any present component columns by the same
+  per-row CPI factor, so real-terms mode stays consistent.
+- The share-URL `encode/decode` and the CSV export carry the component columns
+  when they hold **any entered value** (blank → JSON null → NaN; an explicit £0
+  round-trips as 0, not the slider fallback; backward-compatible).
+- `personal_asset_split` / `_WC_KEYS` are constructed near the top of `app.py`
+  (read from session_state) so the component lens and headline can split a net
+  worth before the wealth-mix sliders render lower down.
+
+### Tests
+- +22 tests (324 total, green): parser + encode/decode + CPI for the component
+  columns, `personal_component_values` (entered / blank-fallback / mixed / zero /
+  Total / unknown / no-split), explicit-£0 vs all-blank URL round-trip, template
+  re-parse, and three AppTest runtime cases (component lens with slider fallback,
+  with entered columns, and PDF generation under the lens).
+
+### Review
+- An adversarial multi-lens review surfaced 12 confirmed findings (2 high), all
+  fixed: the two-benchmark split resolves the report/planning mismatch and the
+  partner head-to-head; explicit-£0 share round-trip; log-scale hidden-count on
+  the plotted (component) frame; and several caption/banner accuracy fixes.
+
 ## [2.17] — June 2026 (Session 9, part 10)
 
 Wealth-mix editor made easier to use (user feedback: the sliders were unclear

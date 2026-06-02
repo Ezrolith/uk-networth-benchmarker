@@ -55,6 +55,22 @@ def test_personal_template_csv_matches_parser_schema():
     )
 
 
+def test_personal_template_includes_component_columns_and_reparses():
+    """The shipped template should demonstrate the optional component columns and
+    survive a parse round-trip (download → re-upload must work)."""
+    import io
+    from utils.data_loader import parse_personal_csv
+    f = DATA_DIR / "personal_template.csv"
+    raw = f.read_text(encoding="utf-8")
+    df = parse_personal_csv(io.StringIO(raw))
+    for c in ("property", "pension", "financial", "physical"):
+        assert c in df.columns, f"template missing component column {c!r}"
+    # The component columns in the shipped template sum to net_worth per row
+    comp_sum = df[["property", "pension", "financial", "physical"]].sum(axis=1)
+    for total, parts in zip(df["net_worth"], comp_sum):
+        assert parts == pytest.approx(total, abs=1)
+
+
 def test_was_data_csv_schema_matches_loader():
     """The columns load_was_data() expects must all be in the file."""
     from utils.data_loader import load_was_data

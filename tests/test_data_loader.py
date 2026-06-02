@@ -349,3 +349,94 @@ def test_load_asset_class_data_schema():
     pct_sum = df[["property_pct", "pension_pct", "financial_pct", "physical_pct"]].sum(axis=1)
     for v in pct_sum:
         assert v == pytest.approx(100, abs=1)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Optional per-component wealth columns (property/pension/financial/physical)
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_parse_component_columns_kept_and_numeric():
+    csv = ("year,age,net_worth,property,pension,financial,physical\n"
+           "2024,32,52000,30000,12000,6000,4000\n")
+    df = parse_personal_csv(io.StringIO(csv))
+    for c in ("property", "pension", "financial", "physical"):
+        assert c in df.columns
+    row = df.iloc[0]
+    assert row["property"] == 30000.0
+    assert row["physical"] == 4000.0
+    assert row["net_worth"] == 52000.0  # benchmark input untouched
+
+
+def test_parse_component_blank_cell_stays_nan():
+    """A blank component cell must stay NaN (so the app falls back to the slider
+    split) rather than being read as £0."""
+    csv = ("year,age,net_worth,property,pension,financial,physical\n"
+           "2022,30,27000,,6000,5000,4000\n"
+           "2024,32,52000,30000,12000,6000,4000\n")
+    df = parse_personal_csv(io.StringIO(csv)).sort_values("age").reset_index(drop=True)
+    assert pd.isna(df.iloc[0]["property"])     # blank → NaN, not 0
+    assert df.iloc[1]["property"] == 30000.0
+
+
+def test_parse_component_currency_symbols_stripped():
+    csv = 'year,age,net_worth,property\n2024,32,"£52,000","£30,000"\n'
+    df = parse_personal_csv(io.StringIO(csv))
+    assert df.iloc[0]["property"] == 30000.0
+
+
+def test_parse_component_columns_optional():
+    """A CSV without component columns parses fine and gains none of them."""
+    df = parse_personal_csv(io.StringIO("year,age,net_worth\n2020,28,12000\n"))
+    for c in ("property", "pension", "financial", "physical"):
+        assert c not in df.columns
+
+
+def test_encode_decode_roundtrip_with_components():
+    original = pd.DataFrame({
+        "year":      [2022, 2024],
+        "age":       [30.0, 32.0],
+        "net_worth": [27000.0, 52000.0],
+        "property":  [12000.0, 30000.0],
+        "pension":   [6000.0, 12000.0],
+        "financial": [5000.0, 6000.0],
+        "physical":  [4000.0, 4000.0],
+    })
+    restored = decode_personal_data(encode_personal_data(original))
+    for c in ("property", "pension", "financial", "physical"):
+        assert c in restored.columns
+    pd.testing.assert_series_equal(
+        restored.sort_values("age")["property"].reset_index(drop=True),
+        original.sort_values("age")["property"].reset_index(drop=True),
+        check_dtype=False, check_names=False,
+    )
+
+
+def test_encode_decode_component_nan_roundtrips_as_nan():
+    """A blank component cell survives the URL round-trip as NaN, not 0."""
+    original = pd.DataFrame({
+        "year":      [2022, 2024],
+        "age":       [30.0, 32.0],
+        "net_worth": [27000.0, 52000.0],
+        "property":  [float("nan"), 30000.0],
+    })
+    restored = decode_personal_data(encode_personal_data(original)).sort_values("age").reset_index(drop=True)
+    assert pd.isna(restored.iloc[0]["property"])
+    assert restored.iloc[1]["property"] == 30000.0
+
+
+def test_encode_omits_all_blank_components():
+    """An all-blank (NaN) component column is left out of the token to keep URLs short."""
+    df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0],
+                       "property": [float("nan")]})
+    restored = decode_personal_data(encode_personal_data(df))
+    assert "property" not in restored.columns
+
+
+def test_encode_keeps_explicit_zero_components():
+    """An explicit £0 component must round-trip as 0 (not collapse to the slider
+    fallback on the recipient's side)."""
+    df = pd.DataFrame({"year": [2024], "age": [30.0], "net_worth": [50000.0],
+                       "property": [0.0]})
+    restored = decode_personal_data(encode_personal_data(df))
+    assert "property" in restored.columns
+    assert restored.iloc[0]["property"] == 0.0

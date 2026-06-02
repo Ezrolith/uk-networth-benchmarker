@@ -1,5 +1,5 @@
 """
-UK Net Worth Benchmarker (v2.17)
+UK Net Worth Benchmarker (v2.18)
 ================================
 
 Visualises ONS Wealth and Assets Survey Wave 8 (2020–2022) percentile
@@ -38,6 +38,7 @@ from utils.inference import (
     estimate_percentile, estimate_exact_percentile,
     build_percentile_trajectory, derive_tail_percentiles,
     build_asset_class_series, build_decile_table, apply_component_filter,
+    personal_component_values,
     apply_region_factor, region_factor, REGION_MEDIANS, GB_MEDIAN_WEALTH,
     DATA_YEAR, REAL_BASE_YEAR, UK_CPI,
 )
@@ -80,7 +81,7 @@ st.set_page_config(
 
 # Version + public URL — kept together so a release bump touches one block.
 # Streamlit doesn't expose the host URL to the app reliably, so we hardcode it.
-APP_VERSION = "v2.17"
+APP_VERSION = "v2.18"
 PUBLIC_APP_URL = "https://uk-networth-benchmarker.streamlit.app"
 
 st.markdown(
@@ -245,6 +246,10 @@ def _personal_data_section(
             "age":  [28, 29, 30, 31, 32],
             "net_worth":   [12000, 18500, 27000, 38000, 52000],
             "liabilities": [16000, 14000, 158000, 152000, 146000],
+            "property":    [0, 0, 12000, 20000, 30000],
+            "pension":     [3000, 5000, 6000, 9000, 12000],
+            "financial":   [7000, 10500, 5000, 5000, 6000],
+            "physical":    [2000, 3000, 4000, 4000, 4000],
             "note":        ["", "", "bought flat", "", ""],
         })
         st.download_button(
@@ -252,6 +257,12 @@ def _personal_data_section(
             template.to_csv(index=False).encode(),
             "personal_template.csv", "text/csv",
             use_container_width=True, key=f"{key_prefix}_tmpl",
+        )
+        st.caption(
+            "`property` / `pension` / `financial` / `physical` are **optional** — fill them in "
+            "to compare like-for-like when you pick a single **Wealth component** in the sidebar. "
+            "Leave them blank to fall back to your wealth-mix sliders. Net worth still drives the "
+            "overall benchmark."
         )
 
     elif method == "Manual entry":
@@ -273,11 +284,29 @@ def _personal_data_section(
                         pass
             st.session_state[ss_key] = [
                 {"year": date.today().year, "age": _default_age,
-                 "net_worth": 0, "liabilities": 0, "note": ""}
+                 "net_worth": 0, "liabilities": 0,
+                 "property": None, "pension": None,
+                 "financial": None, "physical": None, "note": ""}
             ]
+        st.caption(
+            "Net worth (£) drives the benchmark. The four component columns are **optional** — "
+            "fill them in to compare like-for-like when a single **Wealth component** is selected "
+            "in the sidebar; leave them blank to fall back to your wealth-mix sliders."
+        )
         _editor_df = pd.DataFrame(st.session_state[ss_key])
         if "liabilities" not in _editor_df.columns:
             _editor_df["liabilities"] = 0.0  # show the optional column even for older/restored data
+        for _cc in ("property", "pension", "financial", "physical"):
+            if _cc not in _editor_df.columns:
+                _editor_df[_cc] = pd.NA  # surface the optional component columns
+        # Stable, readable column order in the editor
+        _col_order = ["year", "age", "net_worth", "liabilities",
+                      "property", "pension", "financial", "physical", "note"]
+        _editor_df = _editor_df[[c for c in _col_order if c in _editor_df.columns]]
+        _comp_cfg = {
+            "property":  "🏠 Property (£)", "pension": "💼 Pension (£)",
+            "financial": "💷 Financial (£)", "physical": "🚗 Physical (£)",
+        }
         edited = st.data_editor(
             _editor_df,
             num_rows="dynamic", use_container_width=True,
@@ -287,6 +316,9 @@ def _personal_data_section(
                 "net_worth": st.column_config.NumberColumn("Net worth (£)", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%,d"),
                 "liabilities": st.column_config.NumberColumn("Liabilities (£, optional)", min_value=0, max_value=50_000_000, step=1_000, format="£%,d",
                                                           help="Total debts at that point (mortgage, loans). Context only — net worth drives the benchmark."),
+                **{_cc: st.column_config.NumberColumn(_lbl + ", optional", min_value=-1_000_000, max_value=50_000_000, step=1_000, format="£%,d",
+                                                      help="Your wealth in this component for that year. Blank = use the wealth-mix sliders instead.")
+                   for _cc, _lbl in _comp_cfg.items()},
                 "note":      st.column_config.TextColumn("Note (optional)", max_chars=80,
                                                           help="Short label shown in hover tooltip, e.g. 'bought house'"),
             },
@@ -307,6 +339,11 @@ def _personal_data_section(
                 if "liabilities" in cleaned.columns:
                     cleaned["liabilities"] = pd.to_numeric(
                         cleaned["liabilities"], errors="coerce").fillna(0.0).abs()
+                # Component columns: keep NaN for blank cells (→ slider fallback),
+                # so an empty cell isn't read as £0.
+                for _cc in ("property", "pension", "financial", "physical"):
+                    if _cc in cleaned.columns:
+                        cleaned[_cc] = pd.to_numeric(cleaned[_cc], errors="coerce")
                 cleaned = cleaned.sort_values("age").reset_index(drop=True)
                 st.session_state[ss_key] = cleaned.to_dict("records")
                 result_df = cleaned
@@ -432,6 +469,35 @@ with st.sidebar:
 # Apply palette (must be after sidebar reads cb_safe)
 COLOURS = _COLOURS_CB if cb_safe else _COLOURS_STANDARD
 
+# ── Wealth-mix composition split ──────────────────────────────────────────────
+# The auto-balancing sliders render under the chart (further down), but their
+# session_state keys are seeded and read here EARLY so the component lens and the
+# headline metrics can split a personal net worth across components before those
+# sliders render. The slider widgets + live £ panel still live below the chart.
+_WC_KEYS = [("wc_prop", "Property",  "🏠", "#1d4ed8", 40),
+            ("wc_pen",  "Pension",   "💼", "#10b981", 30),
+            ("wc_fin",  "Financial", "💷", "#f97316", 20),
+            ("wc_phys", "Physical",  "🚗", "#a855f7", 10)]
+for _k, _name, _icon, _col, _default in _WC_KEYS:
+    st.session_state.setdefault(_k, _default)
+
+personal_asset_split = {
+    "Property":  st.session_state["wc_prop"] / 100,
+    "Pension":   st.session_state["wc_pen"]  / 100,
+    "Financial": st.session_state["wc_fin"]  / 100,
+    "Physical":  st.session_state["wc_phys"] / 100,
+}
+
+# ── Component lens (the selected wealth component, if any) ─────────────────────
+# When a single wealth component is selected we compare the user's wealth IN that
+# component (entered columns, else net_worth × the wealth-mix split) against a
+# component-scaled benchmark. This drives the position views: the main chart, the
+# headline metrics, the "Where you stand" tab, and "Your progress". Whole-wealth
+# surfaces (Planning, Tax, the asset-class composition chart, the PDF/.md reports)
+# instead use TOTAL net worth and benchmark_total below.
+component_lens = wealth_component != "Total"
+nw_label = f"{wealth_component} wealth" if component_lens else "Net worth"
+
 # Pre-initialise so sidebar goal calculator can safely reference them
 latest_nw:  float | None = None
 latest_age: float | None = None
@@ -439,10 +505,14 @@ latest_age: float | None = None
 # ── Data pipeline ─────────────────────────────────────────────────────────────
 
 benchmark = _build_benchmark(basis, include_pension, real_terms, gender)
-if wealth_component != "Total":
-    benchmark = apply_component_filter(benchmark, wealth_component, _load_asset_classes())
 if region != "Great Britain":
     benchmark = apply_region_factor(benchmark, region)
+# benchmark_total: total (region-scaled) benchmark for whole-wealth surfaces.
+# Component scaling is applied AFTER region (they commute — region is a uniform
+# factor, component a per-age share ratio) so benchmark_total stays total.
+benchmark_total = benchmark
+if component_lens:
+    benchmark = apply_component_filter(benchmark, wealth_component, _load_asset_classes())
 
 def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
     if df is None or len(df) == 0:
@@ -451,6 +521,22 @@ def _prep_plot_df(df: pd.DataFrame | None) -> pd.DataFrame | None:
 
 personal_plot_df = _prep_plot_df(personal_df)
 partner_plot_df  = _prep_plot_df(partner_df)
+
+# Swap the personal/partner overlay to the user's wealth IN the selected component.
+# The global personal_plot_df / latest_nw stay on TOTAL net worth so the planning &
+# tax tabs (FIRE, IHT, Monte Carlo …) keep working on whole wealth.
+
+
+def _component_view(df: pd.DataFrame | None) -> pd.DataFrame | None:
+    if df is None or len(df) == 0 or not component_lens:
+        return df
+    return personal_component_values(df, wealth_component, personal_asset_split)
+
+
+personal_view_df = _component_view(personal_plot_df)
+partner_view_df  = _component_view(partner_plot_df)
+disp_nw = (float(personal_view_df.sort_values("age").iloc[-1]["net_worth"])
+           if personal_view_df is not None and len(personal_view_df) else None)
 
 
 def _pct_series(pct: str) -> pd.DataFrame:
@@ -578,20 +664,30 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
     latest_nw  = float(latest["net_worth"])
     price_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
 
-    exact_pct = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
-    band_desc = estimate_percentile(latest_nw, round(latest_age), benchmark)
+    # Component lens: this position block compares the user's wealth IN the
+    # selected component (disp_*) against the component-scaled benchmark. In the
+    # default Total view disp_* equals the total figures, so it's a no-op.
+    disp_df       = (personal_view_df if personal_view_df is not None else sorted_pdf).sort_values("age")
+    disp_nw       = float(disp_df.iloc[-1]["net_worth"])
+    disp_first_nw = float(disp_df.iloc[0]["net_worth"])
+
+    exact_pct = estimate_exact_percentile(disp_nw, round(latest_age), benchmark)
+    band_desc = estimate_percentile(disp_nw, round(latest_age), benchmark)
 
     delta_str = delta_val = None
-    if len(sorted_pdf) >= 2:
-        delta_val = latest_nw - float(sorted_pdf.iloc[-2]["net_worth"])
+    if len(disp_df) >= 2:
+        delta_val = disp_nw - float(disp_df.iloc[-2]["net_worth"])
         delta_str = _fmt_delta(delta_val)
 
     col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.metric("Your latest age", f"{latest_age:.1f}")
     with col2:
-        st.metric("Net worth", _fmt(latest_nw), delta=delta_str,
-                  help=f"In {price_note}. Delta vs previous data point.")
+        st.metric(nw_label, _fmt(disp_nw), delta=delta_str,
+                  help=(f"Your {wealth_component.lower()} wealth in {price_note} "
+                        "(from your entered split, else the wealth-mix sliders). "
+                        "Delta vs previous data point." if component_lens
+                        else f"In {price_note}. Delta vs previous data point."))
     with col3:
         if exact_pct:
             # The log-normal model clamps at [0.5, 99.5]. Flag when the user
@@ -624,23 +720,25 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
         p50v = float(ab[ab["percentile"] == "p50"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p50"]) else None
         p75v = float(ab[ab["percentile"] == "p75"]["value"].iloc[0]) if len(ab[ab["percentile"]=="p75"]) else None
         if p50v and p75v and p50v > 0:
-            # Age-adjusted relative wealth: net_worth / benchmark_median (index = 100 at median)
-            rel_wealth = latest_nw / p50v * 100
+            # Age-adjusted relative wealth: value / benchmark_median (index = 100 at median)
+            rel_wealth = disp_nw / p50v * 100
             st.metric(
                 "Rel. wealth index",
                 f"{rel_wealth:.0f}",
-                help="Your net worth as a % of the benchmark median at your age. "
-                     "100 = exactly at median. Age-adjusted so it's comparable across ages.",
+                help=(f"Your {wealth_component.lower()} wealth" if component_lens
+                      else "Your net worth")
+                     + " as a % of the benchmark median at your age. "
+                       "100 = exactly at median. Age-adjusted so it's comparable across ages.",
             )
     with col5:
         # Own column so the 4-up metric grid stays aligned (was stacked under col4).
         if p50v and p75v:
-            if latest_nw < p50v:
-                st.metric("Gap to median", _fmt(p50v - latest_nw))
-            elif latest_nw < p75v:
-                st.metric("Gap to P75", _fmt(p75v - latest_nw))
+            if disp_nw < p50v:
+                st.metric("Gap to median", _fmt(p50v - disp_nw))
+            elif disp_nw < p75v:
+                st.metric("Gap to P75", _fmt(p75v - disp_nw))
             else:
-                st.metric("Above P75 by", _fmt(latest_nw - p75v))
+                st.metric("Above P75 by", _fmt(disp_nw - p75v))
 
     # Gross-assets-vs-net-worth context when a liabilities column was supplied.
     if personal_df is not None and "liabilities" in personal_df.columns:
@@ -652,18 +750,19 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                 f"💳 Latest position: **{_fmt(_nw_raw + _liab)}** gross assets − "
                 f"**{_fmt(_liab)}** liabilities = **{_fmt(_nw_raw)}** net worth"
                 + (" (nominal)" if real_terms else "")
-                + ". Net worth is what's compared to the benchmark."
+                + (f". The metrics above compare your **{wealth_component.lower()} wealth**; "
+                   "net worth is your total position." if component_lens
+                   else ". Net worth is what's compared to the benchmark.")
             )
 
-    # Row 2: growth & progress
-    first_age = float(sorted_pdf.iloc[0]["age"])
-    first_nw  = float(sorted_pdf.iloc[0]["net_worth"])
+    # Row 2: growth & progress (of the displayed component value in a component lens)
+    first_age = float(disp_df.iloc[0]["age"])
     age_span  = latest_age - first_age
 
-    if len(sorted_pdf) >= 2:
+    if len(disp_df) >= 2:
         col_a, col_b, col_c = st.columns([1, 1, 2])
         with col_a:
-            cagr = _safe_cagr(first_nw, latest_nw, age_span)
+            cagr = _safe_cagr(disp_first_nw, disp_nw, age_span)
             if cagr is not None:
                 double_time = (math.log(2) / math.log(1 + cagr)) if cagr > 0 else None
                 dt_str = f" · doubles in {double_time:.0f} yrs" if double_time else ""
@@ -672,48 +771,48 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
                 if double_time:
                     st.caption(f"Doubles in ~{double_time:.0f} yrs at this rate")
             else:
-                st.metric("Total change", _fmt_delta(latest_nw - first_nw),
-                          help=("CAGR not shown: starting net worth below "
+                st.metric("Total change", _fmt_delta(disp_nw - disp_first_nw),
+                          help=("CAGR not shown: starting value below "
                                 f"£{CAGR_MIN_START:,} would inflate the rate."
-                                if first_nw < CAGR_MIN_START and first_nw > 0
+                                if disp_first_nw < CAGR_MIN_START and disp_first_nw > 0
                                 else None))
         with col_b:
             if age_span > 0:
-                st.metric("Avg annual gain", _fmt((latest_nw - first_nw) / age_span),
+                st.metric("Avg annual gain", _fmt((disp_nw - disp_first_nw) / age_span),
                           help=f"Simple average over {age_span:.1f} years.")
         with col_c:
             if p50v and p75v:
-                if latest_nw < p50v:
-                    target, from_val = p50v, max(0.0, first_nw) if first_nw < p50v else 0.0
+                if disp_nw < p50v:
+                    target, from_val = p50v, max(0.0, disp_first_nw) if disp_first_nw < p50v else 0.0
                     mlabel = f"Progress toward median ({_fmt(p50v)})"
-                elif latest_nw < p75v:
+                elif disp_nw < p75v:
                     target, from_val = p75v, p50v
                     mlabel = f"Progress toward P75 ({_fmt(p75v)})"
                 else:
                     target = None
                 if target:
                     span = max(target - from_val, 1)
-                    prog = min(max((latest_nw - from_val) / span, 0.0), 1.0)
+                    prog = min(max((disp_nw - from_val) / span, 0.0), 1.0)
                     st.caption(mlabel)
                     st.progress(prog)
                     # CAGR-based ETA
-                    if age_span > 0.5 and first_nw > 0 and latest_nw > 0 and latest_nw < target:
-                        cagr_proj = (latest_nw / first_nw) ** (1 / age_span) - 1
+                    if age_span > 0.5 and disp_first_nw > 0 and disp_nw > 0 and disp_nw < target:
+                        cagr_proj = (disp_nw / disp_first_nw) ** (1 / age_span) - 1
                         if cagr_proj > 0.001:
-                            yrs = math.log(target / latest_nw) / math.log(1 + cagr_proj)
+                            yrs = math.log(target / disp_nw) / math.log(1 + cagr_proj)
                             eta = latest_age + yrs
                             if eta <= 100:
                                 st.caption(f"At {cagr_proj*100:.1f}% CAGR: age **{eta:.0f}** (~{yrs:.0f} yrs)")
 
     # Median multiples
     if p50v and p50v > 0:
-        multiples = latest_nw / p50v
+        multiples = disp_nw / p50v
         multiples_str = f"**{multiples:.1f}× the median**" if multiples >= 0.1 else f"**{multiples*100:.0f}% of the median**"
     else:
         multiples_str = ""
 
     st.info(
-        f"At age **{latest_age:.1f}**, your net worth of **{_fmt(latest_nw)}** ({price_note}) "
+        f"At age **{latest_age:.1f}**, your {nw_label.lower()} of **{_fmt(disp_nw)}** ({price_note}) "
         f"places you {'at approximately the **' + str(round(exact_pct)) + 'th percentile** (±~5–10 pts)' if exact_pct else '**' + band_desc + '**'} "
         f"on a {basis.lower()} basis in the UK."
         + (f" Roughly **{round(exact_pct)} in 100** people your age have less wealth than you." if exact_pct else "")
@@ -753,8 +852,8 @@ if personal_plot_df is not None and len(personal_plot_df) > 0:
 
 fig = build_main_figure(
     benchmark,
-    personal_plot_df=personal_plot_df,
-    partner_plot_df=partner_plot_df,
+    personal_plot_df=personal_view_df,
+    partner_plot_df=partner_view_df,
     log_scale=log_scale,
     show_tails=show_tails,
     show_milestones=show_milestones,
@@ -779,12 +878,34 @@ if region != "Great Britain":
         icon="📍",
     )
 
-if wealth_component != "Total":
+if component_lens:
+    _ccol = wealth_component.lower()
+
+    def _comp_entered(_df):
+        """How many rows of this component column the person actually filled in."""
+        if _df is None or _ccol not in getattr(_df, "columns", []):
+            return 0, 0
+        _vals = pd.to_numeric(_df[_ccol], errors="coerce")
+        return int(_vals.notna().sum()), int(len(_vals))
+
+    _n_entered, _n_rows = _comp_entered(personal_df)
+    _p_entered, _ = _comp_entered(partner_df)
+    if _n_entered == 0:
+        if _p_entered == 0:
+            _src = (f"your wealth-mix sliders (you haven't entered per-year {_ccol} figures — "
+                    "add a property/pension/financial/physical column to your CSV or the manual editor)")
+        else:
+            _src = (f"your wealth-mix sliders (your partner's overlay uses their own entered "
+                    f"{_ccol} figures)")
+    elif _n_entered < _n_rows:
+        _src = (f"the {_ccol} values you entered, with the wealth-mix split filling any blank years")
+    else:
+        _src = f"the {_ccol} values you entered"
     st.info(
-        f"Viewing **{wealth_component} wealth** component only. "
-        "Benchmark scaled by component shares rescaled to ONS Wave 8 aggregates. "
-        "Your personal net worth overlay shows **total** net worth — "
-        "adjust your composition split in the wealth-mix panel under the chart for per-component context.",
+        f"Viewing **{wealth_component} wealth** only. The benchmark is scaled to this component "
+        "(WAS Wave 8 shares rescaled to age), and your overlay **and the metrics above** now show "
+        f"**your {_ccol} wealth** — from {_src}. The 🎯 Planning and 🏛️ Tax tabs still use your "
+        "**total** net worth.",
         icon="ℹ️",
     )
 elif basis == "Individual":
@@ -798,18 +919,11 @@ else:
 
 # ── Wealth mix: composition split + interactive editor ───────────────────────
 # Auto-balancing sliders (always total 100%) co-located with a live £ breakdown,
-# so dragging and seeing the effect happen in one place. personal_asset_split is
-# defined unconditionally (from session_state) so the asset-class overlay, the
-# SWR figure, the retirement defaults and the PDF always have it — even before
-# the editor, which only renders when there's net worth to split.
-_WC_KEYS = [("wc_prop", "Property",  "🏠", "#1d4ed8", 40),
-            ("wc_pen",  "Pension",   "💼", "#10b981", 30),
-            ("wc_fin",  "Financial", "💷", "#f97316", 20),
-            ("wc_phys", "Physical",  "🚗", "#a855f7", 10)]
-for _k, _name, _icon, _col, _default in _WC_KEYS:
-    st.session_state.setdefault(_k, _default)
-
-
+# so dragging and seeing the effect happen in one place. _WC_KEYS and
+# personal_asset_split are defined near the top of the module (from session_state)
+# so the component lens, the headline metrics, the asset-class overlay, the SWR
+# figure, the retirement defaults and the PDF all have them — even before this
+# editor renders (it only renders when there's net worth to split).
 def _wc_rebalance(changed_key):
     """Keep the four composition sliders summing to 100% (integer percentages).
 
@@ -836,13 +950,6 @@ def _wc_rebalance(changed_key):
     for k in others:
         st.session_state[k] = floored[k]
 
-
-personal_asset_split = {
-    "Property":  st.session_state["wc_prop"] / 100,
-    "Pension":   st.session_state["wc_pen"]  / 100,
-    "Financial": st.session_state["wc_fin"]  / 100,
-    "Physical":  st.session_state["wc_phys"] / 100,
-}
 
 if latest_nw is not None and latest_nw > 0:
     with st.expander("🎚️ Adjust your wealth mix — drag a slider, the rest auto-balance", expanded=True):
@@ -908,8 +1015,8 @@ with tab_stand:
         hm_price = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal ({DATA_YEAR})"
         hm_fig = build_heatmap(
             benchmark,
-            personal_plot_df=personal_plot_df,
-            partner_plot_df=partner_plot_df,
+            personal_plot_df=personal_view_df,
+            partner_plot_df=partner_view_df,
             person_colour=COLOURS["person"],
             partner_colour=COLOURS["partner"],
             price_label=hm_price,
@@ -938,13 +1045,13 @@ with tab_stand:
                 )
                 decile_display = decile_display.drop(columns=["Modelled"])
 
-                # Highlight the user's row if we know their net worth
+                # Highlight the user's row if we know their (component) value
                 st.dataframe(decile_display, use_container_width=True, hide_index=True)
-                if latest_nw:
-                    exact_pct_here = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+                if disp_nw:
+                    exact_pct_here = estimate_exact_percentile(disp_nw, round(latest_age), benchmark)
                     if exact_pct_here:
                         st.caption(
-                            f"Your net worth of **{_fmt(latest_nw)}** sits at approximately "
+                            f"Your {nw_label.lower()} of **{_fmt(disp_nw)}** sits at approximately "
                             f"**~{exact_pct_here:.0f}th percentile** at age {latest_age:.0f}."
                         )
                 price_label_note = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR} prices"
@@ -957,12 +1064,12 @@ with tab_stand:
         dist_age_default = round(latest_age) if latest_age else 40
         dist_age = st.slider("Age to show distribution for", 16, 85, dist_age_default,
                              key="dist_age_slider")
-        p_nw_for_dist = float(partner_plot_df.sort_values("age").iloc[-1]["net_worth"]) \
-            if partner_plot_df is not None and len(partner_plot_df) > 0 else None
+        p_nw_for_dist = float(partner_view_df.sort_values("age").iloc[-1]["net_worth"]) \
+            if partner_view_df is not None and len(partner_view_df) > 0 else None
         dist_price = f"{REAL_BASE_YEAR} real" if real_terms else f"nominal {DATA_YEAR}"
         dist_fig = build_distribution_chart(
             dist_age, benchmark,
-            user_nw=latest_nw if dist_age == dist_age_default else None,
+            user_nw=disp_nw if dist_age == dist_age_default else None,
             partner_nw=p_nw_for_dist if dist_age == dist_age_default else None,
             price_label=dist_price,
             person_colour=COLOURS["person"],
@@ -981,7 +1088,9 @@ with tab_stand:
     # ── Asset class breakdown chart ───────────────────────────────────────────────
 
     if show_asset_class:
-        asset_series = build_asset_class_series(_load_asset_classes(), benchmark, AGE_RANGE)
+        # Composition is a whole-wealth concept → always the total benchmark P50
+        # (even in a component lens, where `benchmark` is scaled to one component).
+        asset_series = build_asset_class_series(_load_asset_classes(), benchmark_total, AGE_RANGE)
         if len(asset_series):
             ac_price_label = f"{REAL_BASE_YEAR} real terms" if real_terms else f"nominal {DATA_YEAR}"
             ac_fig = build_asset_class_chart(asset_series, price_label=ac_price_label)
@@ -1016,12 +1125,16 @@ with tab_prog:
 
     if personal_plot_df is not None and len(personal_plot_df) >= 2:
         with st.expander("Summary statistics"):
-            frames = [build_summary_stats(personal_plot_df, benchmark, "You")]
-            if partner_plot_df is not None and len(partner_plot_df) >= 2:
-                frames.append(build_summary_stats(partner_plot_df, benchmark, "Partner"))
+            # In a component lens these stats (incl. the percentile column) are of
+            # the user's component wealth vs the component-scaled benchmark.
+            _you_lbl = f"You ({wealth_component})" if component_lens else "You"
+            _ptn_lbl = f"Partner ({wealth_component})" if component_lens else "Partner"
+            frames = [build_summary_stats(personal_view_df, benchmark, _you_lbl)]
+            if partner_view_df is not None and len(partner_view_df) >= 2:
+                frames.append(build_summary_stats(partner_view_df, benchmark, _ptn_lbl))
             st.dataframe(pd.concat(frames, ignore_index=True), use_container_width=True, hide_index=True)
 
-            # Data quality score
+            # Data quality score (always on the actual entered totals)
             dq = compute_data_quality(personal_plot_df)
             st.markdown(f"**Data quality score: {dq['score']}/100**")
             st.progress(dq["score"] / 100)
@@ -1031,7 +1144,7 @@ with tab_prog:
 
             # Downloadable percentile history
             st.markdown("**Percentile history download**")
-            traj_dl = build_percentile_trajectory(personal_plot_df, benchmark)
+            traj_dl = build_percentile_trajectory(personal_view_df, benchmark)
             if len(traj_dl):
                 traj_dl_out = traj_dl.rename(columns={
                     "age": "age", "year": "year",
@@ -1049,10 +1162,10 @@ with tab_prog:
     # ── Percentile trajectory chart ───────────────────────────────────────────────
 
     if personal_plot_df is not None and len(personal_plot_df) >= 2:
-        traj_you = build_percentile_trajectory(personal_plot_df, benchmark)
+        traj_you = build_percentile_trajectory(personal_view_df, benchmark)
         traj_partner = None
-        if partner_plot_df is not None and len(partner_plot_df) >= 2:
-            traj_partner = build_percentile_trajectory(partner_plot_df, benchmark)
+        if partner_view_df is not None and len(partner_view_df) >= 2:
+            traj_partner = build_percentile_trajectory(partner_view_df, benchmark)
         if len(traj_you) >= 2:
             st.plotly_chart(
                 build_percentile_chart(
@@ -1075,6 +1188,9 @@ with tab_prog:
 
     if personal_plot_df is not None and len(personal_plot_df) >= 2:
         with st.expander("Milestone tracker"):
+            if component_lens:
+                st.caption(f"ℹ️ Milestones track your **total** net worth (not {wealth_component.lower()} "
+                           "wealth) — they're about your whole-wealth journey.")
             MILESTONES = [10_000, 25_000, 50_000, 100_000, 250_000, 500_000, 1_000_000]
             s_ms = personal_plot_df.sort_values("age")
             milestone_rows = []
@@ -1121,6 +1237,9 @@ with tab_prog:
 
     if personal_plot_df is not None and len(personal_plot_df) >= 2:
         with st.expander("Annual gains breakdown"):
+            if component_lens:
+                st.caption(f"ℹ️ Gains/velocity below are your **total** net worth (not "
+                           f"{wealth_component.lower()} wealth).")
             gc_you = build_gains_chart(personal_plot_df, colour=COLOURS["person"], name="Your net worth")
             if gc_you:
                 st.plotly_chart(gc_you, use_container_width=True, config=PLOTLY_CONFIG)
@@ -1258,25 +1377,30 @@ with tab_prog:
                     icon="💧",
                 )
 
-    # Partner summary metric
+    # Partner summary metric (component-aware in a component lens, like the rest
+    # of this tab — the percentile is partner's wealth in the selected component
+    # vs the component-scaled benchmark; the household sum below stays on totals).
     if partner_plot_df is not None and len(partner_plot_df) > 0:
         ps = partner_plot_df.sort_values("age")
         partner_latest_age = float(ps.iloc[-1]["age"])
-        p_nw = float(ps.iloc[-1]["net_worth"])
-        p_pct = estimate_exact_percentile(p_nw, round(partner_latest_age), benchmark)
+        p_nw = float(ps.iloc[-1]["net_worth"])               # total — household sum
+        p_nw_view = (float(partner_view_df.sort_values("age").iloc[-1]["net_worth"])
+                     if partner_view_df is not None and len(partner_view_df) else p_nw)
+        p_pct = estimate_exact_percentile(p_nw_view, round(partner_latest_age), benchmark)
         st.success(
-            f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}** · "
+            f"Partner · age **{partner_latest_age:.1f}** · {nw_label.lower()} **{_fmt(p_nw_view)}** · "
             f"est. **~{p_pct:.0f}th percentile**" if p_pct else
-            f"Partner · age **{partner_latest_age:.1f}** · net worth **{_fmt(p_nw)}**"
+            f"Partner · age **{partner_latest_age:.1f}** · {nw_label.lower()} **{_fmt(p_nw_view)}**"
         )
 
-        # Combined household callout + head-to-head leaderboard
+        # Combined household callout (always TOTAL net worth) + head-to-head
         if personal_plot_df is not None and latest_nw is not None:
             combined = latest_nw + p_nw
             st.info(f"Combined household net worth: **{_fmt(combined)}**")
 
-            # Head-to-head at same interpolated benchmark age
-            you_pct = estimate_exact_percentile(latest_nw, round(latest_age or 0), benchmark)
+            # Head-to-head at same interpolated benchmark age (component-aware:
+            # uses each person's wealth in the selected component)
+            you_pct = estimate_exact_percentile(disp_nw, round(latest_age or 0), benchmark)
             if you_pct and p_pct:
                 h2h_col1, h2h_col2, h2h_col3 = st.columns(3)
                 ahead_label = "You" if you_pct >= p_pct else "Partner"
@@ -1325,9 +1449,14 @@ with tab_prog:
                                               help=f"At your average gain of {_fmt(avg_gain)}/yr. "
                                                    f"(CAGR not shown for small or zero starting balances.)")
 
-    # Log scale warning
-    if log_scale and personal_plot_df is not None and (personal_plot_df["net_worth"] <= 0).any():
-        st.warning(f"{(personal_plot_df['net_worth']<=0).sum()} data point(s) hidden on log scale.", icon="⚠️")
+    # Log scale warning — count against the frame the chart actually plots (the
+    # component view when a component lens is on), across you + partner.
+    _hidden = 0
+    for _hdf in (personal_view_df, partner_view_df):
+        if _hdf is not None and len(_hdf):
+            _hidden += int((_hdf["net_worth"] <= 0).sum())
+    if log_scale and _hidden:
+        st.warning(f"{_hidden} data point(s) hidden on log scale.", icon="⚠️")
 
 
 with tab_plan:
@@ -1444,7 +1573,7 @@ with tab_plan:
                 else:
                     fv = latest_nw * (1 + r) ** years + annual * (((1 + r) ** years - 1) / r)
                 tgt_age = latest_age + years if latest_age is not None else years
-                pct = estimate_exact_percentile(fv, round(min(tgt_age, 85)), benchmark)
+                pct = estimate_exact_percentile(fv, round(min(tgt_age, 85)), benchmark_total)
                 return fv, tgt_age, pct
 
             a_fv, a_age, a_pct = _project_plan(a_monthly, a_r, a_years)
@@ -2161,7 +2290,7 @@ with tab_plan:
             ]
             st.plotly_chart(
                 build_whatif_figure(
-                    personal_plot_df, benchmark, scenarios,
+                    personal_plot_df, benchmark_total, scenarios,
                     project_to_age=wi_age,
                     monthly_savings=wi_monthly,
                     actual_colour=COLOURS["person"],
@@ -2181,7 +2310,7 @@ with tab_plan:
                     else:
                         proj_nw_at = (latest_nw * (1 + cagr) ** t
                                       + annual_wi * ((1 + cagr) ** t - 1) / cagr)
-                    proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark)
+                    proj_pct   = estimate_exact_percentile(proj_nw_at, min(wi_age, 85), benchmark_total)
                     with sc_cols[i]:
                         st.metric(
                             sc_label,
@@ -2707,8 +2836,9 @@ with tab_share:
 
             with share_col2:
                 st.markdown("**Download as CSV**")
+                _opt_cols = ("liabilities", "property", "pension", "financial", "physical", "note")
                 _export_cols = ["year", "age", "net_worth"] + [
-                    c for c in ("liabilities", "note") if c in personal_plot_df.columns]
+                    c for c in _opt_cols if c in personal_plot_df.columns]
                 export_df = personal_plot_df[_export_cols].copy()
                 csv_bytes = export_df.to_csv(index=False).encode("utf-8")
                 from datetime import datetime as _dt
@@ -2722,7 +2852,7 @@ with tab_share:
                 )
                 if partner_plot_df is not None and len(partner_plot_df) > 0:
                     _p_cols = ["year", "age", "net_worth"] + [
-                        c for c in ("liabilities", "note") if c in partner_plot_df.columns]
+                        c for c in _opt_cols if c in partner_plot_df.columns]
                     p_export = partner_plot_df[_p_cols].copy()
                     p_csv = p_export.to_csv(index=False).encode("utf-8")
                     p_fname = f"partner_net_worth_{_dt.now():%Y-%m-%d}.csv"
@@ -2969,11 +3099,14 @@ if personal_plot_df is not None and latest_nw is not None:
     _asp_rpt   = float(_s_rpt.iloc[-1]["age"]) - float(_first_rpt["age"])
     _fnw_rpt   = float(_first_rpt["net_worth"])
     _cagr_rpt  = _safe_cagr(_fnw_rpt, latest_nw, _asp_rpt)
-    _pct_rpt   = estimate_exact_percentile(latest_nw, round(latest_age), benchmark)
+    # Reports are whole-wealth documents → always the TOTAL (region-scaled)
+    # benchmark, never the component-scaled one, so the percentiles/bands match
+    # the total net worth they're computed against.
+    _pct_rpt   = estimate_exact_percentile(latest_nw, round(latest_age), benchmark_total)
 
     # PDF benchmark table promises P10/P90 derived values; ensure they're present
     # regardless of whether the user toggled show_tails.
-    _benchmark_with_tails = pd.concat([benchmark, derive_tail_percentiles(benchmark)],
+    _benchmark_with_tails = pd.concat([benchmark_total, derive_tail_percentiles(benchmark_total)],
                                        ignore_index=True)
     _ab_rpt    = _benchmark_with_tails[_benchmark_with_tails["age"] == min(round(latest_age), 85)]
 
@@ -3014,9 +3147,9 @@ if personal_plot_df is not None and latest_nw is not None:
 
         def _mpl_benchmark():
             try:
-                p25 = benchmark[benchmark["percentile"]=="p25"].sort_values("age")
-                p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
-                p75 = benchmark[benchmark["percentile"]=="p75"].sort_values("age")
+                p25 = benchmark_total[benchmark_total["percentile"]=="p25"].sort_values("age")
+                p50 = benchmark_total[benchmark_total["percentile"]=="p50"].sort_values("age")
+                p75 = benchmark_total[benchmark_total["percentile"]=="p75"].sort_values("age")
                 fig, ax = _plt.subplots(figsize=(11, 4.2))
                 ax.fill_between(p25["age"], p25["value"], p75["value"],
                                 alpha=0.15, color="#93c5fd", label="P25-P75 range")
@@ -3106,7 +3239,7 @@ if personal_plot_df is not None and latest_nw is not None:
                           (wi_cagr3/100, f"S3 {wi_cagr3:+.1f}%")]
                 ann = wi_monthly * 12
                 fig, ax = _plt.subplots(figsize=(11, 4))
-                p50 = benchmark[benchmark["percentile"]=="p50"].sort_values("age")
+                p50 = benchmark_total[benchmark_total["percentile"]=="p50"].sort_values("age")
                 ax.plot(p50["age"], p50["value"], "#1d4ed8", lw=1.5, ls="--",
                         alpha=0.5, label="Benchmark median")
                 ax.plot(_s_rpt["age"], _s_rpt["net_worth"],
@@ -3175,7 +3308,7 @@ if personal_plot_df is not None and latest_nw is not None:
         main_png  = _mpl_benchmark()
         traj_png  = None
         if len(_s_rpt) >= 2:
-            _ty = build_percentile_trajectory(personal_plot_df, benchmark)
+            _ty = build_percentile_trajectory(personal_plot_df, benchmark_total)
             if len(_ty) >= 2:
                 traj_png = _mpl_trajectory(_ty)
         gains_png  = _mpl_gains() if len(_s_rpt) >= 2 else None
@@ -3308,8 +3441,11 @@ if personal_plot_df is not None and latest_nw is not None:
         KV("Basis:", _basis_lbl)
         KV("Prices:", _price_lbl)
         KV("Pension wealth:", "Included" if include_pension else "Excluded")
-        if wealth_component != "Total":
-            KV("Wealth component:", wealth_component)
+        if component_lens:
+            # The report is a whole-wealth document; flag that the on-screen
+            # component lens does not apply here so the percentiles aren't misread.
+            KV("Note:", f"On screen you're viewing {wealth_component} wealth; this "
+                        "report uses your total net worth.")
 
         if _pct_rpt:
             pdf.ln(4); H1("Key observations")
@@ -3328,7 +3464,7 @@ if personal_plot_df is not None and latest_nw is not None:
                 if abs(latest_age - _start_age) >= 0.5:  # at least 6 months apart
                     _first_pct = estimate_exact_percentile(
                         float(_pct_start_row["net_worth"]),
-                        min(round(_start_age), 85), benchmark)
+                        min(round(_start_age), 85), benchmark_total)
                     if _first_pct is not None and abs(_pct_rpt - _first_pct) >= 1:
                         _trend_meaningful = True
             p25v = _bm("p25"); p75v = _bm("p75")
@@ -3424,7 +3560,7 @@ if personal_plot_df is not None and latest_nw is not None:
         _prev_nw = None
         for i, (_, rd) in enumerate(_s_rpt.iterrows()):
             a_d  = float(rd["age"]); nw_d = float(rd["net_worth"])
-            p_d  = estimate_exact_percentile(nw_d, min(round(a_d), 85), benchmark)
+            p_d  = estimate_exact_percentile(nw_d, min(round(a_d), 85), benchmark_total)
             yr_d = str(int(rd["year"])) if "year" in rd.index else ""
             note_d = _clean_note(rd)
             chg = _fmt_delta(nw_d - _prev_nw) if _prev_nw is not None else "-"
@@ -3532,8 +3668,8 @@ if personal_plot_df is not None and latest_nw is not None:
             TH(("Scenario", 90), (f"Net worth at age {wi_age}", 50), ("vs benchmark median", 40))
             _ann = wi_monthly * 12
             _p50_at_wi = None
-            _p50_wi_rows = benchmark[
-                (benchmark["percentile"]=="p50") & (benchmark["age"]==min(wi_age,85))]
+            _p50_wi_rows = benchmark_total[
+                (benchmark_total["percentile"]=="p50") & (benchmark_total["age"]==min(wi_age,85))]
             if len(_p50_wi_rows):
                 _p50_at_wi = float(_p50_wi_rows["value"].iloc[0])
             for _si, (_cagr_v, _lbl) in enumerate([
@@ -3856,7 +3992,7 @@ if personal_plot_df is not None and latest_nw is not None:
     with rpt_col2:
         # Lightweight text report as fallback — also useful for piping into LLMs
         # or any other text-based tooling that doesn't render PDF.
-        _ab_rpt2 = benchmark[benchmark["age"] == min(round(latest_age), 85)]
+        _ab_rpt2 = benchmark_total[benchmark_total["age"] == min(round(latest_age), 85)]
         _lines = [
             "# UK Net Worth Benchmarker — Personal Report",
             f"Generated: {_today}",
@@ -3883,7 +4019,7 @@ if personal_plot_df is not None and latest_nw is not None:
             _p_sorted = partner_plot_df.sort_values("age")
             _p_last = _p_sorted.iloc[-1]
             _p_age, _p_nw = float(_p_last["age"]), float(_p_last["net_worth"])
-            _p_pct = estimate_exact_percentile(_p_nw, round(_p_age), benchmark)
+            _p_pct = estimate_exact_percentile(_p_nw, round(_p_age), benchmark_total)
             _lines += ["", "## Partner",
                        f"- Age: {_p_age:.1f}",
                        f"- Net worth: {_fmt(_p_nw)}",

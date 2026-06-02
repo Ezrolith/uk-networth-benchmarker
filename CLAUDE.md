@@ -45,7 +45,8 @@ data/
                           Schema: age_band, band_midpoint, property_pct, pension_pct,
                                   financial_pct, physical_pct, source, data_year
   personal_template.csv   CSV template for user net worth upload
-                          (year, age, net_worth, liabilities [optional], note)
+                          (year, age, net_worth, liabilities [optional],
+                           property/pension/financial/physical [optional], note)
 charts/                   All chart builders (extraction complete — see __init__.py)
   _helpers.py             fmt, fmt_delta, clean_note, safe_cagr, best_gain, hover_template
   main_figure.py          THE main benchmark + personal overlay chart
@@ -60,7 +61,9 @@ utils/
   inference.py            All maths: interpolation, individual/gender conversion, CPI,
                           log-normal percentile model, tail derivation, asset class series,
                           decile table, build_percentile_trajectory, region filter
-                          (REGION_MEDIANS / region_factor / apply_region_factor)
+                          (REGION_MEDIANS / region_factor / apply_region_factor),
+                          personal_component_values + PERSONAL_COMPONENT_COLS
+                          (per-component personal overlay; CPI scales component cols)
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
   uk_tax.py               All UK 2025/26 tax + demographic constants and helpers:
@@ -177,7 +180,7 @@ sidebar block so goal/savings calculator widgets can safely reference them.
 | Include pension wealth | Adds/removes private pension component |
 | Real terms (2026 £) | CPI-adjusts benchmark AND personal data to 2026 prices |
 | Region | Scales benchmark to a region's median wealth (ONS WAS Wave 8; uniform factor) |
-| Wealth component | Total / Property / Pension / Financial / Physical — scales benchmark by WAS component shares |
+| Wealth component | Total / Property / Pension / Financial / Physical — scales benchmark by WAS component shares **and** switches your overlay + position metrics to your wealth in that component (entered property/pension/financial/physical columns, else the wealth-mix split). Planning/Tax tabs stay on total. |
 | Log scale | Log Y-axis; negative personal values hidden with warning |
 | Show P10 / P90 | Derived tails via log-normal model |
 | Wealth milestones | £100k / £250k / £500k / £1m reference lines |
@@ -232,6 +235,23 @@ python -m py_compile app.py utils/inference.py utils/data_loader.py
 CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
 
 ## Current version
+
+**v2.18** (June 2026) — Session 9 (part 11): **per-component personal wealth**.
+The **Wealth component** lens now compares like-for-like. Optional `property /
+pension / financial / physical` (£) columns in the upload CSV, template and
+manual editor (blank ≠ £0). New `personal_component_values(pdf, component, split)`
+in utils/inference.py swaps the personal `net_worth` for the user's wealth in the
+selected component — entered column where present, else `net_worth × wealth-mix
+slider proportion` (the chosen fallback). Two-benchmark model: `benchmark`
+(component **+** region) drives the position views — main chart overlay, headline
+metrics, Where-you-stand (heatmap/decile/distribution) and Your-progress
+(trajectory, summary stats, partner percentile + head-to-head) — all on the user's
+component wealth; `benchmark_total` (region only) drives the whole-wealth surfaces
+— 🎯 Planning, 🏛️ Tax, the asset-class composition chart and the PDF/.md reports —
+on **total** net worth. `cpi_adjust_personal` rescales the component columns too;
+share-URL + CSV export carry them (explicit £0 round-trips, all-blank omitted;
+backward-compatible). Shipped after an adversarial multi-lens review (12 findings,
+all fixed). +22 tests, 324 green. See CHANGELOG.md.
 
 **v2.17** (June 2026) — Session 9 (part 10): **wealth-mix editor UX**. The
 auto-balancing composition sliders moved from the sidebar into the "🎚️ Adjust

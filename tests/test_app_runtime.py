@@ -485,6 +485,84 @@ def test_pdf_generation_with_single_year_monthly_data_succeeds():
     assert _count_pdf_pages(pdf_bytes) >= 8
 
 
+def test_component_lens_with_demo_data_no_crash():
+    """
+    Selecting a single 'Wealth component' (Property) with personal data that has
+    NO per-component columns must fall back to the wealth-mix split and render the
+    whole app without exception. Guards the disp_*/personal_view_df code paths
+    (headline metrics, chart overlay, heatmap, decile, distribution, trajectory).
+    """
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    from data.demo_data import DEMO_HISTORY
+    at.session_state["you_rows"] = list(DEMO_HISTORY)
+    at.run()
+    assert len(at.exception) == 0
+
+    wc = [r for r in at.radio if r.label == "Wealth component"]
+    assert len(wc) == 1, f"Expected one 'Wealth component' radio, found {len(wc)}"
+    wc[0].set_value("Property").run()
+    assert len(at.exception) == 0, (
+        "Component lens (slider fallback) crashed: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+
+def test_component_lens_with_entered_component_columns_no_crash():
+    """
+    With per-component columns entered, picking that component overlays the user's
+    own component wealth. Exercises the personal_component_values entered-value
+    path end-to-end.
+    """
+    at = _make_app_test()
+    at.session_state["_pending_demo_load"] = True
+    at.session_state["you_rows"] = [
+        {"year": 2022, "age": 30.0, "net_worth": 27_000.0,
+         "property": 12_000.0, "pension": 6_000.0, "financial": 5_000.0, "physical": 4_000.0, "note": ""},
+        {"year": 2024, "age": 32.0, "net_worth": 52_000.0,
+         "property": 30_000.0, "pension": 12_000.0, "financial": 6_000.0, "physical": 4_000.0, "note": ""},
+    ]
+    at.run()
+    assert len(at.exception) == 0
+
+    wc = [r for r in at.radio if r.label == "Wealth component"]
+    assert len(wc) == 1
+    wc[0].set_value("Pension").run()
+    assert len(at.exception) == 0, (
+        "Component lens (entered columns) crashed: "
+        f"{[e.message for e in at.exception]}"
+    )
+
+
+def test_pdf_generation_in_component_lens_uses_total_and_succeeds():
+    """
+    Generating the PDF report while a Wealth component is selected must still
+    succeed: the report is a whole-wealth document and uses benchmark_total, not
+    the component-scaled benchmark. Guards the v2.18 report-routing changes.
+    """
+    at = _make_app_test(timeout=120)
+    at.session_state["_pending_demo_load"] = True
+    from data.demo_data import DEMO_HISTORY
+    at.session_state["you_rows"] = list(DEMO_HISTORY)
+    at.run()
+    assert len(at.exception) == 0
+
+    wc = [r for r in at.radio if r.label == "Wealth component"]
+    assert len(wc) == 1
+    wc[0].set_value("Property").run()
+    assert len(at.exception) == 0
+
+    gen_buttons = [b for b in at.button if "Generate PDF" in b.label]
+    assert len(gen_buttons) == 1
+    gen_buttons[0].click().run()
+    assert len(at.exception) == 0, (
+        "PDF generation crashed in a component lens: "
+        f"{[e.message for e in at.exception]}"
+    )
+    assert "_pdf_bytes" in at.session_state
+    assert at.session_state["_pdf_bytes"].startswith(b"%PDF-")
+
+
 def test_app_handles_monthly_snapshot_data_end_to_end():
     """
     Users with frequent snapshots (e.g. exporting from a banking app every

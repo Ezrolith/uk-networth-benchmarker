@@ -17,6 +17,11 @@ import pandas as pd
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
+# Optional per-year wealth-component columns the parser, manual editor and share
+# URL all understand. Blank cells stay NaN (fall back to the wealth-mix split in
+# the app) rather than being read as £0.
+PERSONAL_COMPONENT_COLS = ("property", "pension", "financial", "physical")
+
 
 def load_asset_class_data() -> pd.DataFrame:
     return pd.read_csv(DATA_DIR / "was_asset_class.csv")
@@ -43,7 +48,21 @@ def encode_personal_data(df: pd.DataFrame) -> str:
     if "liabilities" in df.columns and (df["liabilities"].fillna(0) != 0).any():
         cols.append("liabilities")
         rounding["liabilities"] = 2
+    # Carry optional per-component columns only when they hold at least one entered
+    # value (any non-null cell). This keeps all-blank columns out of the token (so
+    # the common case stays short) while preserving explicit £0 entries — a column
+    # of real zeros must round-trip as zeros, not collapse to the slider fallback.
+    for _c in PERSONAL_COMPONENT_COLS:
+        if _c in df.columns and pd.to_numeric(df[_c], errors="coerce").notna().any():
+            cols.append(_c)
+            rounding[_c] = 2
     records = df[cols].round(rounding).to_dict("records")
+    # Blank component cells are NaN — encode them as JSON null (valid JSON) so a
+    # missing value round-trips to NaN, not a spurious 0.
+    for r in records:
+        for k, v in list(r.items()):
+            if isinstance(v, float) and pd.isna(v):
+                r[k] = None
     raw = json.dumps(records, separators=(",", ":")).encode()
     return base64.urlsafe_b64encode(zlib.compress(raw, level=9)).decode()
 
@@ -62,6 +81,11 @@ def decode_personal_data(encoded: str) -> pd.DataFrame:
     df["net_worth"] = df["net_worth"].astype(float)
     if "liabilities" in df.columns:
         df["liabilities"] = pd.to_numeric(df["liabilities"], errors="coerce").fillna(0.0)
+    # Optional per-component columns: JSON null → NaN (kept NaN, not 0, so the
+    # app falls back to the wealth-mix split for those rows).
+    for _c in PERSONAL_COMPONENT_COLS:
+        if _c in df.columns:
+            df[_c] = pd.to_numeric(df[_c], errors="coerce")
     return df.sort_values("age").reset_index(drop=True)
 
 
@@ -76,6 +100,10 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
     - note: optional free-text label for a data point (shown in hover tooltip)
     - liabilities: optional total debts at that point (mortgage, loans). Context
       only — net_worth stays the benchmark input.
+    - property / pension / financial / physical: optional per-component wealth (£)
+      for that year. Used by the wealth-component lens so your own component
+      wealth is compared with the component-filtered benchmark. Blank cells fall
+      back to the wealth-mix split rather than counting as £0.
 
     Tolerant of common CSV issues:
     - Whitespace around column names (Excel often pads after the comma)
@@ -138,6 +166,9 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
         keep_cols.append("note")
     if "liabilities" in df.columns:
         keep_cols.append("liabilities")
+    for _c in PERSONAL_COMPONENT_COLS:
+        if _c in df.columns:
+            keep_cols.append(_c)
     df = df[keep_cols].dropna(subset=["year", "age", "net_worth"])
 
     # year: accept plain integers, ISO dates, or UK dd/mm/yyyy dates
@@ -223,6 +254,23 @@ def parse_personal_csv(uploaded_file) -> pd.DataFrame:
                 .str.strip()
             )
         df["liabilities"] = pd.to_numeric(df["liabilities"], errors="coerce").fillna(0.0).abs()
+
+    # Optional per-component wealth columns (property / pension / financial /
+    # physical). Same currency tolerance as net_worth; the sign is preserved
+    # (e.g. negative property equity is legitimate). Blank cells stay NaN so the
+    # app falls back to the wealth-mix split rather than treating a gap as £0.
+    for _c in PERSONAL_COMPONENT_COLS:
+        if _c in df.columns:
+            if not pd.api.types.is_numeric_dtype(df[_c]):
+                df[_c] = (
+                    df[_c].astype(str)
+                    .str.replace("£", "", regex=False)
+                    .str.replace("$", "", regex=False)
+                    .str.replace("€", "", regex=False)
+                    .str.replace(",", "", regex=False)
+                    .str.strip()
+                )
+            df[_c] = pd.to_numeric(df[_c], errors="coerce")
 
     df = df.sort_values("age").reset_index(drop=True)
 

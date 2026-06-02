@@ -243,6 +243,18 @@ def adjust_for_inflation(
     return df
 
 
+# Optional per-year wealth-component columns a user can upload / enter, mapped
+# from the UI component label to the personal-dataframe column name. Used by the
+# component lens so a component-filtered benchmark can be compared like-for-like
+# with the user's own wealth in that component.
+PERSONAL_COMPONENT_COLS = {
+    "Property":  "property",
+    "Pension":   "pension",
+    "Financial": "financial",
+    "Physical":  "physical",
+}
+
+
 def cpi_adjust_personal(
     personal_df: pd.DataFrame,
     to_year: int = REAL_BASE_YEAR,
@@ -250,16 +262,25 @@ def cpi_adjust_personal(
     """
     CPI-adjust personal net worth entries from their recorded year to to_year.
     Each row uses its own 'year' column as the from_year.
+
+    Any optional per-component wealth columns (property/pension/financial/
+    physical) present are rescaled by the same per-row factor so they stay
+    consistent with net_worth in real terms. Blank component cells stay NaN.
+    Liabilities are left untouched (context-only, historically nominal).
     """
     df = personal_df.copy()
-    adjusted = []
+    money_cols = ["net_worth"] + [c for c in PERSONAL_COMPONENT_COLS.values()
+                                  if c in df.columns]
+    factors = []
     for _, row in df.iterrows():
         from_year = int(row["year"])
-        nw = float(row["net_worth"])
         if from_year in UK_CPI and to_year in UK_CPI:
-            nw = nw * UK_CPI[to_year] / UK_CPI[from_year]
-        adjusted.append(nw)
-    df["net_worth"] = adjusted
+            factors.append(UK_CPI[to_year] / UK_CPI[from_year])
+        else:
+            factors.append(1.0)
+    factor_s = pd.Series(factors, index=df.index)
+    for col in money_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce") * factor_s
     return df
 
 
@@ -522,6 +543,45 @@ def apply_component_filter(
     normalised = component_shares / np.maximum(total_shares, 1e-9)
     bm["value"] = bm["value"].values * normalised
     return bm
+
+
+def personal_component_values(
+    pdf: pd.DataFrame,
+    component: str,
+    split: dict | None = None,
+) -> pd.DataFrame:
+    """
+    Return a copy of `pdf` whose ``net_worth`` column holds the user's wealth in a
+    single component (Property/Pension/Financial/Physical) rather than their total
+    net worth — so it can be overlaid on a component-filtered benchmark.
+
+    Per row: use the entered per-component column (property/pension/financial/
+    physical) when present and non-null; otherwise fall back to
+    ``net_worth * split[component]`` (the wealth-mix slider proportion). A blank
+    component cell therefore falls back rather than being read as £0.
+
+    ``component == 'Total'`` returns an unchanged copy. ``split`` maps the
+    component label to a 0–1 fraction; when omitted/missing the fallback is 0.
+    Raises ValueError for an unrecognised component.
+    """
+    df = pdf.copy()
+    if component == "Total":
+        return df
+    if component not in PERSONAL_COMPONENT_COLS:
+        valid = sorted(["Total"] + list(PERSONAL_COMPONENT_COLS.keys()))
+        raise ValueError(
+            f"Unknown component {component!r}. Expected one of: {', '.join(valid)}"
+        )
+    col = PERSONAL_COMPONENT_COLS[component]
+    frac = float((split or {}).get(component, 0.0))
+    nw = pd.to_numeric(df["net_worth"], errors="coerce").astype(float)
+    fallback = nw * frac
+    if col in df.columns:
+        entered = pd.to_numeric(df[col], errors="coerce")
+        df["net_worth"] = entered.where(entered.notna(), fallback).astype(float)
+    else:
+        df["net_worth"] = fallback
+    return df
 
 
 def build_percentile_trajectory(
