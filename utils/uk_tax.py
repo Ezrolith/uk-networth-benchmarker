@@ -1,9 +1,11 @@
 """
-UK 2025/26 tax-rule constants and helpers.
+UK 2026/27 tax-rule constants and helpers.
 
 Centralises every UK-specific calculation so the rules can be unit-tested
 independently of the Streamlit UI and refreshed in one place each new
-tax year.
+tax year. `TAX_YEAR` below is the single label the UI interpolates, so
+rolling the app to a new tax year is a one-line change here plus a check
+of the constants.
 
 Covers:
 - ISA total + Lifetime ISA allowances and remaining-headroom helpers
@@ -20,16 +22,25 @@ All money values in £. All rates as fractions (0.40 not 40).
 from __future__ import annotations
 
 
-# ── 2025/26 allowances (constants) ─────────────────────────────────────────────
+# Label for the tax year these rules describe. Interpolated into every UI
+# string so no year is hardcoded in app.py.
+TAX_YEAR = "2026/27"
+
+# ── 2026/27 allowances (constants) ─────────────────────────────────────────────
+# Unchanged from 2025/26: the ISA, LISA and pension allowances were all held at
+# these levels for 2026/27. NB from 6 April 2027 the *cash* ISA sub-limit drops
+# to £12,000 for under-65s (the £20,000 overall ISA allowance is unchanged, and
+# over-65s keep the full £20,000 in cash).
 ISA_ALLOWANCE         = 20_000   # Annual ISA limit (cash + S&S + IF + LISA combined)
 LISA_ALLOWANCE        = 4_000    # Lifetime ISA, counts inside ISA total
 PENSION_AA            = 60_000   # Standard pension Annual Allowance
 TAPER_THRESHOLD       = 260_000  # Adjusted income above which taper begins
 TAPER_FLOOR           = 10_000   # Minimum tapered AA (reached at £360k adjusted income)
 STATE_PENSION_2026_27 = 12_548   # Full new State Pension 2026/27: £241.30/wk × 52 (+4.8% triple lock)
-STATE_PENSION_AGE      = 67      # SPA for cohorts retiring 2028+; rises to 68 from 2044
-                                 # (proposed; could be brought forward). 66 for cohorts
-                                 # who already qualified pre-2028.
+STATE_PENSION_AGE      = 67      # SPA for cohorts retiring 2028+; the 66 -> 67 rise is
+                                 # being phased in between 6 May 2026 and 6 April 2028.
+                                 # Rises to 68 from 2044-46 (legislated; could be brought
+                                 # forward). 66 for cohorts who qualified before May 2026.
 
 # ── Life expectancy at retirement age (ONS 2020-22 cohort, mixed-sex) ─────────
 # Approximate cohort life expectancy at each retirement age. Source: ONS
@@ -53,7 +64,7 @@ def life_expectancy_at(retirement_age: int) -> int:
     # losing ~0.2 years per year of late retirement
     return int(85 - max(0, retirement_age - 65) * 0.2)
 
-# ── IHT (Inheritance Tax) thresholds 2025/26 ───────────────────────────────────
+# ── IHT (Inheritance Tax) thresholds 2026/27 ───────────────────────────────────
 # Both nil-rate bands are frozen at these values until April 2031
 # (the freeze was extended by a further year at the Autumn Budget 2025).
 NIL_RATE_BAND          = 325_000  # Per person standard nil-rate band
@@ -134,7 +145,7 @@ def lisa_remaining(
     """
     Remaining LISA pay-in headroom for the current tax year.
 
-    LISA rules (2025/26):
+    LISA rules (2026/27):
     - You can only OPEN a LISA between age 18 and 39 inclusive.
     - Once opened, you can contribute up to £4,000/yr until age 50.
     - From age 50 onwards, no new contributions (existing balance keeps growing).
@@ -182,10 +193,12 @@ def lisa_bonus(contribution: float) -> float:
     return min(contribution * 0.25, 1_000.0)
 
 
-# ── Income tax 2025/26 (England, Wales & Northern Ireland) ─────────────────────
-# Scotland sets its own rates/bands and is NOT modelled here. rUK bands are
-# frozen to April 2028. National Insurance and the dividend/savings allowances
-# are out of scope (this models earned/pension income).
+# ── Income tax 2026/27 (England, Wales & Northern Ireland) ─────────────────────
+# Scotland sets its own rates/bands and is NOT modelled here. The rUK personal
+# allowance and higher-rate threshold are frozen to April 2031 (the Autumn
+# Budget 2025 extended the freeze by three years from April 2028). National
+# Insurance and the dividend/savings allowances are out of scope (this models
+# earned/pension income).
 PERSONAL_ALLOWANCE        = 12_570   # tax-free personal allowance
 BASIC_RATE_BAND           = 37_700   # taxable income (above the PA) taxed at 20%
 ADDITIONAL_RATE_THRESHOLD = 125_140  # taxable income above which the 45% rate applies
@@ -200,9 +213,9 @@ ADDITIONAL_RATE           = 0.45
 PENSION_LSA               = 268_275
 
 
-def income_tax_2025_26(gross_income: float) -> float:
+def income_tax(gross_income: float) -> float:
     """
-    Estimated UK income tax (England/Wales/NI, 2025/26) on a gross annual income.
+    Estimated UK income tax (England/Wales/NI, 2026/27) on a gross annual income.
 
     Models the £12,570 personal allowance and its £1-per-£2 taper above
     £100,000 (gone entirely at £125,140 — the 60% effective-rate band), then
@@ -231,9 +244,41 @@ def income_tax_2025_26(gross_income: float) -> float:
     return tax
 
 
+# ── Annuity rate assumption (market-dependent — refresh periodically) ─────────
+# Indicative single-life, level (non-escalating) annuity rate for a healthy
+# 65-year-old, used as a conservative income proxy in the retirement forecast.
+# UK annuity rates are gilt-yield-linked and sat near multi-decade highs
+# through 2026: best-buy rates at 65 were roughly 7.9-8.4% in mid-2026. We use
+# a deliberately conservative 7.5% — below best-buy, since most people do not
+# shop the whole market. Rates rise with age (mortality), roughly +0.25
+# percentage points per year of deferral over the range this app covers.
+#
+# THIS IS A MARKET ASSUMPTION, NOT A TAX RULE — recheck it at least annually.
+ANNUITY_RATE_AT_65   = 0.075
+ANNUITY_RATE_PER_YR  = 0.0025  # added per year of age above 65
+ANNUITY_RATE_FLOOR   = 0.02    # sanity floor for very early retirement ages
+
+
+def annuity_rate(age: int | float) -> float:
+    """
+    Indicative single-life level annuity rate at a given age, as a fraction.
+
+    Anchored at ANNUITY_RATE_AT_65 and sloped by ANNUITY_RATE_PER_YR per year
+    of age either side, floored at ANNUITY_RATE_FLOOR. Deliberately simple —
+    real quotes depend on health, postcode, guarantee periods and escalation.
+    """
+    return max(ANNUITY_RATE_AT_65 + (age - 65) * ANNUITY_RATE_PER_YR,
+               ANNUITY_RATE_FLOOR)
+
+
 def tax_free_lump_sum(pension_pot: float) -> float:
     """
     Tax-free pension commencement lump sum: 25% of the pot, capped at the
     Lump Sum Allowance (£268,275). Returns £ (0 for a non-positive pot).
     """
     return min(max(0.0, pension_pot) * 0.25, PENSION_LSA)
+
+
+# Backwards-compatible alias: the function was named for the 2025/26 tax year
+# before the year label was factored out into TAX_YEAR.
+income_tax_2025_26 = income_tax

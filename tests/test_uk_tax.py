@@ -1,5 +1,5 @@
 """
-Tests for utils/uk_tax.py — UK 2025/26 tax rules.
+Tests for utils/uk_tax.py — UK 2026/27 tax rules.
 
 Covers: pension AA + taper + carryforward, ISA + LISA (age-aware) remaining,
 pension relief estimate, LISA bonus, and IHT (nil-rate bands, four scenario
@@ -17,7 +17,7 @@ from utils.uk_tax import (  # noqa: E402
     tapered_pension_allowance, effective_pension_allowance,
     isa_remaining, lisa_remaining, pension_relief_estimate, lisa_bonus,
     iht_payable, life_expectancy_at,
-    income_tax_2025_26, tax_free_lump_sum,
+    income_tax, income_tax_2025_26, TAX_YEAR, tax_free_lump_sum,
     ISA_ALLOWANCE, LISA_ALLOWANCE, PENSION_AA, TAPER_THRESHOLD, TAPER_FLOOR,
     NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, IHT_STANDARD_RATE, IHT_REDUCED_RATE,
     IHT_BANDS, STATE_PENSION_AGE, STATE_PENSION_2026_27,
@@ -266,9 +266,10 @@ def test_state_pension_age_currently_67():
 
 
 def test_state_pension_amount_realistic():
-    """2026/27 estimate should be in a plausible band given recent triple-lock uprating."""
-    # 2024/25 was £11,502. 2025/26 was £11,973. 2026/27 estimate ~£12,400.
-    # If this assertion fails because the figure was refreshed, just update it.
+    """2026/27 is confirmed, so pin the exact figure as well as the sanity band."""
+    # 2024/25 was £11,502; 2025/26 £11,973; 2026/27 is confirmed at £12,548
+    # (£241.30/wk, +4.8% triple lock). Update both lines at the next uprating.
+    assert STATE_PENSION_2026_27 == 12_548
     assert 11_500 <= STATE_PENSION_2026_27 <= 13_500
 
 
@@ -306,47 +307,47 @@ def test_life_expectancy_monotone_non_increasing():
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Income tax 2025/26 (rUK) + tax-free pension lump sum
+# Income tax 2026/27 (rUK) + tax-free pension lump sum
 # ──────────────────────────────────────────────────────────────────────────────
 
 def test_income_tax_zero_at_or_below_personal_allowance():
-    assert income_tax_2025_26(0) == 0
-    assert income_tax_2025_26(PERSONAL_ALLOWANCE) == 0
-    assert income_tax_2025_26(-5_000) == 0
+    assert income_tax(0) == 0
+    assert income_tax(PERSONAL_ALLOWANCE) == 0
+    assert income_tax(-5_000) == 0
 
 
 def test_income_tax_basic_rate():
     # £30k: taxable £17,430 all at 20% = £3,486
-    assert income_tax_2025_26(30_000) == pytest.approx(3_486.0)
+    assert income_tax(30_000) == pytest.approx(3_486.0)
 
 
 def test_income_tax_at_basic_rate_ceiling():
     # £50,270 gross → £37,700 taxable, all basic rate = £7,540
-    assert income_tax_2025_26(50_270) == pytest.approx(7_540.0)
+    assert income_tax(50_270) == pytest.approx(7_540.0)
 
 
 def test_income_tax_higher_rate():
     # £60k: 20%×37,700 + 40%×(47,430−37,700) = 7,540 + 3,892 = £11,432
-    assert income_tax_2025_26(60_000) == pytest.approx(11_432.0)
+    assert income_tax(60_000) == pytest.approx(11_432.0)
 
 
 def test_income_tax_personal_allowance_taper_is_60pc_trap():
     # Between £100k and £125,140 the effective marginal rate is 60%
     # (40% + the £1-per-£2 PA withdrawal).
-    delta = income_tax_2025_26(110_000) - income_tax_2025_26(100_000)
+    delta = income_tax(110_000) - income_tax(100_000)
     assert delta == pytest.approx(6_000.0)  # 60% of the extra £10k
 
 
 def test_income_tax_additional_rate():
     # £150k: PA fully tapered to 0; 20%×37,700 + 40%×(125,140−37,700)
     #        + 45%×(150,000−125,140) = 7,540 + 34,976 + 11,187 = £53,703
-    assert income_tax_2025_26(150_000) == pytest.approx(53_703.0)
+    assert income_tax(150_000) == pytest.approx(53_703.0)
 
 
 def test_income_tax_monotonic_increasing():
     prev = -1.0
     for income in range(0, 200_001, 5_000):
-        tax = income_tax_2025_26(income)
+        tax = income_tax(income)
         assert tax >= prev, f"tax fell at £{income}"
         prev = tax
 
@@ -364,3 +365,61 @@ def test_tax_free_lump_sum_capped_at_lsa():
 def test_tax_free_lump_sum_non_positive():
     assert tax_free_lump_sum(0) == 0
     assert tax_free_lump_sum(-100) == 0
+
+
+# ── Tax-year label + backwards-compatible alias ──────────────────────────────
+
+def test_tax_year_label_is_current():
+    """The UI interpolates TAX_YEAR everywhere, so it must be a real label."""
+    assert TAX_YEAR == "2026/27"
+
+
+def test_income_tax_legacy_alias_still_works():
+    """The old year-stamped name stays importable so stale imports don't break."""
+    assert income_tax_2025_26 is income_tax
+    assert income_tax_2025_26(50_270) == pytest.approx(income_tax(50_270))
+
+
+def test_allowances_unchanged_for_2026_27():
+    """
+    2026/27 held every headline allowance at its 2025/26 level. Pinning them
+    here means a future tax-year roll has to consciously update this test.
+    """
+    assert ISA_ALLOWANCE == 20_000
+    assert LISA_ALLOWANCE == 4_000
+    assert PENSION_AA == 60_000
+    assert TAPER_THRESHOLD == 260_000
+    assert PERSONAL_ALLOWANCE == 12_570
+    assert NIL_RATE_BAND == 325_000
+    assert RESIDENCE_NIL_RATE_BAND == 175_000
+
+
+def test_higher_rate_threshold_is_50270():
+    """PA (£12,570) + basic-rate band (£37,700) = the £50,270 HRT, frozen to 2031."""
+    from utils.uk_tax import BASIC_RATE_BAND
+    assert PERSONAL_ALLOWANCE + BASIC_RATE_BAND == 50_270
+
+
+# ── Annuity rate assumption ──────────────────────────────────────────────────
+
+def test_annuity_rate_anchored_at_65():
+    from utils.uk_tax import annuity_rate, ANNUITY_RATE_AT_65
+    assert annuity_rate(65) == pytest.approx(ANNUITY_RATE_AT_65)
+
+
+def test_annuity_rate_rises_with_age():
+    from utils.uk_tax import annuity_rate
+    assert annuity_rate(70) > annuity_rate(65) > annuity_rate(60)
+
+
+def test_annuity_rate_floored():
+    from utils.uk_tax import annuity_rate, ANNUITY_RATE_FLOOR
+    # A very early retirement age would otherwise slope below zero.
+    assert annuity_rate(20) == pytest.approx(ANNUITY_RATE_FLOOR)
+    assert annuity_rate(40) >= ANNUITY_RATE_FLOOR
+
+
+def test_annuity_rate_in_plausible_market_range():
+    """Guard against a fat-finger refresh: 65-year-old rates are single digits."""
+    from utils.uk_tax import annuity_rate
+    assert 0.04 <= annuity_rate(65) <= 0.12

@@ -97,10 +97,14 @@ _INDIVIDUAL_FACTORS_BY_MIDPOINT = {
 
 # ── UK CPI (2015 = 100) ───────────────────────────────────────────────────────
 # ONS CPI all-items annual average index, 2015 = 100 (ONS series D7BT).
-# 2000–2025 are published annual averages; 2026 is an estimate (~2.5% on the
-# 2025 actual) pending the full-year figure. NB the previous table spliced a
-# different pre-2015 base onto the 2015=100 series (a fake ~7% step at 2014→15)
-# and stalled 2020 at the 2019 value — both corrected here.
+# 2000–2025 are published annual averages. 2026 is not a full year yet, so it
+# is anchored to the published June 2026 monthly index (142.5) — the mid-year
+# point, which is the closest single-month proxy for a calendar-year average.
+# CPI ran at 2.6–2.9% y/y through H1 2026, so expect the final 2026 annual
+# average to land within ~0.5 index points of this. Refresh in Jan 2027.
+# NB the pre-v2.8 table spliced a different pre-2015 base onto the 2015=100
+# series (a fake ~7% step at 2014→15) and stalled 2020 at the 2019 value —
+# both corrected.
 UK_CPI = {
     2000: 72.7,  2001: 73.6,  2002: 74.5,  2003: 75.5,
     2004: 76.5,  2005: 78.1,  2006: 79.9,  2007: 81.8,
@@ -108,7 +112,7 @@ UK_CPI = {
     2012: 96.1,  2013: 98.5,  2014: 100.0, 2015: 100.0,
     2016: 100.7, 2017: 103.4, 2018: 105.9, 2019: 107.8,
     2020: 108.7, 2021: 111.6, 2022: 121.7, 2023: 130.6,
-    2024: 133.9, 2025: 138.4, 2026: 141.9,  # 2026 estimated (~2.5% on 2025 actual)
+    2024: 133.9, 2025: 138.4, 2026: 142.5,  # 2026 = June 2026 monthly index (part-year)
 }
 
 # ── Regional median household total wealth (ONS WAS Wave 8) ───────────────────

@@ -6,6 +6,90 @@ see `REVIEW_LOG.md` for session-by-session audit notes and rationale.
 
 ---
 
+## [2.19] — August 2026 (Session 10)
+
+Accuracy and currency pass, prompted by a "is this still up to date?" review.
+No new features — this release fixes things the app was stating as fact that had
+either always been wrong or had gone stale since v2.18 (which shipped in June
+2026, before the 2026/27 tax year figures settled).
+
+### Fixed
+- **Pension access age was wrong.** The ISA-bridge calculator and the
+  methodology panel both said private pension access is "currently 57, rising to
+  58 in 2028". The normal minimum pension age is **55**, rising to **57 on
+  6 April 2028**. Anyone planning a bridge fund off the old text would have
+  sized it for the wrong number of years.
+- **IHT freeze date was internally inconsistent.** The estate calculator said
+  the nil-rate bands are frozen until April 2030; `utils/uk_tax.py` said 2031.
+  April 2031 is correct (Autumn Budget 2025 extended the freeze by a year).
+- **Income-tax threshold freeze** was documented as ending April 2028. The
+  Autumn Budget 2025 extended it three years to **April 2031**.
+- **State pension help text** led with the superseded 2025/26 rate (£11,973) as
+  if it were current. It now leads with the 2026/27 rate actually used in the
+  calculation (£12,548).
+- **State pension age** was described as "currently 66, rising to 67 by 2028".
+  The 66→67 rise has been phasing in since 6 May 2026, so it is now 66 *or* 67
+  depending on date of birth.
+
+### Changed
+- **Tax year rolled 2025/26 → 2026/27.** Every headline allowance was verified
+  as unchanged for 2026/27 (ISA £20,000, LISA £4,000, pension AA £60,000, taper
+  from £260,000, PA £12,570, HRT £50,270, NRB £325,000, RNRB £175,000, LSA
+  £268,275), so this is a relabelling, not a re-valuation.
+- **Year labels are no longer hardcoded.** New `TAX_YEAR` constant in
+  `utils/uk_tax.py`; all ~10 UI strings interpolate it. `income_tax_2025_26` is
+  renamed `income_tax` (the old name stays as an alias). Rolling the app to
+  2027/28 is now a one-line change plus a constants check.
+- **Cash ISA change from 6 April 2027** now notes the age-65 carve-out
+  (under-65s drop to a £12,000 cash sub-limit; over-65s keep the full £20,000).
+- **Annuity rate assumption refreshed and de-duplicated.** It was hardcoded as
+  `0.065` in three places, commented "late 2024/25". UK annuity rates sat near
+  multi-decade highs through 2026 (best-buy ~7.9–8.4% at 65). Now a single
+  `annuity_rate(age)` helper anchored on `ANNUITY_RATE_AT_65 = 0.075` — a
+  deliberately conservative below-best-buy planning figure. **This raises
+  projected retirement income**: a given pot now buys more annuity than it did
+  under the old 6.5% assumption.
+- **CPI 2026 re-anchored.** Was a `141.9` guess (2025 actual + 2.5%); now
+  `142.5`, the published June 2026 monthly index. Slightly changes every
+  real-terms figure. Replace with the annual average in January 2027.
+- **Migrated off the deprecated `use_container_width=`** Streamlit parameter
+  (32 call sites → `width="stretch"`). This one was a live deploy risk rather
+  than a tidy-up: the parameter carried a stated removal date of 2025-12-31 and
+  has since been dropped from `st.plotly_chart`, and Streamlit Cloud installs
+  the newest release on every rebuild — so the next redeploy could have taken
+  out all 13 charts. The `streamlit` floor in `requirements.txt` rises
+  1.32 → 1.50 accordingly (`width=` did not exist before then).
+- **CI now tests Python 3.14.** Streamlit Community Cloud defaults to the newest
+  Python that Streamlit supports, which is 3.14 — the matrix stopped at 3.13, so
+  production was running an interpreter CI never exercised. (The old CI comment
+  said to add 3.14 "once it ships stable"; it has.)
+
+### Documentation
+- **README was five releases stale** — it claimed v2.3, "237 tests, ~7s" and
+  CI on "Python 3.11 and 3.12", and its file tree omitted `utils/uk_tax.py`,
+  `data_quality.py`, `summary.py`, `demo_data.py`, `bump_version.py` and 11 of
+  the 16 test modules. Rewritten against the actual tree, plus the optional CSV
+  columns, the region filter, the wealth-mix editor and Plan A/B compare.
+- **CLAUDE.md** said app.py was ~2,650 lines (it is ~4,100), that the suite was
+  302 tests (332), and listed `kaleido` as a cold-start dependency — it was
+  dropped in favour of fpdf2 + matplotlib.
+- Both files now record that **ONS WAS Round 9 is still unpublished** as of
+  August 2026 (accreditation suspended from Round 8), so pinning the benchmark
+  to Wave 8 is a deliberate choice, not neglect.
+
+### Tests
+- +8 tests in `test_uk_tax.py`: the `TAX_YEAR` label, the legacy `income_tax`
+  alias, the pinned 2026/27 allowance values (so a future roll has to update
+  them consciously), the £50,270 higher-rate threshold, and four on
+  `annuity_rate` including a plausible-range guard against a fat-fingered
+  refresh.
+- +1 test in `test_app_imports.py`: a source scan that fails on any Streamlit
+  parameter past its removal date, seeded with `use_container_width`. Add to
+  `DEPRECATED_STREAMLIT_PARAMS` as Streamlit deprecates more. **333 tests, all
+  green.**
+
+---
+
 ## [2.18] — June 2026 (Session 9, part 11)
 
 Per-component personal wealth, so the **Wealth component** lens compares

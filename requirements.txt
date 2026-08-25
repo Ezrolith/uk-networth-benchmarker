@@ -4,7 +4,12 @@
 # .github/workflows/ci.yml — not listed here so the production image stays
 # minimal.
 
-streamlit>=1.32.0       # UI framework — provides every st.* primitive
+streamlit>=1.50.0       # UI framework — provides every st.* primitive.
+                        # Floor is 1.50 because the app uses width="stretch";
+                        # the old use_container_width= spelling was deprecated
+                        # with a removal date of 2025-12-31 and has since been
+                        # dropped from st.plotly_chart. Streamlit Cloud installs
+                        # the latest release, so the app must use the new API.
 plotly>=5.20.0          # Interactive charts (in-app) — go.Figure / go.Scatter / etc.
 pandas>=2.2.0           # DataFrames everywhere; read_csv, etc.
 numpy>=1.26.0           # Numerical arrays for Monte Carlo + interpolation

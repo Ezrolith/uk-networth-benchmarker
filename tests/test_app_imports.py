@@ -148,3 +148,36 @@ def test_app_imports_block_resolves():
         "app.py imports names that don't exist in target modules:\n  "
         + "\n  ".join(failures)
     )
+
+
+# ── Deprecated Streamlit API guard ───────────────────────────────────────────
+# Streamlit deprecates parameters with a stated removal date and then drops
+# them. Because Streamlit Cloud installs the LATEST release on every rebuild,
+# a deprecated call site is a live deploy risk, not a tidy-up task: the app
+# breaks on redeploy, not at the point the parameter was deprecated.
+#
+# use_container_width= was the 2025/26 example — deprecated with a removal
+# date of 2025-12-31, then removed from st.plotly_chart. It is replaced by
+# width="stretch" / width="content".
+
+DEPRECATED_STREAMLIT_PARAMS = {
+    "use_container_width": 'width="stretch"  (or width="content" for False)',
+}
+
+
+@pytest.mark.parametrize("param,replacement", sorted(DEPRECATED_STREAMLIT_PARAMS.items()))
+def test_no_deprecated_streamlit_params(param, replacement):
+    """No source file may use a Streamlit parameter that is past its removal date."""
+    offenders = []
+    for path in sorted(ROOT.rglob("*.py")):
+        if ".git" in path.parts or "__pycache__" in path.parts:
+            continue
+        if path.name == Path(__file__).name:   # this file names them deliberately
+            continue
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if param in line:
+                offenders.append(f"{path.relative_to(ROOT)}:{lineno}")
+    assert not offenders, (
+        f"`{param}` is deprecated and removed in current Streamlit — "
+        f"use {replacement}. Found at: " + ", ".join(offenders)
+    )

@@ -12,7 +12,8 @@ Portfolio piece for Multiverse; hosted on Streamlit Community Cloud.
 ## Run locally
 
 ```bash
-cd "C:\Users\Peter\OneDrive\Documents\Claude\Projects\Networth Tracker"
+cd <repo root>          # Peter's local checkout:
+                        # C:\Users\Peter\OneDrive\Documents\Claude\Projects\Networth Tracker
 pip install -r requirements.txt
 streamlit run app.py
 # → http://localhost:8501
@@ -27,13 +28,16 @@ streamlit run app.py
 ## Deploy
 
 share.streamlit.io → connect Ezrolith/uk-networth-benchmarker → entry point `app.py`.
-No secrets or env vars needed. scipy + kaleido + plotly install takes ~3 min on first cold start.
+No secrets or env vars needed. scipy + plotly + matplotlib install takes ~3 min on first cold
+start. (kaleido is NOT a dependency — the PDF is rendered with fpdf2 + matplotlib, no Chrome.)
+Streamlit Cloud defaults to the newest Python Streamlit supports (3.14 as of Aug 2026), which
+is why CI includes 3.14.
 
 ## File structure
 
 ```
-app.py                    Main Streamlit app — UI, sidebar, rendering, plus build_main_figure
-                          (the last builder not yet in charts/). ~2,650 lines.
+app.py                    Main Streamlit app — UI, sidebar, rendering. All chart builders
+                          now live in charts/. ~4,100 lines.
 requirements.txt          streamlit, plotly, pandas, numpy, scipy, matplotlib, fpdf2
 data/
   was_data.csv            ONS WAS Wave 8 (Apr 2020 – Mar 2022) — real published P50 by age,
@@ -47,6 +51,8 @@ data/
   personal_template.csv   CSV template for user net worth upload
                           (year, age, net_worth, liabilities [optional],
                            property/pension/financial/physical [optional], note)
+  demo_data.py            DEMO_HISTORY — the 11-year baked-in history behind the
+                          'Try with demo data' button (2016-2026, age 25-35)
 charts/                   All chart builders (extraction complete — see __init__.py)
   _helpers.py             fmt, fmt_delta, clean_note, safe_cagr, best_gain, hover_template
   main_figure.py          THE main benchmark + personal overlay chart
@@ -66,7 +72,9 @@ utils/
                           (per-component personal overlay; CPI scales component cols)
   data_loader.py          CSV loading, URL encode/decode (zlib+base64)
   monte_carlo.py          run_monte_carlo + envelope + probability functions
-  uk_tax.py               All UK 2025/26 tax + demographic constants and helpers:
+  uk_tax.py               All UK 2026/27 tax + demographic constants and helpers.
+                          TAX_YEAR is the single year label the UI interpolates —
+                          rolling to a new tax year is a one-line change here.
                           - Pension AA taper for £260k+ adjusted income
                           - effective_pension_allowance (AA + carryforward)
                           - isa_remaining / lisa_remaining (age-aware)
@@ -76,8 +84,10 @@ utils/
                           - STATE_PENSION_AGE, STATE_PENSION_2026_27 (£12,548)
                           - income_tax_2025_26 (rUK bands + PA taper / 60% trap)
                           - tax_free_lump_sum (25% PCLS, capped at LSA £268,275)
-                          - All constants exported (ISA_ALLOWANCE, PENSION_AA,
-                            NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, etc.)
+                          - annuity_rate(age) + ANNUITY_RATE_AT_65 — a MARKET
+                            assumption, not a tax rule; recheck annually
+                          - All constants exported (TAX_YEAR, ISA_ALLOWANCE,
+                            PENSION_AA, NIL_RATE_BAND, RESIDENCE_NIL_RATE_BAND, etc.)
   data_quality.py         compute_data_quality(pdf) → 0–100 score + notes list
                           for personal data completeness/recency/density/span
   summary.py              build_summary_stats(pdf, benchmark, label) → table
@@ -97,20 +107,23 @@ tests/
                           gains-chart annual aggregation + debt-paydown line)
   test_monte_carlo.py     28 tests on simulation, glide path, envelope,
                           probabilities, chart
-  test_uk_tax.py          59 tests on pension taper, ISA/LISA remaining,
+  test_uk_tax.py          67 tests on pension taper, ISA/LISA remaining,
                           relief estimates, LISA bonus, IHT payable + bands,
                           state pension + life expectancy, income tax bands +
-                          PA taper, tax-free lump sum cap
+                          PA taper, tax-free lump sum cap, the TAX_YEAR label +
+                          pinned 2026/27 allowances, and the annuity assumption
   test_demo_data.py       8 tests verifying the demo data shape, CPI round-trip,
                           and percentile trajectory upward
   test_data_quality.py    9 tests on the 0–100 data quality scorer
   test_summary.py         10 tests on build_summary_stats (incl. single-row
                           edge case)
-  test_app_imports.py     6 defensive tests that parse app.py's import block
+  test_app_imports.py     7 defensive tests: parse app.py's import block
                           with `ast` and verify every imported name exists in
                           its target module. Catches the 2026-05-25 deploy
                           incident class of bug (app.py references X but
-                          utils/uk_tax.py is stale) in CI.
+                          utils/uk_tax.py is stale) in CI. Plus a source scan
+                          that fails on any Streamlit parameter past its
+                          removal date (DEPRECATED_STREAMLIT_PARAMS).
   test_app_runtime.py     15 Streamlit AppTest integration tests — app loads
                           without exception, demo button flow, no duplicate
                           widget keys, share URL bootstrap, Excel-serial CSV
@@ -124,11 +137,15 @@ tests/
   test_bump_version.py    5 tests around the version-bump script
   conftest.py             Session-scoped shared fixtures (benchmark, raw_was,
                           asset_series, personal_history)
-                          (302 tests total, ~28s runtime)
-.github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13)
+                          (333 tests total, ~30s runtime)
+.github/workflows/ci.yml  pytest + py_compile on push/PR (Py 3.11, 3.12, 3.13, 3.14)
 .streamlit/config.toml    Blue theme (primaryColor #1d4ed8)
 NEXT_STEPS.md             Full backlog with completed items archived
 REVIEW_LOG.md             Session-by-session audit notes
+CHANGELOG.md              Release-by-release change log (Keep a Changelog format)
+Makefile                  test / test-quick / check / compile shortcuts
+pyproject.toml            Project metadata + pytest config (requires-python >=3.11)
+scripts/bump_version.py   Syncs APP_VERSION across app.py, pyproject.toml, CLAUDE.md
 ```
 
 ## Key architectural decisions
@@ -227,14 +244,41 @@ aggregate matches Wave 8 published shares (40/35/14/10). Reproducible via
 ## Testing
 
 ```bash
-python -m pytest tests/ -v          # 302 tests, ~28s
+python -m pytest tests/ -v          # 333 tests, ~30s
 python -m pytest tests/test_inference.py    # just the maths
 python -m py_compile app.py utils/inference.py utils/data_loader.py
 ```
 
-CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 + 3.13).
+CI runs the same on every push (`.github/workflows/ci.yml`, matrix on Py 3.11 + 3.12 +
+3.13 + 3.14). 3.14 matters: Streamlit Cloud defaults to it, so dropping it from the
+matrix would leave production on an untested interpreter.
 
 ## Current version
+
+**v2.19** (August 2026) — Session 10: **accuracy & currency pass**. No new
+features; fixes claims that were wrong or had gone stale. Corrected the
+**normal minimum pension age** (the ISA-bridge text said "currently 57, rising
+to 58" — it is **55, rising to 57 on 6 April 2028**), the **IHT freeze date**
+(the estate panel said 2030, uk_tax.py said 2031 — **2031** is right), the
+**income-tax threshold freeze** (April 2028 → **April 2031**, per Autumn Budget
+2025), the **state pension** help text (led with the superseded £11,973) and the
+**state pension age** (the 66→67 rise has been phasing in since May 2026).
+Rolled the tax year **2025/26 → 2026/27** — every allowance verified unchanged,
+so it is a relabel, not a re-valuation — and factored the year out into a
+`TAX_YEAR` constant that all UI strings interpolate (`income_tax_2025_26` →
+`income_tax`, old name aliased). Refreshed two market assumptions: the
+**annuity rate** (hardcoded `0.065` in three places, commented "late 2024/25" →
+one `annuity_rate(age)` helper at **7.5%** — this raises projected retirement
+income) and **CPI 2026** (a 141.9 guess → **142.5**, the published June 2026
+index — this shifts every real-terms figure slightly). Added **Python 3.14** to
+CI, since Streamlit Cloud now defaults to it and production was running an
+untested interpreter, and migrated off the deprecated **`use_container_width=`**
+(32 sites → `width="stretch"`; removal date 2025-12-31 has passed and it is
+already gone from `st.plotly_chart`, so the next Cloud rebuild could have broken
+every chart) — `streamlit` floor 1.32 → **1.50**, plus a source-scan test that
+fails on any Streamlit param past its removal date. Rewrote the **README**
+(five releases stale: claimed v2.3, 237 tests, CI on 3.11–3.12) and corrected
+CLAUDE.md's own line/test counts and its stale kaleido reference. +9 tests, **333 green**. See CHANGELOG.md.
 
 **v2.18** (June 2026) — Session 9 (part 11): **per-component personal wealth**.
 The **Wealth component** lens now compares like-for-like. Optional `property /

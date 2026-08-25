@@ -8,7 +8,7 @@ Ranked by value vs effort. Completed items archived at the bottom.
 
 ### New features (high value, moderate effort)
 - [ ] **Side-by-side scenario compare** — "Plan A vs Plan B" view of two retirement configurations side-by-side. The biggest remaining UX feature; would touch every projection expander.
-- [ ] **CGT annual exemption tracker** — £3,000/yr (2025/26, reduced from £12,300 in 2022/23). Would need a "realised gains this year" input. Limited value without per-asset cost-basis tracking.
+- [ ] **CGT annual exemption tracker** — £3,000/yr (unchanged for 2026/27; reduced from £12,300 in 2022/23). Would need a "realised gains this year" input. Limited value without per-asset cost-basis tracking.
 - [ ] **Second mini-bridge (pension access → state pension)** — the ISA bridge calculator currently covers FIRE age to pension access. A second leg from pension access to state pension age would round out the gap analysis.
 
 ### Chart / UX polish
